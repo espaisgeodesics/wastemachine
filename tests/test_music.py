@@ -57,4 +57,39 @@ class MusicTests(unittest.TestCase):
         self.assertFalse(a.active)
         a.toggle_panic();self.assertFalse(a.muted)
 
+class DrumTests(unittest.TestCase):
+    app=MusicTests.app
+    def test_one_card_emits_whole_kit_and_loops(self):
+        a=self.app('Ritme de bateria')
+        a.cards[0]['drum_preset']='Rock bàsic'
+        a.sequencer_tick(2.5)
+        hits=[c.args[0] for c in a.midi.send.call_args_list if c.args[0].type=='note_on']
+        self.assertEqual([x.note for x in hits],[36,42])
+        self.assertTrue(all(x.channel==9 for x in hits))
+        for step in range(1,17):a.sequencer_tick(2.5+step*.125)
+        notes=[c.args[0].note for c in a.midi.send.call_args_list if c.args[0].type=='note_on']
+        self.assertEqual(notes.count(36),3)
+        self.assertEqual(notes.count(38),2)
+        self.assertEqual(notes.count(42),9)
+
+    def test_all_presets_and_note_mapping(self):
+        signatures=[]
+        for preset in m.DRUM_PRESETS:
+            a=self.app('Ritme de bateria');a.cards[0]['drum_preset']=preset
+            a.cards[0]['drum_notes']={'Bombo':35,'Caixa':40}
+            for step in range(16):a.sequencer_tick(step*.125)
+            notes=[c.args[0].note for c in a.midi.send.call_args_list if c.args[0].type=='note_on']
+            self.assertIn(35,notes);self.assertIn(40,notes)
+            self.assertNotIn(36,notes);self.assertNotIn(38,notes)
+            signatures.append(tuple(notes))
+        self.assertEqual(len(set(signatures)),len(m.DRUM_PRESETS))
+
+    def test_removal_releases_every_simultaneous_hit(self):
+        a=self.app('Ritme de bateria');a.cards[0]['drum_preset']='Rock potent'
+        a.arp_lock=threading.RLock();a.sequencer_tick(0)
+        a.stop_arpeggio(0)
+        messages=[c.args[0] for c in a.midi.send.call_args_list]
+        self.assertEqual(sorted(x.note for x in messages if x.type=='note_on'),sorted(x.note for x in messages if x.type=='note_off'))
+        self.assertFalse(a.arp_states)
+
 if __name__=='__main__':unittest.main()

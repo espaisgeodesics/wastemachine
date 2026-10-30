@@ -15,7 +15,7 @@ ROOT=Path(__file__).resolve().parent
 (ROOT/'GRAVACIONS').mkdir(exist_ok=True)
 W,H=640,360
 NAMES=['Motor de ferro','Tempesta de pols','Vapor tòxic','Reactor elèctric','Túnel mecànic','Forja de foc','Fantasma digital','Ones mecàniques','Ferralla orbital','Nucli radioactiu','Ull de la màquina','Sol terminal','Cercle cromàtic 360°']
-FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Cap acció']
+FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Ritme de bateria','Cap acció']
 DEFAULTS=[]
 for i in range(16):
     DEFAULTS.append({'name':f'Targeta {i+1:02d}','function':'Nota MIDI' if i<4 else ('Control MIDI CC' if i<12 else 'Canviar visual'), 'channel':1,'note':36+i,'cc':20+i,'visual':i%12,'axis':'Rotació','min':0,'max':127,'harmony_key':'La menor','harmony_root':9,'harmony_scale':'Menor natural (eòlica)','harmony_velocity':85,'arp_division':'1/2 temps','arp_gate':60})
@@ -44,6 +44,17 @@ def harmony_pitches(card,sector):
       indices=(degree,degree+2,degree+4)
     pitches=tuple(max(0,min(127,degree_pitch(j))) for j in indices)
     return pitches,NOTE_NAMES[pitches[0]%12]
+DRUM_NOTES={'Bombo':36,'Caixa':38,'Hi-hat tancat':42,'Hi-hat obert':46,'Crash':49}
+# Un compàs 4/4 amb 16 semicorxeres; els passos interns comencen a zero.
+DRUM_PRESETS={
+ 'Rock bàsic':{'Bombo':(0,8),'Caixa':(4,12),'Hi-hat tancat':tuple(range(0,16,2))},
+ 'Rock potent':{'Bombo':(0,2,8,10),'Caixa':(4,12),'Hi-hat tancat':tuple(range(0,16,2)),'Crash':(0,)},
+ 'Disco':{'Bombo':(0,4,8,12),'Caixa':(4,12),'Hi-hat tancat':(0,4,8,12),'Hi-hat obert':(2,6,10,14)},
+ 'Funk':{'Bombo':(0,3,6,10),'Caixa':(4,12),'Hi-hat tancat':tuple(range(16))},
+ 'Mig temps':{'Bombo':(0,7,10),'Caixa':(8,),'Hi-hat tancat':tuple(range(0,16,2))},
+ 'Electrònic':{'Bombo':(0,4,8,12),'Caixa':(4,12),'Hi-hat tancat':(2,6,10,14),'Hi-hat obert':(15,)},
+}
+
 ARP_DIRECTIONS=['Ascendent','Descendent','Pujada i baixada','Aleatori']
 
 def arpeggio_note(pitches,index,direction):
@@ -60,7 +71,7 @@ class App:
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.metronome_enabled=False; self.metronome_start=time.monotonic(); self.metronome_last_beat=-1; self.metronome_last_bpm=self.bpm; self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
-    self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]
+    self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
     self.camera=None; self.midi=None; self.midi_name=''; self.recording=None; self.record_file=None; self.t0=time.monotonic(); self.last_frame=None; self.visual_paused=False; self.visual_paused_at=None; self.monitor_window=None; self.monitor_table=None; self.monitor_ticks=0
     self.aruco_detector=cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
     self.last_visual_update=0.0; self.visual_interval=1/12; self._closing=False
@@ -432,12 +443,12 @@ class App:
       if tree.exists(iid):tree.item(iid,values=values,tags=('on' if active else 'off',))
       else:tree.insert('', 'end',iid=iid,values=values,tags=('on' if active else 'off',))
  def on_function_selected(self,event=None):
-    if self.fun.get() in ('Harmonia espacial','Arpegiador espacial','Patró rítmic'):
+    if self.fun.get() in ('Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria'):
       self.open_music_settings()
  def open_music_settings(self):
     kind=self.fun.get()
-    if kind not in ('Harmonia espacial','Arpegiador espacial','Patró rítmic'):
-      messagebox.showinfo('Configuració musical','Selecciona Harmonia espacial, Arpegiador espacial o Patró rítmic.',parent=self.editor_window)
+    if kind not in ('Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria'):
+      messagebox.showinfo('Configuració musical','Selecciona una funció musical: harmonia, arpegiador, patró rítmic o ritme de bateria.',parent=self.editor_window)
       return
     old=getattr(self,'music_settings_window',None)
     if old is not None and old.winfo_exists():
@@ -445,14 +456,14 @@ class App:
     win=tk.Toplevel(self.root)
     self.music_settings_window=win
     win.title('WASTELAND · '+kind.upper()+' · TARGETA '+self.card_id.get())
-    win.geometry('420x620' if kind in ('Arpegiador espacial','Patró rítmic') else '370x360')
+    win.geometry('460x700' if kind=='Ritme de bateria' else ('420x620' if kind in ('Arpegiador espacial','Patró rítmic') else '370x360'))
     win.minsize(320,275)
     win.configure(bg='#151210')
     win.transient(self.root)
     win.lift(self.root)
     pane=ttk.Frame(win);pane.pack(fill='both',expand=True,padx=16,pady=12)
     ttk.Label(pane,text=kind.upper(),foreground='#e7ae70',font=('Segoe UI',12,'bold')).pack(anchor='w',pady=(0,12))
-    if kind!='Patró rítmic':
+    if kind not in ('Patró rítmic','Ritme de bateria'):
       ttk.Label(pane,text='Nota fonamental').pack(anchor='w',pady=(4,2))
       ttk.Combobox(pane,textvariable=self.harmony_root,values=NOTE_NAMES,state='readonly').pack(fill='x')
       ttk.Label(pane,text='Escala / mode').pack(anchor='w',pady=(9,2))
@@ -473,16 +484,29 @@ class App:
       for j,var in enumerate(self.rhythm_steps):
         ttk.Checkbutton(steps,text=str(j+1),variable=var).grid(row=j//4,column=j%4,padx=5,pady=4)
       ttk.Label(pane,text='Utilitza la nota i el canal MIDI de la targeta. Per a bateria General MIDI, habitualment canal 10; nota 36: bombo, 38: caixa, 42: hi-hat.',wraplength=370).pack(anchor='w',pady=8)
+    if kind=='Ritme de bateria':
+      ttk.Label(pane,text='Ritme complet amb una sola targeta').pack(anchor='w',pady=(10,2))
+      ttk.Combobox(pane,textvariable=self.drum_preset,values=list(DRUM_PRESETS),state='readonly').pack(fill='x')
+      ttk.Label(pane,text='Canal MIDI de la pista de bateria (1–16)').pack(anchor='w',pady=(10,2))
+      tk.Spinbox(pane,textvariable=self.channel,from_=1,to=16,bg='#e9d8c2').pack(anchor='w')
+      ttk.Label(pane,text='Notes MIDI · adapta-les al mapa del teu instrument').pack(anchor='w',pady=(10,2))
+      mapping=ttk.Frame(pane);mapping.pack(fill='x')
+      for row,(name,var) in enumerate(self.drum_notes.items()):
+        ttk.Label(mapping,text=name).grid(row=row,column=0,sticky='w',padx=4,pady=3)
+        tk.Spinbox(mapping,textvariable=var,from_=0,to=127,width=6,bg='#e9d8c2').grid(row=row,column=1,padx=8,pady=3)
+      ttk.Label(pane,text='Ensenya la targeta: sona el ritme. Retira-la: s’atura. Un compàs 4/4 al tempo del Wasteland. Ruta la sortida MIDI a MT Power Drum Kit dins de Sonar.',wraplength=390).pack(anchor='w',pady=10)
     ttk.Button(pane,text='APLICAR A LA TARGETA I TANCAR',command=lambda:(self.apply_card(),win.destroy())).pack(fill='x',pady=(16,4))
     ttk.Label(pane,text='Per conservar els canvis en disc: Projecte → Desar projecte.',wraplength=320).pack(anchor='w',pady=(5,0))
  def load_card(self):
     c=self.cards[int(self.card_id.get())-1]; self.fun.set(c['function']); self.axis.set(c['axis']); self.note.set(c['note']); self.cc.set(c['cc']); self.channel.set(c['channel']); self.visual.set(NAMES[c['visual']]); self.harmony_key.set(c.get('harmony_key','La menor')); self.harmony_root.set(NOTE_NAMES[int(c.get('harmony_root',9))%12]); self.harmony_scale.set(c.get('harmony_scale','Menor natural (eòlica)')); self.harmony_velocity.set(c.get('harmony_velocity',85)); self.arp_division.set(c.get('arp_division','1/2 temps')); self.arp_gate.set(c.get('arp_gate',60)); self.arp_direction.set(c.get('arp_direction','Ascendent'))
+    self.drum_preset.set(c.get('drum_preset','Rock bàsic'))
+    for name,var in self.drum_notes.items():var.set(c.get('drum_notes',{}).get(name,DRUM_NOTES[name]))
     for j,var in enumerate(self.rhythm_steps):var.set(bool(c.get('rhythm_pattern',[k%4==0 for k in range(16)])[j]))
  def apply_card(self):
     try:
       card_index=int(self.card_id.get())-1
       self.deactivate(card_index)
-      c=self.cards[card_index]; c.update(arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
+      c=self.cards[card_index]; c.update(drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
       if c['visual']==12 and int(self.card_id.get())-1 in self.active:self.select_visual(12)
       self.status.set(f'Targeta {self.card_id.get()} configurada. Desa el projecte per conservar els canvis.');self.update_cards_table()
     except Exception as e: messagebox.showerror('Configuració',str(e))
@@ -663,6 +687,7 @@ class App:
  def stop_arpeggio(self,i):
     with self.arp_lock:
       state=self.arp_states.pop(i,None)
+      if state:self.stop_drum_notes(state)
       if state and state.get('playing') and self.midi:
         ch,note=state['playing']
         try:self.midi.send(mido.Message('note_off',channel=ch,note=note,velocity=0))
@@ -677,6 +702,8 @@ class App:
  def sequencer_tick(self,now):
     if self.muted:return
     for i,state in list(self.arp_states.items()):
+      if self.cards[i]['function']=='Ritme de bateria':
+        self.drum_tick(i,state,now);continue
       if state.get('playing') and now>=state.get('off_at',0):
         ch,note=state['playing']
         if self.midi:
@@ -711,6 +738,35 @@ class App:
           # La durada també es calcula des de la graella absoluta.
           state['off_at']=self.metronome_start+(step+max(.1,min(.95,int(c.get('arp_gate',60))/100)))*interval
         except Exception:pass
+ def stop_drum_notes(self,state):
+    for channel,note in state.pop('playing_notes',[]):
+      if self.midi:
+        try:self.midi.send(mido.Message('note_off',channel=channel,note=note,velocity=0))
+        except Exception:pass
+ def drum_tick(self,i,state,now):
+    if state.get('playing_notes') and now>=state.get('off_at',0):self.stop_drum_notes(state)
+    interval=60.0/max(1,self.bpm)/4
+    absolute_step=math.floor((now-self.metronome_start)/interval)
+    if absolute_step<0 or absolute_step==state.get('last_step'):return
+    state['last_step']=absolute_step
+    self.stop_drum_notes(state)
+    origin=state.setdefault('origin_step',absolute_step)
+    step=(absolute_step-origin)%16
+    c=self.cards[i]
+    pattern=DRUM_PRESETS.get(c.get('drum_preset'),DRUM_PRESETS['Rock bàsic'])
+    channel=max(0,min(15,int(c['channel'])-1))
+    velocity=max(1,min(127,int(c.get('harmony_velocity',85))))
+    played=[]
+    for name,steps in pattern.items():
+      if step not in steps:continue
+      note=max(0,min(127,int(c.get('drum_notes',{}).get(name,DRUM_NOTES[name]))))
+      if self.midi:
+        try:
+          self.midi.send(mido.Message('note_on',channel=channel,note=note,velocity=velocity))
+          played.append((channel,note))
+        except Exception:pass
+    state['playing_notes']=played
+    state['off_at']=self.metronome_start+(absolute_step+.4)*interval
  def spatial_arpeggio(self,i,x,y):
     c=self.cards[i]
     dx=x-.5;dy=.5-y
@@ -796,7 +852,7 @@ class App:
       return
     if c['function']=='Harmonia espacial':
       self.spatial_harmony(i,x,y)
-    elif c['function']=='Patró rítmic':
+    elif c['function'] in ('Patró rítmic','Ritme de bateria'):
       with self.arp_lock:
         if i not in self.arp_states:self.arp_states[i]={'pitches':[c['note']],'index':0,'last_step':None,'playing':None,'off_at':0}
     elif c['function']=='Arpegiador espacial':

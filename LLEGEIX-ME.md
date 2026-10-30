@@ -41,3 +41,13 @@ Proves: `python -m unittest discover -s tests -v`.
 - La funció **Patró rítmic** ofereix 16 passos repetits. Activa els cops a la configuració musical; la nota i el canal es trien a l'editor de la targeta. La divisió 1/4 temps equival a semicorxeres: 16 passos formen un compàs de 4/4. El patró segueix el rellotge intern i comença a la fase actual de la graella quan detecta la targeta; s'atura en retirar-la. No hi ha sincronització externa amb Cakewalk en aquesta versió.
 - Per a bateria General MIDI, pots assignar targetes diferents a bombo (nota 36), caixa (38) i hi-hat (42), normalment al canal 10; depèn de l'instrument receptor. La simulació amb ratolí activa una targeta cada vegada; la càmera permet diverses targetes.
 - Desa el projecte per conservar les direccions i els patrons. Els projectes anteriors continuen fent servir arpegis ascendents per defecte.
+
+## Una targeta, una bateria completa
+
+Tria **Ritme de bateria** com a funció d'una targeta i obre **CONFIGURAR MÚSICA / PATRÓ**. Pots escollir Rock bàsic, Rock potent, Disco, Funk, Mig temps o Electrònic. Cada preset envia simultàniament les peces corresponents del kit; no cal una targeta per instrument. Configura el canal que rep la pista de MT Power Drum Kit a Sonar, ajusta la intensitat i prem APLICAR. Desa el projecte per conservar-ho.
+
+La detecció de la targeta inicia el compàs des del primer pas i el repeteix mentre es manté present. En retirar-la s'aturen totes les notes que ha generat. El ratolí serveix per provar el ritme complet mantenint premut el clic. SILENCI ABSOLUT també atura aquests ritmes.
+
+Utilitza el port loopMIDI d'entrada de la pista de bateria i activa l'escolta d'entrada a Sonar. El canal es pot ajustar a la configuració del ritme (sovint 10 per a bateria GM, o l'entrada Omni de la pista). Les notes proposades són 36, 38, 42, 46 i 49; les pots canviar a la mateixa finestra si el mapa del teu MT Power Drum Kit difereix. No s'ha provat el plugin real al núvol. No activa els grooves interns del plugin: genera les notes MIDI que l'instrument interpreta.
+
+El tempo és el del Wasteland. Cada bucle és un compàs de 4/4 i encara no se sincronitza automàticament amb el transport de Sonar. Retira una targeta abans d'ensenyar-ne una altra si vols canviar de ritme sense superposar-los.

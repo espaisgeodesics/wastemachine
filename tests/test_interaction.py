@@ -24,7 +24,7 @@ class InteractionTests(unittest.TestCase):
             a.simulation_release()
             self.assertNotIn(0,a.active)
             self.assertEqual(a.midi.send.call_args.args[0].type,'note_off')
-            for kind in ('Arpegiador espacial','Patró rítmic'):
+            for kind in ('Arpegiador espacial','Patró rítmic','Ritme de bateria'):
                 a.fun.set(kind);a.on_function_selected()
                 self.assertTrue(a.music_settings_window.winfo_exists())
                 a.music_settings_window.destroy()
@@ -37,11 +37,19 @@ class InteractionTests(unittest.TestCase):
             self.assertTrue(a.muted);self.assertFalse(a.arp_states);self.assertFalse(a.active)
             a.simulation_press(event);self.assertFalse(a.active)
             a.toggle_panic()
+            a.fun.set('Ritme de bateria');a.drum_preset.set('Disco');a.drum_notes['Caixa'].set(40)
+            a.apply_card();a.simulation_press(event)
+            a.sequencer_tick(a.metronome_start)
+            hits=[c.args[0].note for c in a.midi.send.call_args_list if c.args[0].type=='note_on']
+            self.assertIn(36,hits);self.assertIn(42,hits)
+            a.simulation_release()
             with tempfile.TemporaryDirectory() as folder:
                 a.project=str(Path(folder)/'project.json');a.save_project()
                 a.cards[0]['function']='Cap acció'
                 with patch.object(m.filedialog,'askopenfilename',return_value=a.project):a.open_project()
-                self.assertEqual(a.cards[0]['function'],'Patró rítmic')
+                self.assertEqual(a.cards[0]['function'],'Ritme de bateria')
+                self.assertEqual(a.drum_preset.get(),'Disco')
+                self.assertEqual(a.drum_notes['Caixa'].get(),40)
                 self.assertEqual(a.cards[0]['arp_direction'],'Descendent')
                 self.assertEqual([v.get() for v in a.rhythm_steps],[j in (0,4,8,12) for j in range(16)])
             a.close()
