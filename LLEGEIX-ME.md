@@ -54,7 +54,7 @@ El tempo és el del Wasteland. Cada bucle és un compàs de 4/4 i encara no se s
 
 ## Llista de targetes i mapes de configuració
 
-La finestra VISUAL té una llista lateral **TARGETES AMB FUNCIÓ**. Hi apareixen les targetes amb una funció diferent de **Cap acció**, incloses les assignacions inicials del programa. Les targetes actives es destaquen. Per treure'n una de la llista, selecciona Cap acció a l'editor i prem APLICAR; desa el projecte per conservar el canvi.
+El botó superior **TARGETES EN FUNCIÓ** obre una finestra independent amb la llista de targetes i les columnes Targeta, Funció i Nom assignat. Fes doble clic a la columna Nom assignat, o prem CANVIAR NOM DE LA TARGETA, per donar-li un nom propi. Els noms es desen amb el projecte. La posició i visibilitat d’aquesta finestra es conserven amb la distribució de finestres. Hi apareixen les targetes amb una funció diferent de **Cap acció**, incloses les assignacions inicials del programa. Les targetes actives es destaquen. Per treure'n una de la llista, selecciona Cap acció a l'editor i prem APLICAR; desa el projecte per conservar el canvi.
 
 Clica una fila per seleccionar la mateixa targeta a l'editor i veure el seu mapa sense activar-la: sectors d'harmonia/arpegis, graella de passos del patró o de tota la bateria, cercle cromàtic, visual assignat o paràmetres MIDI. La selecció no envia notes noves. Pots provar la targeta amb la simulació o la càmera quan vulguis. Canviar de selecció retira una simulació que estigués premuda.
 

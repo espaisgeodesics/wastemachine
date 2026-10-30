@@ -1,7 +1,7 @@
 import os, sys, json, time, math, random, datetime, threading
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 import numpy as np
 import cv2
 from PIL import Image, ImageTk, ImageDraw, ImageFont
@@ -120,8 +120,9 @@ class App:
       tk.Label(banner,text='WASTELAND MACHINE',font=('Georgia',19,'bold'),fg='#f5b47a',bg='#20130e').pack(fill='both',expand=True)
     toolbar=ttk.Frame(self.root);toolbar.pack(fill='x',padx=9,pady=(1,5))
     self.panic_button=tk.Button(toolbar,text='SILENCI ABSOLUT',command=self.toggle_panic,bg='#a52626',fg='white',font=('Segoe UI',10,'bold'));self.panic_button.pack(side='left',padx=3)
+    ttk.Button(toolbar,text='TARGETES EN FUNCIÓ',command=lambda:self.show_panel('cards')).pack(side='left',padx=3)
     ttk.Button(toolbar,text='MONITOR ARUCO',command=self.open_aruco_monitor).pack(side='left',padx=2)
-    ttk.Button(toolbar,text='MOSTRAR TOTES LES FINESTRES',command=self.show_all_panels).pack(side='left',padx=7)
+    ttk.Button(toolbar,text='FINESTRES',command=self.show_all_panels).pack(side='left',padx=7)
     ttk.Label(toolbar,text='v 4.5.15 · Pas 15',foreground='#d5a16b').pack(side='right',padx=7)
     # Cada mòdul té una finestra nativa de Windows: es pot arrossegar,
     # canviar de mida, minimitzar i restaurar independentment.
@@ -135,18 +136,24 @@ class App:
     self.visual_window=self.make_panel_window('visual','VISUAL · PREVISUALITZACIÓ','680x460+740+300')
     ttk.Label(self.visual_window,textvariable=self.preview_caption,wraplength=600).pack(fill='x',padx=5,pady=3)
     visual_content=ttk.Frame(self.visual_window);visual_content.pack(fill='both',expand=True)
-    card_sidebar=ttk.Frame(visual_content,width=235);card_sidebar.pack(side='right',fill='y',padx=(3,5),pady=5)
-    ttk.Label(card_sidebar,text='TARGETES AMB FUNCIÓ').pack(anchor='w',pady=(0,4))
+    self.cards_window=self.make_panel_window('cards','TARGETES EN FUNCIÓ','620x470+80+100')
+    self.cards_window.minsize(440,260)
+    card_sidebar=ttk.Frame(self.cards_window);card_sidebar.pack(fill='both',expand=True,padx=8,pady=8)
+    ttk.Label(card_sidebar,text='TARGETES EN FUNCIÓ · Doble clic al nom per editar-lo').pack(anchor='w',pady=(0,4))
     card_list=ttk.Frame(card_sidebar);card_list.pack(fill='both',expand=True)
-    self.assigned_cards=ttk.Treeview(card_list,columns=('card','function'),show='headings',selectmode='browse',height=8)
+    self.assigned_cards=ttk.Treeview(card_list,columns=('card','function','name'),show='headings',selectmode='browse',height=8)
     self.assigned_cards.heading('card',text='Targeta');self.assigned_cards.column('card',width=58,minwidth=48,stretch=False)
     self.assigned_cards.heading('function',text='Funció');self.assigned_cards.column('function',width=165,minwidth=100)
+    self.assigned_cards.heading('name',text='Nom assignat');self.assigned_cards.column('name',width=240,minwidth=120)
     card_scroll=ttk.Scrollbar(card_list,orient='vertical',command=self.assigned_cards.yview)
     self.assigned_cards.configure(yscrollcommand=card_scroll.set)
     card_scroll.pack(side='right',fill='y');self.assigned_cards.pack(fill='both',expand=True)
     self.assigned_cards.tag_configure('active',background='#29453d',foreground='white')
     self.assigned_cards.bind('<<TreeviewSelect>>',self.choose_assigned_card)
+    self.assigned_cards.bind('<Double-1>',self.edit_card_name)
+    ttk.Button(card_sidebar,text='CANVIAR NOM DE LA TARGETA',command=self.edit_card_name).pack(fill='x',pady=(5,0))
     ttk.Button(card_sidebar,text='SEGUIR DIRECTE',command=self.follow_live_preview).pack(fill='x',pady=(5,0))
+    self.cards_window.withdraw()
     self.vis_label=tk.Label(visual_content,bg='#0d0b0b',fg='#e0c3a0',anchor='center',bd=0)
     self.vis_label.pack(fill='both',expand=True,padx=5,pady=5)
     simulation_bar=ttk.Frame(self.visual_window);simulation_bar.pack(fill='x',padx=5,pady=3)
@@ -399,17 +406,37 @@ class App:
       if iid not in ids:tree.delete(iid)
     for i,c in enumerate(self.cards):
       if str(i) not in ids:continue
-      values=(f'{i+1:02d}',c['function'])
+      values=(f'{i+1:02d}',c['function'],c.get('name',f'Targeta {i+1:02d}'))
       tags=('active',) if i in self.active else ()
       if tree.exists(str(i)):tree.item(str(i),values=values,tags=tags)
       else:tree.insert('','end',iid=str(i),values=values,tags=tags)
     if self.preview_card is not None:
       if str(self.preview_card) not in ids:self.follow_live_preview()
       elif tree.selection()!=(str(self.preview_card),):tree.selection_set(str(self.preview_card))
+ def edit_card_name(self,event=None):
+    tree=self.assigned_cards
+    if event is not None:
+      if tree.identify_column(event.x)!='#3':return
+      iid=tree.identify_row(event.y)
+      if not iid:return
+      tree.selection_set(iid)
+    else:
+      selected=tree.selection()
+      if not selected:
+        self.status.set('Selecciona una targeta per posar-hi nom.');return
+      iid=selected[0]
+    i=int(iid)
+    name=simpledialog.askstring('Nom assignat',f'Nom per a la targeta {i+1:02d}:',initialvalue=self.cards[i].get('name',''),parent=self.cards_window)
+    if name is None:return
+    self.cards[i]['name']=name.strip()
+    self.update_cards_table()
+    if self.preview_card==i:self.select_card_preview(i)
+    self.status.set(f'Nom de la targeta {i+1:02d} actualitzat. Desa el projecte per conservar-lo.')
  def choose_assigned_card(self,event=None):
     selected=self.assigned_cards.selection()
     if not selected:return
     i=int(selected[0])
+    self.show_panel('visual')
     if self.preview_card==i and self.card_id.get()==f'{i+1:02d}':return
     self.simulation_release()
     self.card_id.set(f'{i+1:02d}');self.load_card()
@@ -425,7 +452,7 @@ class App:
     self.preview_card=i;self.preview_dirty=True
     c=self.cards[i]
     extra=c.get('drum_preset','Rock bàsic') if c['function']=='Ritme de bateria' else (c.get('arp_direction','Ascendent') if c['function']=='Arpegiador espacial' else f'Canal {c["channel"]}')
-    self.preview_caption.set(f'Targeta {i+1:02d} · {c["function"]} · {extra} · Seleccionar no activa MIDI')
+    self.preview_caption.set(f'Targeta {i+1:02d} · {c.get("name","")} · {c["function"]} · {extra} · Seleccionar no activa MIDI')
     self.update_assigned_cards()
  def card_preview_frame(self,i,t):
     c=self.cards[i];kind=c['function']

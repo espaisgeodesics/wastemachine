@@ -6,6 +6,11 @@ import unittest
 from unittest.mock import Mock, patch
 from test_camera import app_module as m
 
+def close_test_app(app):
+    # Each test owns its Tcl interpreter; cancel callbacks before destroying it.
+    for timer in app.root.tk.call('after','info'):app.root.after_cancel(timer)
+    app.close()
+
 @unittest.skipUnless(os.environ.get('DISPLAY') or os.name=='nt','Requires a graphical display')
 class InteractionTests(unittest.TestCase):
     def test_mouse_music_settings_and_project_roundtrip(self):
@@ -52,7 +57,7 @@ class InteractionTests(unittest.TestCase):
                 self.assertEqual(a.drum_notes['Caixa'].get(),40)
                 self.assertEqual(a.cards[0]['arp_direction'],'Descendent')
                 self.assertEqual([v.get() for v in a.rhythm_steps],[j in (0,4,8,12) for j in range(16)])
-            a.close()
+            close_test_app(a)
         finally:
             try:root.destroy()
             except m.tk.TclError:pass
@@ -101,7 +106,41 @@ class InteractionTests(unittest.TestCase):
             self.assertFalse(a.assigned_cards.selection())
             a.cards[2]['function']='Cap acció';a.update_assigned_cards()
             self.assertFalse(a.assigned_cards.exists('2'))
-            a.close()
+            close_test_app(a)
+        finally:
+            try:root.destroy()
+            except m.tk.TclError:pass
+
+    def test_independent_card_window_names_and_layout_persist(self):
+        root=m.tk.Tk()
+        try:
+            with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
+            a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
+            a.midi=Mock()
+            self.assertIs(a.assigned_cards.winfo_toplevel(),a.cards_window)
+            self.assertIsNot(a.cards_window,a.visual_window)
+            self.assertEqual(tuple(a.assigned_cards['columns']),('card','function','name'))
+            a.show_panel('cards');a.assigned_cards.selection_set('0');root.update()
+            with patch.object(m.simpledialog,'askstring',return_value='Bateria principal – Jordi'):
+                a.edit_card_name()
+            self.assertEqual(a.cards[0]['name'],'Bateria principal – Jordi')
+            self.assertEqual(a.assigned_cards.item('0','values')[2],'Bateria principal – Jordi')
+            with patch.object(m.simpledialog,'askstring',return_value=None):a.edit_card_name()
+            self.assertEqual(a.cards[0]['name'],'Bateria principal – Jordi')
+            with tempfile.TemporaryDirectory() as folder:
+                a.project=str(Path(folder)/'project.json');a.save_project()
+                a.cards[0]['name']='Canvi temporal'
+                with patch.object(m.filedialog,'askopenfilename',return_value=a.project):a.open_project()
+                self.assertEqual(a.cards[0]['name'],'Bateria principal – Jordi')
+                self.assertEqual(a.assigned_cards.item('0','values')[2],'Bateria principal – Jordi')
+                a.window_layout_file=Path(folder)/'layout.json'
+                a.cards_window.geometry('600x400+60+70');root.update_idletasks()
+                a.save_window_layout();a.cards_window.withdraw();a.restore_window_layout()
+                root.update_idletasks()
+                self.assertEqual(a.cards_window.state(),'normal')
+                self.assertEqual(a.cards_window.geometry(),'600x400+60+70')
+            a.midi.send.assert_not_called()
+            close_test_app(a)
         finally:
             try:root.destroy()
             except m.tk.TclError:pass
