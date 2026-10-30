@@ -1,5 +1,6 @@
 import os, sys, json, time, math, random, datetime, threading
 from pathlib import Path
+from collections import deque
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 import numpy as np
@@ -77,7 +78,7 @@ class App:
  def __init__(self,root):
     self.root=root; root.title('WASTELAND MACHINE'); root.geometry('790x265'); root.minsize(570,205)
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
-    self.active={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
+    self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
     self.show_only_assigned=tk.BooleanVar(value=True); self.visual_dirty=True; self.preview_card=None; self.preview_dirty=True; self.preview_caption=tk.StringVar(value='Previsualització en directe'); self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
     self.audio_states={}; self.audio_error=None; self.audio_duration=tk.DoubleVar(value=0);self.audio_cc_values={}
@@ -754,7 +755,12 @@ class App:
     image_w=max(1,int(W*scale));image_h=max(1,int(H*scale))
     x=(event.x-(width-image_w)/2)/image_w
     y=(event.y-(height-image_h)/2)/image_h
-    return (x,y) if 0<=x<=1 and 0<=y<=1 else None
+    if not (0<=x<=1 and 0<=y<=1):return None
+    if self.radial_preview():
+      rr=int(min(H*.425,W*.32))
+      x=.5+(x*W-W/2)/(2*rr);y=.5+(y*H-H/2)/(2*rr)
+      x=max(0,min(1,x));y=max(0,min(1,y))
+    return x,y
  def simulation_press(self,event):
     if not self.simulation.get() or self.muted:return
     self.simulation_release()
@@ -1039,10 +1045,47 @@ class App:
     for i,state in list(self.audio_states.items()):
       if now>=state['release_at']:self.release_audio_trigger(state)
       if now>=state['ends_at']:self.audio_states.pop(i,None)
+ def record_target_position(self,i,x,y):
+    now=time.monotonic();trail=self.target_trails.setdefault(i,deque(maxlen=90))
+    if not trail or math.hypot(x-trail[-1][1],y-trail[-1][2])>.002 or now-trail[-1][0]>.08:trail.append((now,x,y))
+    while trail and now-trail[0][0]>2.5:trail.popleft()
+ def radial_preview(self):
+    cards=[self.preview_card] if self.preview_card is not None else list(self.active)
+    if not cards and self.simulation.get():cards=[int(self.card_id.get())-1]
+    return any(self.cards[i].get('visual')==12 or self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial') for i in cards)
+ def tracking_point(self,x,y,radial=False):
+    if not radial:return (round(max(0,min(1,x))*(W-1)),round(max(0,min(1,y))*(H-1)))
+    dx=(x-.5)*2;dy=(y-.5)*2;length=max(1,math.hypot(dx,dy))
+    rr=int(min(H*.425,W*.32))
+    return (round(W/2+dx/length*rr),round(H/2+dy/length*rr))
+ def live_preview_frame(self):
+    if not self.active:return self.last_frame.copy()
+    musical=[i for i in self.active if self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial')]
+    chromatic=any(self.cards[i].get('visual')==12 for i in self.active)
+    if musical:frame=self.harmony_map_preview(chromatic=chromatic,card_index=musical[0])
+    elif chromatic:frame=self.color_wheel_preview()
+    else:frame=self.last_frame.copy()
+    radial=bool(musical or chromatic);now=time.monotonic()
+    colors=[(70,210,255),(255,185,70),(150,255,120),(235,120,245)]
+    for i,(x,y,angle) in self.active.items():
+      color=colors[i%len(colors)]
+      points=[self.tracking_point(tx,ty,radial) for stamp,tx,ty in self.target_trails.get(i,()) if now-stamp<=2.5]
+      if len(points)>1:cv2.polylines(frame,[np.array(points,np.int32)],False,color,2,cv2.LINE_AA)
+      px,py=self.tracking_point(x,y,radial)
+      cv2.circle(frame,(px,py),11,(8,8,8),-1,cv2.LINE_AA)
+      cv2.circle(frame,(px,py),8,color,2,cv2.LINE_AA)
+      dx=int(16*math.cos(angle*math.tau));dy=int(16*math.sin(angle*math.tau))
+      cv2.line(frame,(px,py),(px+dx,py+dy),color,2,cv2.LINE_AA)
+      label=('SIM ' if i==self.sim_card else '')+f'T{i+1:02d}'
+      tx=max(3,min(W-100,px+16));ty=max(20,min(H-40,py-12))
+      cv2.putText(frame,label,(tx,ty),cv2.FONT_HERSHEY_SIMPLEX,.48,(8,8,8),3,cv2.LINE_AA)
+      cv2.putText(frame,label,(tx,ty),cv2.FONT_HERSHEY_SIMPLEX,.48,color,1,cv2.LINE_AA)
+    return frame
  def activate(self,i,x,y,angle):
     if self.muted:return
     c=self.cards[i];v={'Rotació':angle,'Horitzontal':x,'Vertical':y}.get(c['axis'],angle);v=max(0,min(1,v))
     was=i in self.active;self.active[i]=(x,y,angle)
+    self.record_target_position(i,x,y)
     if not was:
       self.visual_dirty=True;self.follow_live_preview()
     if not was and c.get('visual')==12:self.select_visual(12)
@@ -1093,7 +1136,7 @@ class App:
  def deactivate(self,i):
     self.stop_arpeggio(i)
     self.stop_harmony(i)
-    self.active.pop(i,None);self.last_cc.pop(i,None);self.audio_cc_values.pop(i,None);self.visual_dirty=True;self.preview_dirty=True
+    self.active.pop(i,None);self.target_trails.pop(i,None);self.last_cc.pop(i,None);self.audio_cc_values.pop(i,None);self.visual_dirty=True;self.preview_dirty=True
     if self.cards[i].get('visual')==12 and not any(self.cards[j].get('visual')==12 for j in self.active):
       self.last_color_xy=None;self.smooth_color_xy=None
     if i==1:self.card2_rotation_prev=None;self.card2_rotation_total=0.
@@ -1339,7 +1382,7 @@ class App:
     cv2.line(result,(cx,cy-rr),(cx,cy+rr),(235,235,235),1,cv2.LINE_AA)
     cv2.circle(result,(cx,cy),4,(255,255,255),-1,cv2.LINE_AA)
     if self.smooth_color_xy is not None:
-      px=int(cx+dx*rr);py=int(cy-dy*rr)
+      px,py=self.tracking_point(x,y,radial=True)
       cv2.line(result,(cx,cy),(px,py),(245,245,245),2,cv2.LINE_AA)
       cv2.circle(result,(px,py),10,(0,0,0),-1,cv2.LINE_AA)
       cv2.circle(result,(px,py),7,(255,255,255),-1,cv2.LINE_AA)
@@ -1404,9 +1447,9 @@ class App:
         self.visual_dirty=False
         self.last_visual_update=now_vis;frame_changed=True
       if self.visual_window.state()=='normal' and (self.preview_dirty or frame_changed):
-        preview=self.card_preview_frame(self.preview_card,now_vis-self.t0) if self.preview_card is not None else self.last_frame.copy()
-        if self.sim_card is not None and self.sim_xy is not None:
-          px,py=int(self.sim_xy[0]*(W-1)),int(self.sim_xy[1]*(H-1))
+        preview=self.card_preview_frame(self.preview_card,now_vis-self.t0) if self.preview_card is not None else self.live_preview_frame()
+        if self.preview_card is not None and self.sim_card is not None and self.sim_xy is not None:
+          px,py=self.tracking_point(*self.sim_xy,self.radial_preview())
           cv2.circle(preview,(px,py),14,(0,240,255),2)
           cv2.putText(preview,f'SIM T{self.sim_card+1:02d}',(max(0,min(W-110,px+18)),max(20,py)),cv2.FONT_HERSHEY_SIMPLEX,.5,(0,240,255),1)
         self.display(self.vis_label,cv2.cvtColor(preview,cv2.COLOR_BGR2RGB),'vis_photo')

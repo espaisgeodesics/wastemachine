@@ -171,7 +171,8 @@ class InteractionTests(unittest.TestCase):
             a.display=Mock();a.visual_dirty=True;a.tick()
             projected=[c.args[1] for c in a.display.call_args_list if c.args[0] is a.proj_label][-1]
             previewed=[c.args[1] for c in a.display.call_args_list if c.args[0] is a.vis_label][-1]
-            np.testing.assert_array_equal(projected,previewed)
+            np.testing.assert_array_equal(projected,m.cv2.cvtColor(a.last_frame,m.cv2.COLOR_BGR2RGB))
+            self.assertFalse(np.array_equal(projected,previewed))
             self.assertTrue(projected.any())
             a.deactivate(3);a.tick()
             self.assertFalse(a.last_frame.any())
@@ -226,6 +227,37 @@ class InteractionTests(unittest.TestCase):
                 self.assertEqual(a.audio_control_vars['volume']['max'].get(),110)
                 self.assertEqual(a.note.get(),60)
                 self.assertEqual(a.channel.get(),2)
+            close_test_app(a)
+        finally:
+            try:root.destroy()
+            except m.tk.TclError:pass
+
+    def test_chromatic_live_tracking_stays_out_of_projection_and_recording(self):
+        import numpy as np
+        root=m.tk.Tk()
+        try:
+            with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
+            a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
+            a.midi=Mock();a.cards[0]['visual']=12
+            for x,y in ((.7,.5),(.6,.4),(.4,.3)):a.activate(0,x,y,0)
+            self.assertEqual(len(a.target_trails[0]),3)
+            a.open_projection();root.update_idletasks()
+            a.display=Mock();a.recording=Mock();a.tick()
+            projected=[c.args[1] for c in a.display.call_args_list if c.args[0] is a.proj_label][-1]
+            previewed=[c.args[1] for c in a.display.call_args_list if c.args[0] is a.vis_label][-1]
+            self.assertTrue(np.all(projected==projected[0,0]))
+            self.assertFalse(np.array_equal(projected,previewed))
+            np.testing.assert_array_equal(a.recording.write.call_args.args[0],a.last_frame)
+            self.assertTrue(a.radial_preview())
+            radius=int(min(m.H*.425,m.W*.32))
+            self.assertEqual(a.tracking_point(.75,.5,True),(round(m.W/2+radius*.5),m.H//2))
+            a.activate(2,.65,.7,.25)
+            preview=a.live_preview_frame()
+            self.assertEqual(preview.shape,(360,640,3))
+            self.assertIn(2,a.target_trails)
+            a.deactivate(0);a.deactivate(2);a.tick()
+            self.assertFalse(a.last_frame.any());self.assertFalse(a.live_preview_frame().any())
+            self.assertFalse(a.target_trails)
             close_test_app(a)
         finally:
             try:root.destroy()

@@ -96,3 +96,9 @@ Cada control permet escollir moviment horitzontal, vertical, rotació o distànc
 Aquests controls **envien missatges MIDI, no afegeixen processament d'àudio al Wasteland**. Una pista d'àudio de Sonar no interpreta automàticament tots aquests CC: assigna'ls a volum, panoràmica o paràmetres de plugin amb MIDI Learn / ACT, o utilitza un sampler que els admeti. Configura l'entrada MIDI i els canals perquè no modifiquin instruments que no vulguis controlar. Per fer l'aprenentatge d'un paràmetre, activa primer només aquell control i mou la targeta o la simulació.
 
 Mentre la targeta és present, els moviments modifiquen els controls sense tornar a iniciar el clip. Retirar-la deixa l'últim valor al receptor i el clip continua; tornar-la a mostrar abans que acabi permet continuar controlant-la sense repetir el dispar. La configuració es desa amb el projecte. Inversió de reproducció, canvi de velocitat o bucles no s'han afegit: requereixen un receptor adequat i una configuració específica a Sonar; aquesta funció conserva la reproducció completa una sola vegada.
+
+## Previsualització de seguiment i projecció neta
+
+El directe mostra les guies de control: cercle cromàtic quan hi ha una targeta amb aquest visual, mapa de sectors quan hi ha harmonia/arpegis, i marcadors de totes les targetes actives amb número, orientació i un recorregut dels últims 2,5 segons. Cada targeta té un traç propi. Les coordenades del ratolí sobre el cercle utilitzen la mateixa escala que el mapa visible.
+
+La projecció i la gravació continuen rebent només la composició visual neta: color pla o visuals superposats, sense cercle, mapes, identificadors ni trajectòries. En retirar l'última targeta, el directe i la projecció tornen al negre; consultar una targeta a la llista continua permetent veure'n el mapa sense projectar-lo.
