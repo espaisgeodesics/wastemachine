@@ -269,9 +269,9 @@ class App:
         win.lift(self.root)
     self.status.set('Finestres ordenades. Mou-les o desa la teva distribució des de Projecte.')
  def raise_all_panels(self):
-    # Arrencada sempre ordenada; la distribució personal es recupera manualment
-    # des del menú Projecte per evitar disposicions antigues fora de pantalla.
+    # La distribució inicial serveix de base si no hi ha cap desat o és incomplet.
     self.default_window_layout()
+    if self.window_layout_file.exists():self.restore_window_layout()
  def save_window_layout(self):
     layout={'main':self.root.geometry(),'panels':{}}
     for key,win in self.panel_windows.items():
