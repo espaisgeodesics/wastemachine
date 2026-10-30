@@ -8,7 +8,7 @@ class MusicTests(unittest.TestCase):
         a=m.App.__new__(m.App)
         a.cards=[dict(m.DEFAULTS[0],function=function,arp_direction='Ascendent',rhythm_pattern=[i in (0,3) for i in range(16)],arp_division='1/4 temps',note=36,channel=10)]
         a.arp_states={0:dict(pitches=[60,64,67],index=0,last_step=None,playing=None,off_at=0)}
-        a.midi=Mock();a.bpm=120;a.metronome_start=0;a.muted=False
+        a.audio_states={};a.audio_error=None;a.midi=Mock();a.bpm=120;a.clock_start=0;a.muted=False
         return a
 
     def test_directions_emit_expected_midi(self):

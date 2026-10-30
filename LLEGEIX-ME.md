@@ -37,14 +37,14 @@ Proves: `python -m unittest discover -s tests -v`.
 
 - A la finestra VISUAL, activa **SIMULAR AMB RATOLÍ**. Tria una targeta a l'editor, configura-la i prem APLICAR. Mantén premut el botó esquerre sobre la imatge i arrossega per simular-ne la posició; un cercle groc indica la targeta. Deixa anar el clic per retirar-la. El control Gir simula la rotació. La càmera i la simulació són alternatives; activar-ne una desactiva l'altra.
 - **SILENCI ABSOLUT** atura les notes, allibera el pedal de sustain i envia All Sound Off i All Notes Off als 16 canals de la sortida MIDI connectada. També bloqueja noves activacions fins a prémer **REPRENDRE MIDI**. No silencia pistes d'àudio o instruments que no rebin aquesta sortida MIDI.
-- A **Arpegiador espacial → CONFIGURAR MÚSICA / PATRÓ**, tria Ascendent, Descendent, Pujada i baixada o Aleatori. Es conserven la divisió rítmica, durada, escala i intensitat.
+- En seleccionar **Arpegiador espacial**, el menú s’obre i pots triar Ascendent, Descendent, Pujada i baixada o Aleatori. Es conserven la divisió rítmica, durada, escala i intensitat.
 - La funció **Patró rítmic** ofereix 16 passos repetits. Activa els cops a la configuració musical; la nota i el canal es trien a l'editor de la targeta. La divisió 1/4 temps equival a semicorxeres: 16 passos formen un compàs de 4/4. El patró segueix el rellotge intern i comença a la fase actual de la graella quan detecta la targeta; s'atura en retirar-la. No hi ha sincronització externa amb Cakewalk en aquesta versió.
 - Per a bateria General MIDI, pots assignar targetes diferents a bombo (nota 36), caixa (38) i hi-hat (42), normalment al canal 10; depèn de l'instrument receptor. La simulació amb ratolí activa una targeta cada vegada; la càmera permet diverses targetes.
 - Desa el projecte per conservar les direccions i els patrons. Els projectes anteriors continuen fent servir arpegis ascendents per defecte.
 
 ## Una targeta, una bateria completa
 
-Tria **Ritme de bateria** com a funció d'una targeta i obre **CONFIGURAR MÚSICA / PATRÓ**. Pots escollir Rock bàsic, Rock potent, Disco, Funk, Mig temps o Electrònic. Cada preset envia simultàniament les peces corresponents del kit; no cal una targeta per instrument. Configura el canal que rep la pista de MT Power Drum Kit a Sonar, ajusta la intensitat i prem APLICAR. Desa el projecte per conservar-ho.
+Tria **Ritme de bateria** com a funció d'una targeta: la configuració s'obre automàticament. Pots escollir Rock bàsic, Rock potent, Disco, Funk, Mig temps o Electrònic. Cada preset envia simultàniament les peces corresponents del kit; no cal una targeta per instrument. Configura el canal que rep la pista de MT Power Drum Kit a Sonar, ajusta la intensitat i prem APLICAR. Desa el projecte per conservar-ho.
 
 La detecció de la targeta inicia el compàs des del primer pas i el repeteix mentre es manté present. En retirar-la s'aturen totes les notes que ha generat. El ratolí serveix per provar el ritme complet mantenint premut el clic. SILENCI ABSOLUT també atura aquests ritmes.
 
@@ -64,8 +64,35 @@ Clica una fila per seleccionar la mateixa targeta a l'editor i veure el seu mapa
 
 **TARGETES EN FUNCIÓ** inclou ara el monitor ArUco: nom, funció, ID, estat, canal, nota, CC, eix, valor, X/Y, gir i visual assignat. Ja no s'obre una segona finestra de monitor. Utilitza la barra horitzontal per veure totes les columnes i desmarca **Només targetes amb funció** si vols consultar també les inactives amb Cap acció. Els noms i la distribució desada es conserven.
 
-En seleccionar **Control MIDI CC** s'obre la seva configuració, amb canal, número CC i desplegable de moviment (rotació, horitzontal o vertical). Es pot tornar a obrir amb CONFIGURAR CONTROL MIDI CC. La T02 amb CC7 conserva el control especial radial de volum i filtre CC74, indicat a la finestra.
+En seleccionar **Control MIDI CC** s'obre la seva configuració, amb canal, número CC i desplegable de moviment (rotació, horitzontal o vertical). Per tornar a obrir-la, torna a seleccionar Control MIDI CC al desplegable de funcions. La T02 amb CC7 conserva el control especial radial de volum i filtre CC74, indicat a la finestra.
 
 Les targetes actives generen els visuals assignats. Diversos visuals diferents se superposen mitjançant una mescla de llum; en retirar una targeta desapareix la seva capa, i sense cap targeta la sortida en directe queda negra. Activar una targeta amb càmera o simulació torna automàticament al directe; seleccionar una fila permet inspeccionar el seu mapa sense activar MIDI ni projectar-lo.
 
 La projecció i la gravació reben la mateixa composició en directe. La projecció ja no està limitada al color pla: mostra també els dotze visuals renovats, amb llum, halo i moviment continu. El cercle cromàtic conserva la seva projecció de color pla, que també es pot combinar amb altres visuals. Els mapes i els indicadors del ratolí són només d'ajuda a la previsualització. S'ha comprovat la finestra de projecció en pantalla virtual; cal provar el monitor/projector físic al teu ordinador. Les assignacions numèriques i els noms dels visuals es mantenen per compatibilitat amb els projectes anteriors.
+
+## Àudio: disparar un clip complet dins de Sonar
+
+La funció **Àudio** envia un pols de nota MIDI per iniciar un clip configurat prèviament a Sonar. No reprodueix fitxers localment ni activa directament qualsevol pista del timeline. Necessita una cel·la de la vista Matrix de Sonar, o un sampler amb reproducció one-shot, que tingui aquesta nota assignada.
+
+1. A Sonar, carrega l'àudio a una cel·la Matrix o un sampler. Configura'l perquè una nota curta iniciï el clip complet, sense bucle i sense aturar-se quan arriba el note-off. Per començar, utilitza llançament immediat, sense esperar cap compàs. No el vinculis a una pista amb un instrument de bateria que pugui interpretar la mateixa nota.
+2. Associa una nota MIDI lliure d'un canal concret al llançament del clip, rebuda des del mateix port loopMIDI del Wasteland. La configuració d'aquesta associació es fa a Sonar. Comprova que una pulsació curta reprodueixi l'àudio sencer abans d'utilitzar la càmera.
+3. A l'editor del Wasteland, selecciona **Àudio**. El menú s'obre automàticament: indica canal, nota i la durada real del clip en segons. El botó **PROVAR DISPAR A SONAR** envia el pols sense necessitat de càmera. Desa el projecte per conservar els paràmetres.
+4. En detectar la targeta s'envia un sol dispar. Retirar-la no envia una ordre d'aturada. El bloqueig impedeix repetir-lo durant la durada indicada, encara que es retiri i es torni a detectar la targeta. Quan acaba aquest temps, cal una nova aparició de la targeta per tornar-lo a disparar; no es repeteix automàticament si es manté visible. També es bloquegen dues targetes amb la mateixa nota i canal mentre el clip està ocupat.
+
+**La durada és un bloqueig temporal configurat, no una detecció del final real.** Sonar no retorna aquest final al Wasteland. Si hi ha espera de llançament, estirament de temps o canvis al clip, cal ajustar la durada perquè no es pugui tornar a disparar abans d'hora. El monitor mostra el bloqueig restant; això confirma l'enviament del dispar, no que Sonar estigui sonant. Cal validar la reproducció a Sonar al teu ordinador.
+
+El pols MIDI dura com a màxim 80 ms; el receptor ha d'ignorar-ne la finalització per continuar en one-shot. La retirada d'una targeta, el canvi de funció o la pausa de visuals no aturen el clip. Per aturar-lo abans del final, utilitza els controls de Sonar. El botó SILENCI ABSOLUT del Wasteland bloqueja MIDI i envia ordres de silenci als instruments, però no és un control de transport de les pistes d'àudio de Sonar.
+
+## Interfície simplificada
+
+S'han retirat el metrònom visual, el botó FINESTRES i els botons permanents de configuració de l'editor. Tria o torna a seleccionar una funció al desplegable per obrir la seva configuració. Els BPM continuen marcant el rellotge intern dels arpegis i patrons. La capçalera és nativa, mostra només v4.6.0 i no conté els falsos botons de finestra de la imatge anterior. El fitxer principal conserva el nom anterior per mantenir els accessos d'arrencada existents.
+
+## Àudio: moviment, volum i efectes
+
+La finestra que s'obre en seleccionar **Àudio** té dues pestanyes: **Reproducció** i **Moviment i efectes**. A la segona pots activar fins a tres controls independents: volum (CC7), panoràmica (CC10) i efecte assignable (CC74 per defecte, amb propostes CC91 per reverberació i CC94 per delay). Els controls estan desactivats inicialment: activa només els que hagis vinculat al receptor.
+
+Cada control permet escollir moviment horitzontal, vertical, rotació o distància al centre; invertir-ne el sentit; ajustar mínim/màxim entre 0 i 127, i canviar el número CC. Per exemple, volum vertical invertit fa que a dalt soni més fort. Per evitar arribar al silenci, posa el mínim de volum a 30 o 40. Els controls actius han de tenir CC diferents. Tots utilitzen el canal MIDI de la targeta.
+
+Aquests controls **envien missatges MIDI, no afegeixen processament d'àudio al Wasteland**. Una pista d'àudio de Sonar no interpreta automàticament tots aquests CC: assigna'ls a volum, panoràmica o paràmetres de plugin amb MIDI Learn / ACT, o utilitza un sampler que els admeti. Configura l'entrada MIDI i els canals perquè no modifiquin instruments que no vulguis controlar. Per fer l'aprenentatge d'un paràmetre, activa primer només aquell control i mou la targeta o la simulació.
+
+Mentre la targeta és present, els moviments modifiquen els controls sense tornar a iniciar el clip. Retirar-la deixa l'últim valor al receptor i el clip continua; tornar-la a mostrar abans que acabi permet continuar controlant-la sense repetir el dispar. La configuració es desa amb el projecte. Inversió de reproducció, canvi de velocitat o bucles no s'han afegit: requereixen un receptor adequat i una configuració específica a Sonar; aquesta funció conserva la reproducció completa una sola vegada.

@@ -10,12 +10,13 @@ try:
 except ImportError:
     mido = None
 
+APP_VERSION='4.6.0'
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
 (ROOT/'GRAVACIONS').mkdir(exist_ok=True)
 W,H=640,360
 NAMES=['Motor de ferro','Tempesta de pols','Vapor tòxic','Reactor elèctric','Túnel mecànic','Forja de foc','Fantasma digital','Ones mecàniques','Ferralla orbital','Nucli radioactiu','Ull de la màquina','Sol terminal','Cercle cromàtic 360°']
-FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Ritme de bateria','Cap acció']
+FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Ritme de bateria','Àudio','Cap acció']
 DEFAULTS=[]
 for i in range(16):
     DEFAULTS.append({'name':f'Targeta {i+1:02d}','function':'Nota MIDI' if i<4 else ('Control MIDI CC' if i<12 else 'Canviar visual'), 'channel':1,'note':36+i,'cc':20+i,'visual':i%12,'axis':'Rotació','min':0,'max':127,'harmony_key':'La menor','harmony_root':9,'harmony_scale':'Menor natural (eòlica)','harmony_velocity':85,'arp_division':'1/2 temps','arp_gate':60})
@@ -55,6 +56,13 @@ DRUM_PRESETS={
  'Electrònic':{'Bombo':(0,4,8,12),'Caixa':(4,12),'Hi-hat tancat':(2,6,10,14),'Hi-hat obert':(15,)},
 }
 
+AUDIO_CONTROLS={
+ 'volume':{'label':'Volum','enabled':False,'cc':7,'axis':'Vertical','inverted':True,'min':0,'max':127},
+ 'pan':{'label':'Panoràmica','enabled':False,'cc':10,'axis':'Horitzontal','inverted':False,'min':0,'max':127},
+ 'effect':{'label':'Efecte assignable','enabled':False,'cc':74,'axis':'Rotació','inverted':False,'min':0,'max':127},
+}
+AUDIO_AXES=['Horitzontal','Vertical','Rotació','Distància al centre']
+
 ARP_DIRECTIONS=['Ascendent','Descendent','Pujada i baixada','Aleatori']
 
 def arpeggio_note(pitches,index,direction):
@@ -67,11 +75,15 @@ def arpeggio_note(pitches,index,direction):
 
 class App:
  def __init__(self,root):
-    self.root=root; root.title('WASTELAND MACHINE 4.5.15 · Pas 15 · Editor musical desplegable'); root.geometry('790x265'); root.minsize(570,205)
+    self.root=root; root.title('WASTELAND MACHINE'); root.geometry('790x265'); root.minsize(570,205)
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
-    self.metronome_enabled=False; self.metronome_start=time.monotonic(); self.metronome_last_beat=-1; self.metronome_last_bpm=self.bpm; self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
+    self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
     self.show_only_assigned=tk.BooleanVar(value=True); self.visual_dirty=True; self.preview_card=None; self.preview_dirty=True; self.preview_caption=tk.StringVar(value='Previsualització en directe'); self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
+    self.audio_states={}; self.audio_error=None; self.audio_duration=tk.DoubleVar(value=0);self.audio_cc_values={}
+    self.audio_control_vars={}
+    for role,defaults in AUDIO_CONTROLS.items():
+      self.audio_control_vars[role]={key:(tk.BooleanVar(value=value) if key in ('enabled','inverted') else (tk.StringVar(value=value) if key=='axis' else tk.IntVar(value=value))) for key,value in defaults.items() if key!='label'}
     self.camera=None; self.midi=None; self.midi_name=''; self.recording=None; self.record_file=None; self.t0=time.monotonic(); self.last_frame=None; self.visual_paused=False; self.visual_paused_at=None; self.monitor_window=None; self.monitor_table=None; self.monitor_ticks=0
     self.aruco_detector=cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
     self.last_visual_update=0.0; self.visual_interval=1/12; self._closing=False
@@ -107,22 +119,17 @@ class App:
     fm.add_command(label='Restablir distribució inicial',command=self.default_window_layout)
     fm.add_separator();fm.add_command(label='Sortir',command=self.close)
     menu.add_cascade(label='Projecte',menu=fm);self.root.config(menu=menu)
-    # Capçalera real extreta del disseny aprovat, no una imitació feta amb text.
-    banner=tk.Frame(self.root,bg='#2c1b13',highlightbackground='#9c6139',highlightthickness=2,height=94)
-    banner.pack(fill='x',padx=7,pady=(5,3));banner.pack_propagate(False)
-    try:
-      self.banner_source=Image.open(ROOT/'capcalera_wasteland_4513.png').convert('RGB')
-      self.banner_photo=None
-      self.banner_label=tk.Label(banner,bg='#20130e',bd=0)
-      self.banner_label.pack(fill='both',expand=True)
-      self.banner_label.bind('<Configure>',self.resize_banner)
-    except Exception:
-      tk.Label(banner,text='WASTELAND MACHINE',font=('Georgia',19,'bold'),fg='#f5b47a',bg='#20130e').pack(fill='both',expand=True)
+    # Capçalera nativa: cap versió ni botó decoratiu incrustat en una imatge.
+    banner=tk.Frame(self.root,bg='#211812',highlightbackground='#9c6139',highlightthickness=1,height=88)
+    banner.pack(fill='x',padx=7,pady=(5,5));banner.pack_propagate(False)
+    accent=tk.Frame(banner,bg='#c8874f',width=5);accent.pack(side='left',fill='y',padx=(0,12))
+    brand=tk.Frame(banner,bg='#211812');brand.pack(side='left',fill='both',expand=True,pady=10)
+    tk.Label(brand,text='WASTELAND MACHINE',font=('Georgia',23,'bold'),fg='#edbc88',bg='#211812',anchor='w').pack(fill='x')
+    tk.Label(brand,text='TARGETES  ·  MÚSICA  ·  VISUALS',font=('Segoe UI',9),fg='#b89474',bg='#211812',anchor='w').pack(fill='x',pady=(3,0))
+    tk.Label(banner,text='v'+APP_VERSION,font=('Segoe UI',10),fg='#cfaa85',bg='#211812').pack(side='right',anchor='n',padx=14,pady=15)
     toolbar=ttk.Frame(self.root);toolbar.pack(fill='x',padx=9,pady=(1,5))
     self.panic_button=tk.Button(toolbar,text='SILENCI ABSOLUT',command=self.toggle_panic,bg='#a52626',fg='white',font=('Segoe UI',10,'bold'));self.panic_button.pack(side='left',padx=3)
     ttk.Button(toolbar,text='TARGETES EN FUNCIÓ',command=lambda:self.show_panel('cards')).pack(side='left',padx=3)
-    ttk.Button(toolbar,text='FINESTRES',command=self.show_all_panels).pack(side='left',padx=7)
-    ttk.Label(toolbar,text='v 4.5.15 · Pas 15',foreground='#d5a16b').pack(side='right',padx=7)
     # Cada mòdul té una finestra nativa de Windows: es pot arrossegar,
     # canviar de mida, minimitzar i restaurar independentment.
     self.panel_windows={}
@@ -141,11 +148,11 @@ class App:
     ttk.Label(card_sidebar,text='TARGETES EN FUNCIÓ · Doble clic al nom per editar-lo').pack(anchor='w',pady=(0,4))
     ttk.Checkbutton(card_sidebar,text='Només targetes amb funció',variable=self.show_only_assigned,command=self.update_assigned_cards).pack(anchor='w',pady=4)
     card_list=ttk.Frame(card_sidebar);card_list.pack(fill='both',expand=True)
-    self.assigned_cards=ttk.Treeview(card_list,columns=('card','function','name','id','state','channel','note','cc','axis','value','x','y','angle','visual'),show='headings',selectmode='browse',height=8)
+    self.assigned_cards=ttk.Treeview(card_list,columns=('card','function','name','id','state','channel','note','cc','axis','value','x','y','angle','visual','audio'),show='headings',selectmode='browse',height=8)
     self.assigned_cards.heading('card',text='Targeta');self.assigned_cards.column('card',width=58,minwidth=48,stretch=False)
     self.assigned_cards.heading('function',text='Funció');self.assigned_cards.column('function',width=165,minwidth=100)
     self.assigned_cards.heading('name',text='Nom assignat');self.assigned_cards.column('name',width=240,minwidth=120)
-    for column,title,width in [('id','ID',38),('state','Estat',70),('channel','Canal',50),('note','Nota',48),('cc','CC',45),('axis','Eix',90),('value','Valor',55),('x','X %',55),('y','Y %',55),('angle','Graus',55),('visual','Visual',160)]:
+    for column,title,width in [('id','ID',38),('state','Estat',70),('channel','Canal',50),('note','Nota',48),('cc','CC',45),('axis','Eix',90),('value','Valor',55),('x','X %',55),('y','Y %',55),('angle','Graus',55),('visual','Visual',160),('audio','Àudio / Sonar',170)]:
       self.assigned_cards.heading(column,text=title);self.assigned_cards.column(column,width=width,minwidth=35,stretch=False)
     horizontal=ttk.Scrollbar(card_list,orient='horizontal',command=self.assigned_cards.xview)
     self.assigned_cards.configure(xscrollcommand=horizontal.set);horizontal.pack(side='bottom',fill='x')
@@ -196,10 +203,6 @@ class App:
     bpm_spin.bind('<Return>',lambda event:self.update_bpm())
     bpm_spin.bind('<FocusOut>',lambda event:self.update_bpm())
     ttk.Button(control_strip,text='APLICAR BPM',command=self.update_bpm).pack(side='left',padx=3)
-    self.metronome_button=ttk.Button(control_strip,text='METRÒNOM: OFF',command=self.toggle_metronome)
-    self.metronome_button.pack(side='left',padx=(9,3))
-    self.beat_light=tk.Label(control_strip,text='●',bg='#1e1712',fg='#55483e',font=('Segoe UI',17,'bold'))
-    self.beat_light.pack(side='left',padx=(1,5))
     ttk.Checkbutton(control_strip,text='ACORDS AL TEMPS',variable=self.quantize_harmony,command=self.toggle_quantization).pack(side='left',padx=(2,5))
     self.midi_cb=ttk.Combobox(midi_box,textvariable=self.midi_choice,width=26,state='readonly');self.midi_cb.pack(fill='x',padx=7,pady=(7,3))
     ttk.Button(midi_box,text='ACTUALITZAR PORTS',command=self.refresh_midi).pack(fill='x',padx=7,pady=2)
@@ -218,9 +221,7 @@ class App:
     for label,var,from_,to in [('Canal MIDI (1-16)',self.channel,1,16),('Nota MIDI (0-127)',self.note,0,127)]:
       ttk.Label(frame,text=label).pack(anchor='w',padx=8,pady=(5,0))
       tk.Spinbox(frame,textvariable=var,from_=from_,to=to,width=8,bg='#e9d8c2').pack(anchor='w',padx=8)
-    self.function_settings_button=ttk.Button(frame,text='CONFIGURAR FUNCIÓ…',command=self.open_function_settings)
-    self.function_settings_button.pack(fill='x',padx=8,pady=(9,4))
-    ttk.Label(frame,text='Les escales, la força i el ritme són dins la finestra de configuració musical.',wraplength=245,foreground='#c9aa83').pack(anchor='w',padx=8,pady=(0,5))
+    ttk.Label(frame,text='Tria o torna a seleccionar una funció per obrir-ne la configuració.',wraplength=245,foreground='#c9aa83').pack(anchor='w',padx=8,pady=(0,5))
     ttk.Label(frame,text='Visual assignat').pack(anchor='w',padx=8,pady=(5,0))
     ttk.Combobox(frame,textvariable=self.visual,values=NAMES,state='readonly',width=25).pack(fill='x',padx=8)
     ttk.Button(frame,text='APLICAR / CREAR TARGETA',command=self.apply_card,style='Accent.TButton').pack(fill='x',padx=8,pady=9)
@@ -259,11 +260,10 @@ class App:
     now=time.monotonic()
     if self.clock_last_bpm!=self.bpm:
       self.clock_last_bpm=self.bpm
-      self.metronome_start=now
+      self.clock_start=now
       self.clock_next_beat=1
-      self.metronome_last_beat=-1
     interval=60.0/max(1,self.bpm)
-    current=int((now-self.metronome_start)/interval)
+    current=int((now-self.clock_start)/interval)
     if current>=self.clock_next_beat:
       # No reproduïm pulsacions acumulades després d'una aturada de la GUI.
       self.clock_next_beat=current+1
@@ -271,33 +271,11 @@ class App:
         for i,zone in list(self.queued_harmony.items()):
           if i in self.active:self.play_harmony_zone(i,zone)
         self.queued_harmony.clear()
- def toggle_metronome(self):
-    self.metronome_enabled=not self.metronome_enabled
-    self.metronome_last_beat=-1
-    self.metronome_last_bpm=self.bpm
-    self.metronome_button.config(text='METRÒNOM: ON' if self.metronome_enabled else 'METRÒNOM: OFF')
-    if not self.metronome_enabled:self.beat_light.config(fg='#55483e')
- def update_metronome_light(self):
-    if not self.metronome_enabled:return
-    now=time.monotonic()
-    if self.metronome_last_bpm!=self.bpm:
-      self.metronome_last_bpm=self.bpm
-      self.metronome_last_beat=-1
-    interval=60.0/max(1,self.bpm)
-    elapsed=now-self.metronome_start
-    beat=int(elapsed/interval)
-    phase=(elapsed/interval)-beat
-    if beat!=self.metronome_last_beat:self.metronome_last_beat=beat
-    if phase<0.17:
-      self.beat_light.config(fg='#ffb44b' if beat%4==0 else '#5ff0ac')
-    else:self.beat_light.config(fg='#55483e')
  def show_panel(self,key):
     win=self.panel_windows.get(key)
     if win and win.winfo_exists():
       win.deiconify()
       win.lift()
- def show_all_panels(self):
-    for key in self.panel_windows:self.show_panel(key)
  def default_window_layout(self):
     # Pantalla principal maximitzada; els quatre mòduls ocupen una quadrícula
     # sense superposar-se, amb marges adaptats a la resolució de Windows.
@@ -359,16 +337,6 @@ class App:
       if not silent:self.status.set('Distribució de finestres recuperada.')
     except Exception as exc:
       self.status.set('No s’ha pogut recuperar la distribució: '+str(exc))
- def resize_banner(self,event):
-    if event.width<10 or event.height<10:return
-    im=self.banner_source
-    # Omplim tota la capçalera sense deformar-la.
-    scale=max(event.width/im.width,event.height/im.height)
-    nw=max(1,int(im.width*scale));nh=max(1,int(im.height*scale))
-    resized=im.resize((nw,nh),Image.Resampling.LANCZOS)
-    x=(nw-event.width)//2;y=(nh-event.height)//2
-    self.banner_photo=ImageTk.PhotoImage(resized.crop((x,y,x+event.width,y+event.height)))
-    self.banner_label.config(image=self.banner_photo)
  def sidebar_panel(self,parent,title,pady=3):
     # Marc de ferro rovellat, capçalera de coure i reblons decoratius.
     outer=tk.Frame(parent,bg='#241711',highlightbackground='#b77943',highlightthickness=2,bd=2,relief='ridge')
@@ -414,7 +382,7 @@ class App:
       position=self.active.get(i)
       x,y,angle=position if position is not None else (None,None,None)
       value={'Rotació':angle,'Horitzontal':x,'Vertical':y}.get(c.get('axis'),angle)
-      values=(f'{i+1:02d}',c['function'],c.get('name',f'Targeta {i+1:02d}'),i,'ACTIU' if position is not None else 'Inactiu',c['channel'],c['note'],c['cc'],c['axis'],round(max(0,min(1,value))*127) if value is not None else '--',f'{x*100:.1f}' if x is not None else '--',f'{y*100:.1f}' if y is not None else '--',f'{angle*360:.1f}' if angle is not None else '--',NAMES[c['visual']])
+      values=(f'{i+1:02d}',c['function'],c.get('name',f'Targeta {i+1:02d}'),i,'ACTIU' if position is not None else 'Inactiu',c['channel'],c['note'],c['cc'],c['axis'],round(max(0,min(1,value))*127) if value is not None else '--',f'{x*100:.1f}' if x is not None else '--',f'{y*100:.1f}' if y is not None else '--',f'{angle*360:.1f}' if angle is not None else '--',NAMES[c['visual']],self.audio_status(i))
       tags=('active',) if i in self.active else ()
       if tree.exists(str(i)):tree.item(str(i),values=values,tags=tags)
       else:tree.insert('','end',iid=str(i),values=values,tags=tags)
@@ -468,6 +436,11 @@ class App:
       return self.harmony_map_preview(chromatic=c.get('visual')==12,card_index=i)
     if kind in ('Patró rítmic','Ritme de bateria'):
       return self.rhythm_map_preview(i)
+    if kind=='Àudio':
+      frame=np.full((H,W,3),(25,20,17),np.uint8)
+      for text,y in [(f'AUDIO | TARGETA {i+1:02d}',45),(f'SONAR: CANAL {c["channel"]} | NOTA {c["note"]}',110),(f'UNA VEGADA | {c.get("audio_duration",0):g} segons',170),('Retirar la targeta no atura el clip.',240)]:
+        cv2.putText(frame,text,(24,y),cv2.FONT_HERSHEY_SIMPLEX,.7,(245,228,205),1,cv2.LINE_AA)
+      return frame
     if c.get('visual')==12:return self.color_wheel_preview()
     if kind=='Canviar visual':return self.render(t,visual=c['visual'])
     frame=np.full((H,W,3),(25,20,17),np.uint8)
@@ -538,16 +511,51 @@ class App:
     self.show_panel('cards')
  def update_aruco_monitor(self):
     self.update_assigned_cards()
- def update_function_settings_button(self):
-    kind=self.fun.get()
-    enabled=kind in ('Control MIDI CC','Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria')
-    self.function_settings_button.config(text='CONFIGURAR CONTROL MIDI CC…' if kind=='Control MIDI CC' else 'CONFIGURAR MÚSICA / PATRÓ…',state='normal' if enabled else 'disabled')
  def on_function_selected(self,event=None):
-    self.update_function_settings_button()
     self.open_function_settings()
  def open_function_settings(self):
-    if self.fun.get()=='Control MIDI CC':self.open_cc_settings()
+    if self.fun.get()=='Àudio':self.open_audio_settings()
+    elif self.fun.get()=='Control MIDI CC':self.open_cc_settings()
     elif self.fun.get() in ('Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria'):self.open_music_settings()
+ def open_audio_settings(self):
+    old=getattr(self,'audio_settings_window',None)
+    if old is not None and old.winfo_exists():old.destroy()
+    win=tk.Toplevel(self.root);self.audio_settings_window=win
+    win.title('ÀUDIO · DISPAR A SONAR · TARGETA '+self.card_id.get());win.geometry('560x700');win.transient(self.root);win.configure(bg='#151210')
+    footer=ttk.Frame(win);footer.pack(side='bottom',fill='x',padx=16,pady=10)
+    tabs=ttk.Notebook(win);tabs.pack(fill='both',expand=True,padx=12,pady=10)
+    pane=ttk.Frame(tabs,padding=12);controls=ttk.Frame(tabs,padding=12)
+    tabs.add(pane,text='Reproducció');tabs.add(controls,text='Moviment i efectes')
+    ttk.Label(pane,text='ÀUDIO · UNA REPRODUCCIÓ COMPLETA',font=('Segoe UI',11,'bold')).pack(anchor='w',pady=8)
+    for title,var,minimum,maximum,increment in [('Canal MIDI',self.channel,1,16,1),('Nota que activa el clip a Sonar',self.note,0,127,1),('Durada del clip en segons (obligatòria)',self.audio_duration,.1,86400,.1)]:
+      ttk.Label(pane,text=title).pack(anchor='w',pady=(8,2))
+      tk.Spinbox(pane,textvariable=var,from_=minimum,to=maximum,increment=increment,width=12).pack(anchor='w')
+    ttk.Label(pane,text='A Sonar: carrega el clip en una cel·la Matrix o un sampler configurat en mode one-shot, sense bucle, i assigna-hi aquesta nota del port loopMIDI. Una pista normal no s’activa només rebent aquesta nota.',wraplength=420).pack(anchor='w',pady=(14,6))
+    ttk.Label(pane,text='Retirar la targeta no atura el clip. Les deteccions es bloquegen durant els segons indicats. Quan acabi, retira i torna a ensenyar la targeta per repetir-lo. Sonar no ens envia confirmació del final: indica la durada real, incloent qualsevol espera de llançament.',wraplength=420).pack(anchor='w',pady=6)
+    ttk.Label(controls,text='CONTROLS DE LA TARGETA',font=('Segoe UI',11,'bold')).pack(anchor='w',pady=(0,6))
+    ttk.Label(controls,text='Activa només els controls vinculats amb MIDI Learn / ACT a Sonar o al plugin. Retirar la targeta manté l’últim valor; no envia volum zero ni atura el clip.',wraplength=500).pack(anchor='w',pady=(0,10))
+    for role,variables in self.audio_control_vars.items():
+      group=ttk.LabelFrame(controls,text=AUDIO_CONTROLS[role]['label'],padding=8);group.pack(fill='x',pady=5)
+      ttk.Checkbutton(group,text='Activar',variable=variables['enabled']).grid(row=0,column=0,sticky='w')
+      ttk.Label(group,text='CC').grid(row=0,column=1,padx=5)
+      tk.Spinbox(group,textvariable=variables['cc'],from_=0,to=127,width=5).grid(row=0,column=2,sticky='w')
+      ttk.Checkbutton(group,text='Invertir',variable=variables['inverted']).grid(row=0,column=3,padx=8)
+      ttk.Combobox(group,textvariable=variables['axis'],values=AUDIO_AXES,state='readonly',width=22).grid(row=1,column=0,columnspan=2,sticky='w',pady=6)
+      limits=ttk.Frame(group);limits.grid(row=1,column=2,columnspan=2,sticky='w')
+      for title,key in [('Mín.','min'),('Màx.','max')]:
+        ttk.Label(limits,text=title).pack(side='left',padx=3)
+        tk.Spinbox(limits,textvariable=variables[key],from_=0,to=127,width=4).pack(side='left')
+    self.audio_effect_preset=tk.StringVar(value='Personalitzat')
+    ttk.Label(controls,text='Propostes de CC per a l’efecte (cal assignar-los al receptor)').pack(anchor='w',pady=(8,3))
+    presets={'Filtre · CC74':74,'Reverberació · CC91':91,'Delay · CC94':94}
+    preset=ttk.Combobox(controls,textvariable=self.audio_effect_preset,values=list(presets),state='readonly');preset.pack(fill='x')
+    preset.bind('<<ComboboxSelected>>',lambda event:self.audio_control_vars['effect']['cc'].set(presets[self.audio_effect_preset.get()]))
+    def apply():
+      if self.apply_card():win.destroy()
+    def test():
+      if self.apply_card():self.trigger_audio(int(self.card_id.get())-1)
+    ttk.Button(footer,text='PROVAR DISPAR A SONAR',command=test).pack(fill='x',pady=(10,0))
+    ttk.Button(footer,text='APLICAR A LA TARGETA I TANCAR',command=apply).pack(fill='x',pady=12)
  def open_cc_settings(self):
     old=getattr(self,'cc_settings_window',None)
     if old is not None and old.winfo_exists():old.destroy()
@@ -616,35 +624,46 @@ class App:
     ttk.Label(pane,text='Per conservar els canvis en disc: Projecte → Desar projecte.',wraplength=320).pack(anchor='w',pady=(5,0))
  def load_card(self):
     c=self.cards[int(self.card_id.get())-1]; self.fun.set(c['function']); self.axis.set(c['axis']); self.note.set(c['note']); self.cc.set(c['cc']); self.channel.set(c['channel']); self.visual.set(NAMES[c['visual']]); self.harmony_key.set(c.get('harmony_key','La menor')); self.harmony_root.set(NOTE_NAMES[int(c.get('harmony_root',9))%12]); self.harmony_scale.set(c.get('harmony_scale','Menor natural (eòlica)')); self.harmony_velocity.set(c.get('harmony_velocity',85)); self.arp_division.set(c.get('arp_division','1/2 temps')); self.arp_gate.set(c.get('arp_gate',60)); self.arp_direction.set(c.get('arp_direction','Ascendent'))
+    self.audio_duration.set(c.get('audio_duration',0))
+    for role,variables in self.audio_control_vars.items():
+      for key,var in variables.items():var.set(c.get('audio_controls',{}).get(role,{}).get(key,AUDIO_CONTROLS[role][key]))
     self.drum_preset.set(c.get('drum_preset','Rock bàsic'))
     for name,var in self.drum_notes.items():var.set(c.get('drum_notes',{}).get(name,DRUM_NOTES[name]))
     for j,var in enumerate(self.rhythm_steps):var.set(bool(c.get('rhythm_pattern',[k%4==0 for k in range(16)])[j]))
     self.select_card_preview(int(self.card_id.get())-1)
-    self.update_function_settings_button()
  def apply_card(self):
     try:
       card_index=int(self.card_id.get())-1
+      duration=float(self.audio_duration.get())
+      if not math.isfinite(duration) or duration<0 or (self.fun.get()=='Àudio' and duration<=0):raise ValueError('Indica la durada real del clip d’àudio en segons, superior a zero.')
+      control_configs={role:{key:var.get() for key,var in variables.items()} for role,variables in self.audio_control_vars.items()}
+      used=[]
+      for config in control_configs.values():
+        if config['axis'] not in AUDIO_AXES or not 0<=config['cc']<=127 or not 0<=config['min']<=config['max']<=127:raise ValueError('Revisa els CC i els límits dels controls d’àudio (0–127, mínim ≤ màxim).')
+        if config['enabled']:used.append(config['cc'])
+      if len(set(used))!=len(used):raise ValueError('Cada control d’àudio actiu ha de tenir un número CC diferent.')
       self.deactivate(card_index)
-      c=self.cards[card_index]; c.update(drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
+      c=self.cards[card_index]; c.update(audio_controls=control_configs,audio_duration=duration,drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
       if c['visual']==12 and int(self.card_id.get())-1 in self.active:self.select_visual(12)
       self.select_card_preview(card_index)
       self.status.set(f'Targeta {self.card_id.get()} configurada. Desa el projecte per conservar els canvis.');self.update_cards_table()
-    except Exception as e: messagebox.showerror('Configuració',str(e))
+      return True
+    except Exception as e:
+      messagebox.showerror('Configuració',str(e));return False
  def new_project(self):
     self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol'; self.load_card();self.update_cards_table(); self.status.set('Projecte nou')
  def update_bpm(self):
     try:
       with self.arp_lock:
         self.bpm=max(40,min(180,int(self.bpm_var.get())))
-        self.metronome_start=time.monotonic()
+        self.clock_start=time.monotonic()
         self.clock_last_bpm=self.bpm
-        self.metronome_last_bpm=self.bpm
         self.clock_next_beat=1
       self.bpm_var.set(self.bpm)
       self.status.set(f'Rellotge musical: {self.bpm} BPM. Acords quantitzats si activats; Cakewalk conserva el seu tempo.')
     except (ValueError,tk.TclError):self.status.set('Tempo no vàlid')
  def save_project(self,as_new=False):
-    self.apply_card()
+    if not self.apply_card():return
     if as_new or self.project=='Sense títol':
       path=filedialog.asksaveasfilename(initialdir=ROOT/'PROJECTES',defaultextension='.json',filetypes=[('Projecte Wasteland','*.json')])
       if not path:return
@@ -797,6 +816,8 @@ class App:
     if not wr.isOpened():messagebox.showerror('Gravació','No es pot crear el vídeo AVI');return
     self.recording=wr;self.record_file=path;self.rec_label.config(text='● GRAVANT',foreground='red');self.status.set('Gravant visuals a '+str(path))
  def all_notes_off(self):
+    with self.arp_lock:
+      for state in self.audio_states.values():self.release_audio_trigger(state)
     if self.midi:
       for (ch,note) in list(self.notes.values()):
         try:self.midi.send(mido.Message('note_off',channel=ch,note=note,velocity=0))
@@ -818,7 +839,8 @@ class App:
     while not self.arp_stop.wait(.003):
       with self.arp_lock:
         if self._closing:break
-        if not self.muted:self.sequencer_tick(time.monotonic())
+        now=time.monotonic();self.audio_tick(now)
+        if not self.muted:self.sequencer_tick(now)
  def sequencer_tick(self,now):
     if self.muted:return
     for i,state in list(self.arp_states.items()):
@@ -833,7 +855,7 @@ class App:
       c=self.cards[i]
       division={'1 temps':1,'1/2 temps':2,'1/4 temps':4}.get(c.get('arp_division','1/2 temps'),2)
       interval=60.0/max(1,self.bpm)/division
-      step=math.floor((now-self.metronome_start)/interval)
+      step=math.floor((now-self.clock_start)/interval)
       if step<0 or step==state.get('last_step'):continue
       state['last_step']=step
       if state.get('playing'):
@@ -856,7 +878,7 @@ class App:
           self.midi.send(mido.Message('note_on',channel=ch,note=note,velocity=max(1,min(127,int(c.get('harmony_velocity',85))))))
           state['playing']=(ch,note)
           # La durada també es calcula des de la graella absoluta.
-          state['off_at']=self.metronome_start+(step+max(.1,min(.95,int(c.get('arp_gate',60))/100)))*interval
+          state['off_at']=self.clock_start+(step+max(.1,min(.95,int(c.get('arp_gate',60))/100)))*interval
         except Exception:pass
  def stop_drum_notes(self,state):
     for channel,note in state.pop('playing_notes',[]):
@@ -866,7 +888,7 @@ class App:
  def drum_tick(self,i,state,now):
     if state.get('playing_notes') and now>=state.get('off_at',0):self.stop_drum_notes(state)
     interval=60.0/max(1,self.bpm)/4
-    absolute_step=math.floor((now-self.metronome_start)/interval)
+    absolute_step=math.floor((now-self.clock_start)/interval)
     if absolute_step<0 or absolute_step==state.get('last_step'):return
     state['last_step']=absolute_step
     self.stop_drum_notes(state)
@@ -886,7 +908,7 @@ class App:
           played.append((channel,note))
         except Exception:pass
     state['playing_notes']=played
-    state['off_at']=self.metronome_start+(absolute_step+.4)*interval
+    state['off_at']=self.clock_start+(absolute_step+.4)*interval
  def spatial_arpeggio(self,i,x,y):
     c=self.cards[i]
     dx=x-.5;dy=.5-y
@@ -962,6 +984,61 @@ class App:
       self.harmony_notes[i]=played
     self.harmony_zones[i]=zone
     self.harmony_pending.pop(i,None)
+ def send_audio_controls(self,i,x,y,angle,force=False):
+    if self.muted or not self.midi:return
+    c=self.cards[i];channel=max(0,min(15,int(c['channel'])-1))
+    cache=self.audio_cc_values.setdefault(i,{})
+    if force:cache.clear()
+    axes={'Horitzontal':x,'Vertical':y,'Rotació':angle,'Distància al centre':min(1,math.hypot((x-.5)*2,(y-.5)*2))}
+    for role,defaults in AUDIO_CONTROLS.items():
+      config=dict(defaults,**c.get('audio_controls',{}).get(role,{}))
+      if not config['enabled']:continue
+      value=max(0,min(1,axes.get(config['axis'],0)))
+      if config['inverted']:value=1-value
+      value=round(config['min']+(config['max']-config['min'])*value)
+      key=(channel,int(config['cc']))
+      if cache.get(key)==value:continue
+      try:
+        self.midi.send(mido.Message('control_change',channel=channel,control=key[1],value=value))
+        cache[key]=value
+      except Exception as exc:self.status.set('Error de control d’àudio MIDI: '+str(exc))
+ def audio_status(self,i):
+    with self.arp_lock:
+      state=self.audio_states.get(i)
+      remaining=state['ends_at']-time.monotonic() if state else 0
+    if remaining>0:return f'Dispar bloquejat · {remaining:.1f} s'
+    return 'Preparat' if self.cards[i].get('function')=='Àudio' else '—'
+ def trigger_audio(self,i):
+    if self.muted:
+      self.status.set('Àudio: prem REPRENDRE MIDI abans d’enviar un dispar.');return
+    c=self.cards[i]
+    if not self.midi:
+      self.status.set('Àudio: connecta primer la sortida MIDI que rep Sonar.');return
+    duration=float(c.get('audio_duration',0))
+    if not math.isfinite(duration) or duration<=0:
+      self.status.set('Àudio: configura la durada real del clip abans d’activar-lo.');return
+    now=time.monotonic();channel=max(0,min(15,int(c['channel'])-1));note=max(0,min(127,int(c['note'])))
+    with self.arp_lock:
+      self.audio_tick(now)
+      if any(state['ends_at']>now and (key==i or (state['channel'],state['note'])==(channel,note)) for key,state in self.audio_states.items()):return
+      old=self.audio_states.pop(i,None)
+      if old:self.release_audio_trigger(old)
+      try:self.midi.send(mido.Message('note_on',channel=channel,note=note,velocity=100))
+      except Exception as exc:
+        self.status.set('No s’ha pogut enviar el dispar d’àudio: '+str(exc));return
+      self.audio_states[i]={'channel':channel,'note':note,'ends_at':now+duration,'release_at':now+min(.08,duration),'trigger_down':True}
+    self.status.set(f'Dispar d’àudio enviat a Sonar · Targeta {i+1:02d} · bloqueig {duration:g} s. Comprova la reproducció a Sonar.')
+ def release_audio_trigger(self,state):
+    if not state.get('trigger_down'):return
+    if self.midi:
+      try:self.midi.send(mido.Message('note_off',channel=state['channel'],note=state['note'],velocity=0))
+      except Exception as exc:self.audio_error='Error alliberant el dispar MIDI d’àudio: '+str(exc)
+    state['trigger_down']=False
+ def audio_tick(self,now):
+    # El note_off acaba el pols de dispar, no la reproducció one-shot de Sonar.
+    for i,state in list(self.audio_states.items()):
+      if now>=state['release_at']:self.release_audio_trigger(state)
+      if now>=state['ends_at']:self.audio_states.pop(i,None)
  def activate(self,i,x,y,angle):
     if self.muted:return
     c=self.cards[i];v={'Rotació':angle,'Horitzontal':x,'Vertical':y}.get(c['axis'],angle);v=max(0,min(1,v))
@@ -972,7 +1049,10 @@ class App:
     if i==1 and c.get('function')=='Control MIDI CC' and c.get('cc')==7:
       self.activate_card2(x,y,angle)
       return
-    if c['function']=='Harmonia espacial':
+    if c['function']=='Àudio':
+      self.send_audio_controls(i,x,y,angle,force=not was)
+      if not was:self.trigger_audio(i)
+    elif c['function']=='Harmonia espacial':
       self.spatial_harmony(i,x,y)
     elif c['function'] in ('Patró rítmic','Ritme de bateria'):
       with self.arp_lock:
@@ -1013,7 +1093,7 @@ class App:
  def deactivate(self,i):
     self.stop_arpeggio(i)
     self.stop_harmony(i)
-    self.active.pop(i,None);self.last_cc.pop(i,None);self.visual_dirty=True;self.preview_dirty=True
+    self.active.pop(i,None);self.last_cc.pop(i,None);self.audio_cc_values.pop(i,None);self.visual_dirty=True;self.preview_dirty=True
     if self.cards[i].get('visual')==12 and not any(self.cards[j].get('visual')==12 for j in self.active):
       self.last_color_xy=None;self.smooth_color_xy=None
     if i==1:self.card2_rotation_prev=None;self.card2_rotation_total=0.
@@ -1281,8 +1361,9 @@ class App:
     return result
  def tick(self):
     try:
+      if self.audio_error:
+        self.status.set(self.audio_error);self.audio_error=None
       self.musical_clock_tick()
-      self.update_metronome_light()
       if self.sim_card is not None and self.sim_xy is not None and self.simulation.get():
         self.activate(self.sim_card,*self.sim_xy,self.sim_angle.get()/360)
       if self.camera:

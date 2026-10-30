@@ -44,7 +44,7 @@ class InteractionTests(unittest.TestCase):
             a.toggle_panic()
             a.fun.set('Ritme de bateria');a.drum_preset.set('Disco');a.drum_notes['Caixa'].set(40)
             a.apply_card();a.simulation_press(event)
-            a.sequencer_tick(a.metronome_start)
+            a.sequencer_tick(a.clock_start)
             hits=[c.args[0].note for c in a.midi.send.call_args_list if c.args[0].type=='note_on']
             self.assertIn(36,hits);self.assertIn(42,hits)
             a.simulation_release()
@@ -177,6 +177,55 @@ class InteractionTests(unittest.TestCase):
             self.assertFalse(a.last_frame.any())
             projected=[c.args[1] for c in a.display.call_args_list if c.args[0] is a.proj_label][-1]
             self.assertFalse(projected.any())
+            close_test_app(a)
+        finally:
+            try:root.destroy()
+            except m.tk.TclError:pass
+
+    def test_clean_controls_audio_dialog_and_project_persistence(self):
+        root=m.tk.Tk()
+        try:
+            with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
+            a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
+            def texts(widget):
+                result=[]
+                try:result.append(str(widget.cget('text')))
+                except m.tk.TclError:pass
+                for child in widget.winfo_children():result.extend(texts(child))
+                return result
+            labels=texts(root)
+            self.assertEqual(labels.count('v'+m.APP_VERSION),1)
+            self.assertNotIn('FINESTRES',labels)
+            self.assertNotIn('METRÒNOM: OFF',labels)
+            self.assertFalse(hasattr(a,'function_settings_button'))
+            self.assertFalse(hasattr(a,'banner_source'))
+            a.midi=Mock();a.card_id.set('05');a.load_card();a.fun.set('Àudio');a.on_function_selected()
+            self.assertTrue(a.audio_settings_window.winfo_exists())
+            a.audio_duration.set(0)
+            with patch.object(m.messagebox,'showerror') as error:
+                self.assertFalse(a.apply_card());error.assert_called_once()
+            self.assertNotEqual(a.cards[4]['function'],'Àudio')
+            a.audio_duration.set(45.5);a.note.set(60);a.channel.set(2)
+            a.audio_control_vars['volume']['enabled'].set(True)
+            a.audio_control_vars['volume']['min'].set(30)
+            a.audio_control_vars['volume']['max'].set(110)
+            self.assertTrue(a.apply_card())
+            a.activate(4,.5,.5,0);a.deactivate(4)
+            self.assertEqual(sum(c.args[0].type=='note_on' for c in a.midi.send.call_args_list),1)
+            self.assertIn(4,a.audio_states)
+            self.assertEqual(a.assigned_cards['columns'][-1],'audio')
+            a.audio_settings_window.destroy()
+            with tempfile.TemporaryDirectory() as folder:
+                a.project=str(Path(folder)/'project.json');a.save_project()
+                a.cards[4]['audio_duration']=1
+                with patch.object(m.filedialog,'askopenfilename',return_value=a.project):a.open_project()
+                self.assertEqual(a.cards[4]['function'],'Àudio')
+                self.assertEqual(a.audio_duration.get(),45.5)
+                self.assertTrue(a.audio_control_vars['volume']['enabled'].get())
+                self.assertEqual(a.audio_control_vars['volume']['min'].get(),30)
+                self.assertEqual(a.audio_control_vars['volume']['max'].get(),110)
+                self.assertEqual(a.note.get(),60)
+                self.assertEqual(a.channel.get(),2)
             close_test_app(a)
         finally:
             try:root.destroy()
