@@ -71,7 +71,7 @@ class App:
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.metronome_enabled=False; self.metronome_start=time.monotonic(); self.metronome_last_beat=-1; self.metronome_last_bpm=self.bpm; self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
-    self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
+    self.preview_card=None; self.preview_dirty=True; self.preview_caption=tk.StringVar(value='Previsualització en directe'); self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
     self.camera=None; self.midi=None; self.midi_name=''; self.recording=None; self.record_file=None; self.t0=time.monotonic(); self.last_frame=None; self.visual_paused=False; self.visual_paused_at=None; self.monitor_window=None; self.monitor_table=None; self.monitor_ticks=0
     self.aruco_detector=cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
     self.last_visual_update=0.0; self.visual_interval=1/12; self._closing=False
@@ -133,7 +133,21 @@ class App:
     self.cam_label=tk.Label(self.camera_window,bg='#0c1012',fg='#e0c3a0',text='Càmera desconnectada',anchor='center',bd=0)
     self.cam_label.pack(fill='both',expand=True,padx=5,pady=5)
     self.visual_window=self.make_panel_window('visual','VISUAL · PREVISUALITZACIÓ','680x460+740+300')
-    self.vis_label=tk.Label(self.visual_window,bg='#0d0b0b',fg='#e0c3a0',anchor='center',bd=0)
+    ttk.Label(self.visual_window,textvariable=self.preview_caption,wraplength=600).pack(fill='x',padx=5,pady=3)
+    visual_content=ttk.Frame(self.visual_window);visual_content.pack(fill='both',expand=True)
+    card_sidebar=ttk.Frame(visual_content,width=235);card_sidebar.pack(side='right',fill='y',padx=(3,5),pady=5)
+    ttk.Label(card_sidebar,text='TARGETES AMB FUNCIÓ').pack(anchor='w',pady=(0,4))
+    card_list=ttk.Frame(card_sidebar);card_list.pack(fill='both',expand=True)
+    self.assigned_cards=ttk.Treeview(card_list,columns=('card','function'),show='headings',selectmode='browse',height=8)
+    self.assigned_cards.heading('card',text='Targeta');self.assigned_cards.column('card',width=58,minwidth=48,stretch=False)
+    self.assigned_cards.heading('function',text='Funció');self.assigned_cards.column('function',width=165,minwidth=100)
+    card_scroll=ttk.Scrollbar(card_list,orient='vertical',command=self.assigned_cards.yview)
+    self.assigned_cards.configure(yscrollcommand=card_scroll.set)
+    card_scroll.pack(side='right',fill='y');self.assigned_cards.pack(fill='both',expand=True)
+    self.assigned_cards.tag_configure('active',background='#29453d',foreground='white')
+    self.assigned_cards.bind('<<TreeviewSelect>>',self.choose_assigned_card)
+    ttk.Button(card_sidebar,text='SEGUIR DIRECTE',command=self.follow_live_preview).pack(fill='x',pady=(5,0))
+    self.vis_label=tk.Label(visual_content,bg='#0d0b0b',fg='#e0c3a0',anchor='center',bd=0)
     self.vis_label.pack(fill='both',expand=True,padx=5,pady=5)
     simulation_bar=ttk.Frame(self.visual_window);simulation_bar.pack(fill='x',padx=5,pady=3)
     ttk.Checkbutton(simulation_bar,text='SIMULAR AMB RATOLÍ',variable=self.simulation,command=self.toggle_simulation).pack(side='left')
@@ -370,12 +384,94 @@ class App:
     self.card_id.set(f'{int(sel[0])+1:02d}')
     self.load_card()
  def update_cards_table(self):
+    self.update_assigned_cards()
     if not hasattr(self,'cards_table'):return
     for i,c in enumerate(self.cards):
       val=(f'{i+1:02d}',c.get('name',f'Targeta {i+1:02d}'),c['function'],c['channel'],c['note'] if c['function']=='Nota MIDI' else c['cc'],NAMES[c['visual']] if c['function']=='Canviar visual' else '—',c['axis'])
       iid=str(i);tag='active' if i in self.active else ('odd' if i%2 else 'even')
       if self.cards_table.exists(iid):self.cards_table.item(iid,values=val,tags=(tag,))
       else:self.cards_table.insert('', 'end',iid=iid,values=val,tags=(tag,))
+ def update_assigned_cards(self):
+    if not hasattr(self,'assigned_cards'):return
+    tree=self.assigned_cards
+    ids={str(i) for i,c in enumerate(self.cards) if c.get('function','Cap acció')!='Cap acció'}
+    for iid in tree.get_children():
+      if iid not in ids:tree.delete(iid)
+    for i,c in enumerate(self.cards):
+      if str(i) not in ids:continue
+      values=(f'{i+1:02d}',c['function'])
+      tags=('active',) if i in self.active else ()
+      if tree.exists(str(i)):tree.item(str(i),values=values,tags=tags)
+      else:tree.insert('','end',iid=str(i),values=values,tags=tags)
+    if self.preview_card is not None:
+      if str(self.preview_card) not in ids:self.follow_live_preview()
+      elif tree.selection()!=(str(self.preview_card),):tree.selection_set(str(self.preview_card))
+ def choose_assigned_card(self,event=None):
+    selected=self.assigned_cards.selection()
+    if not selected:return
+    i=int(selected[0])
+    if self.preview_card==i and self.card_id.get()==f'{i+1:02d}':return
+    self.simulation_release()
+    self.card_id.set(f'{i+1:02d}');self.load_card()
+    self.status.set(f'Targeta {i+1:02d}: mapa de configuració. Per provar-la, activa la simulació o ensenya la targeta.')
+ def follow_live_preview(self):
+    self.preview_card=None;self.preview_dirty=True
+    self.preview_caption.set('Previsualització en directe')
+    selected=self.assigned_cards.selection()
+    if selected:self.assigned_cards.selection_remove(*selected)
+ def select_card_preview(self,i):
+    if self.cards[i].get('function')=='Cap acció':
+      self.follow_live_preview();return
+    self.preview_card=i;self.preview_dirty=True
+    c=self.cards[i]
+    extra=c.get('drum_preset','Rock bàsic') if c['function']=='Ritme de bateria' else (c.get('arp_direction','Ascendent') if c['function']=='Arpegiador espacial' else f'Canal {c["channel"]}')
+    self.preview_caption.set(f'Targeta {i+1:02d} · {c["function"]} · {extra} · Seleccionar no activa MIDI')
+    self.update_assigned_cards()
+ def card_preview_frame(self,i,t):
+    c=self.cards[i];kind=c['function']
+    if kind in ('Harmonia espacial','Arpegiador espacial'):
+      return self.harmony_map_preview(chromatic=c.get('visual')==12,card_index=i)
+    if kind in ('Patró rítmic','Ritme de bateria'):
+      return self.rhythm_map_preview(i)
+    if c.get('visual')==12:return self.color_wheel_preview()
+    if kind=='Canviar visual':return self.render(t,visual=c['visual'])
+    frame=np.full((H,W,3),(25,20,17),np.uint8)
+    title=f'TARGETA {i+1:02d} | CANAL {c["channel"]}'
+    cv2.putText(frame,title,(24,40),cv2.FONT_HERSHEY_SIMPLEX,.7,(245,228,205),1,cv2.LINE_AA)
+    if kind=='Nota MIDI':
+      text=f'NOTA MIDI {c["note"]}';detail='Clic premut: nota activa | Deixar anar: aturar'
+    else:
+      text=f'CONTROL CC {c["cc"]}' if kind=='Control MIDI CC' else 'TEMPO'
+      detail={'Horitzontal':'ESQUERRA 0  --------------------  127 DRETA','Vertical':'DALT 0  --------------------  127 BAIX','Rotació':'GIR 0 - 359 graus'}.get(c.get('axis'),'')
+    cv2.rectangle(frame,(24,78),(W-24,H-66),(125,100,75),2)
+    cv2.putText(frame,text,(48,145),cv2.FONT_HERSHEY_SIMPLEX,1,(255,230,170),2,cv2.LINE_AA)
+    cv2.putText(frame,detail,(32,H-36),cv2.FONT_HERSHEY_SIMPLEX,.5,(235,220,205),1,cv2.LINE_AA)
+    if i in self.active:
+      x,y,_=self.active[i];cv2.circle(frame,(int(x*(W-1)),int(y*(H-1))),10,(0,240,255),2)
+    return frame
+ def rhythm_map_preview(self,i):
+    c=self.cards[i];drums=c['function']=='Ritme de bateria'
+    rows=DRUM_PRESETS.get(c.get('drum_preset'),DRUM_PRESETS['Rock bàsic']) if drums else {'Nota '+str(c['note']):tuple(j for j,v in enumerate(c.get('rhythm_pattern',[k%4==0 for k in range(16)])) if v)}
+    frame=np.full((H,W,3),(25,20,17),np.uint8)
+    cv2.putText(frame,f'TARGETA {i+1:02d} | '+('BATERIA' if drums else 'PATRO RITMIC'),(12,27),cv2.FONT_HERSHEY_SIMPLEX,.65,(245,228,205),1,cv2.LINE_AA)
+    current=None
+    with self.arp_lock:
+      state=self.arp_states.get(i)
+      if state and state.get('last_step') is not None:
+        current=(state['last_step']-state.get('origin_step',0))%16
+    for step in range(16):
+      cv2.putText(frame,str(step+1),(158+step*29,57),cv2.FONT_HERSHEY_SIMPLEX,.35,(230,220,200),1)
+    for row,(name,steps) in enumerate(rows.items()):
+      y=76+row*42
+      label=name.replace('í','i').replace('à','a')
+      cv2.putText(frame,label,(10,y+18),cv2.FONT_HERSHEY_SIMPLEX,.42,(240,225,205),1,cv2.LINE_AA)
+      for step in range(16):
+        x=154+step*29
+        color=(65,185,235) if step in steps else (56,48,42)
+        cv2.rectangle(frame,(x,y),(x+24,y+25),color,-1)
+        if current==step:cv2.rectangle(frame,(x-1,y-1),(x+25,y+26),(255,255,255),2)
+    cv2.putText(frame,'Clic premut o targeta present: reproduir | Retirar: aturar',(12,H-18),cv2.FONT_HERSHEY_SIMPLEX,.47,(230,215,195),1,cv2.LINE_AA)
+    return frame
  def make_banner(self):
     # Dibuix vectorial propi, sense fitxers d'imatge externs.
     im=Image.new('RGB',(174,68),'#302820'); d=ImageDraw.Draw(im)
@@ -502,12 +598,14 @@ class App:
     self.drum_preset.set(c.get('drum_preset','Rock bàsic'))
     for name,var in self.drum_notes.items():var.set(c.get('drum_notes',{}).get(name,DRUM_NOTES[name]))
     for j,var in enumerate(self.rhythm_steps):var.set(bool(c.get('rhythm_pattern',[k%4==0 for k in range(16)])[j]))
+    self.select_card_preview(int(self.card_id.get())-1)
  def apply_card(self):
     try:
       card_index=int(self.card_id.get())-1
       self.deactivate(card_index)
       c=self.cards[card_index]; c.update(drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
       if c['visual']==12 and int(self.card_id.get())-1 in self.active:self.select_visual(12)
+      self.select_card_preview(card_index)
       self.status.set(f'Targeta {self.card_id.get()} configurada. Desa el projecte per conservar els canvis.');self.update_cards_table()
     except Exception as e: messagebox.showerror('Configuració',str(e))
  def new_project(self):
@@ -900,10 +998,10 @@ class App:
       if self.midi:
         try:self.midi.send(mido.Message('note_off',channel=ch,note=note,velocity=0))
         except Exception:pass
- def render(self,t):
+ def render(self,t,visual=None):
     # Procedural original visuals: offline, no external assets.
     yy,xx=np.mgrid[0:H,0:W].astype(np.float32);u=(xx-W/2)/(H/2);v=(yy-H/2)/(H/2);r=np.sqrt(u*u+v*v)+1e-4;a=np.arctan2(v,u)
-    n=self.current_visual;beat=math.sin(t*self.bpm/60*math.pi*2); intensity=0.4+0.6*len(self.active)/16
+    n=self.current_visual if visual is None else visual;beat=math.sin(t*self.bpm/60*math.pi*2); intensity=0.4+0.6*len(self.active)/16
     frame=np.zeros((H,W,3),np.uint8);frame[:]=(7,10,14)
     def rings(scale=8):
       z=np.sin(r*scale-t*2+np.sin(a*6+t)*.4);return np.clip((z-.35)*230,0,255).astype(np.uint8)
@@ -984,13 +1082,15 @@ class App:
       bgr=tuple(int(v) for v in cv2.cvtColor(
           np.uint8([[[hue,240,brightness]]]),cv2.COLOR_HSV2BGR)[0,0])
     return np.full((H,W,3),bgr,dtype=np.uint8)
- def harmony_map_preview(self,chromatic=False):
+ def harmony_map_preview(self,chromatic=False,card_index=None):
     # La base cromàtica i la capa musical comparteixen centre i radi.
-    frame=self.color_by_position(None) if chromatic else np.full((H,W,3),(25,20,17),np.uint8)
+    frame=(self.color_by_position(None) if card_index is None else self.color_wheel_preview()) if chromatic else np.full((H,W,3),(25,20,17),np.uint8)
     cards=[i for i in self.active if self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial')]
+    if card_index is not None:cards=[card_index]
     if not cards:return frame
     i=cards[0]
-    x,y,_=self.active[i]
+    position=self.active.get(i)
+    x,y,_=position if position is not None else (.5,.5,0)
     dx=x-.5;dy=.5-y
     angle=(math.atan2(dy,dx)+math.tau)%math.tau
     sector=int((angle+math.pi/8)//(math.pi/4))%8
@@ -1009,7 +1109,7 @@ class App:
       bg=np.full((H,W,3),(43,34,28),np.uint8)
       bg[(sectors%2==0)&mask]=(52,42,33)
       frame[mask]=bg[mask]
-    selected=(sectors==sector)&(rings==ring)&mask
+    selected=(sectors==sector)&(rings==ring)&mask if position is not None else np.zeros((H,W),bool)
     # Barreja transparent, preservant els colors del disc.
     highlight=np.array([195,195,235],dtype=np.float32)
     frame[selected]=np.clip(frame[selected].astype(np.float32)*.60+highlight*.40,0,255).astype(np.uint8)
@@ -1027,15 +1127,16 @@ class App:
       cv2.putText(frame,chord,(px-12,py+5),cv2.FONT_HERSHEY_SIMPLEX,.48,(12,12,12),3,cv2.LINE_AA)
       cv2.putText(frame,chord,(px-12,py+5),cv2.FONT_HERSHEY_SIMPLEX,.48,
                   (255,255,255) if k==sector else (225,220,208),1,cv2.LINE_AA)
-    px=int(cx+radius*rr*math.cos(angle))
-    py=int(cy-radius*rr*math.sin(angle))
-    cv2.line(frame,(cx,cy),(px,py),(20,20,20),3,cv2.LINE_AA)
-    cv2.line(frame,(cx,cy),(px,py),(250,240,170),1,cv2.LINE_AA)
-    cv2.circle(frame,(px,py),11,(12,13,16),-1,cv2.LINE_AA)
-    cv2.circle(frame,(px,py),7,(255,235,150),-1,cv2.LINE_AA)
+    if position is not None:
+      px=int(cx+radius*rr*math.cos(angle))
+      py=int(cy-radius*rr*math.sin(angle))
+      cv2.line(frame,(cx,cy),(px,py),(20,20,20),3,cv2.LINE_AA)
+      cv2.line(frame,(cx,cy),(px,py),(250,240,170),1,cv2.LINE_AA)
+      cv2.circle(frame,(px,py),11,(12,13,16),-1,cv2.LINE_AA)
+      cv2.circle(frame,(px,py),7,(255,235,150),-1,cv2.LINE_AA)
     # Indicadors de totes les targetes arpegiadores (no només la primera).
     for j in cards:
-      if self.cards[j].get('function')!='Arpegiador espacial':continue
+      if j not in self.active or self.cards[j].get('function')!='Arpegiador espacial':continue
       ax,ay,_=self.active[j]
       adx=ax-.5;ady=.5-ay
       aa=(math.atan2(ady,adx)+math.tau)%math.tau
@@ -1058,7 +1159,8 @@ class App:
     else:
       label='SONANT' if state and state[:2]==(sector,ring) else 'CANVI PENDENT'
     layers=['INTERIOR: acord + octava','MIG: acord complet','EXTERIOR: dues notes']
-    cv2.putText(frame,f'{chords[sector]}  |  SECTOR {sector+1}/8  |  {layers[ring]}  |  {label}',
+    footer=f'{chords[sector]}  |  SECTOR {sector+1}/8  |  {layers[ring]}  |  {label}' if position is not None else 'MAPA DE CONFIGURACIO | Targeta inactiva | Sense MIDI'
+    cv2.putText(frame,footer,
                 (10,H-11),cv2.FONT_HERSHEY_SIMPLEX,.49,(250,231,195),1,cv2.LINE_AA)
     return frame
  def color_wheel_preview(self):
@@ -1153,7 +1255,7 @@ class App:
             if i not in seen and now-self.last_seen.get(i,now)>0.25:self.deactivate(i)
           # Mostrem la imatge original: els textos i els contorns es llegeixen correctament.
           if self.camera_window.state()=='normal':self.display(self.cam_label,cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),'cam_photo')
-      now_vis=time.monotonic()
+      now_vis=time.monotonic();frame_changed=False
       if self.last_frame is None or (not self.visual_paused and now_vis-self.last_visual_update>=self.visual_interval):
         t=now_vis-self.t0
         if any(self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial') for i in self.active):
@@ -1162,14 +1264,15 @@ class App:
           self.last_frame=self.color_by_position(None)
         else:
           self.last_frame=self.render(t)
-        self.last_visual_update=now_vis
-        if self.visual_window.state()=='normal':
-          preview=self.last_frame.copy()
-          if self.sim_card is not None and self.sim_xy is not None:
-            px,py=int(self.sim_xy[0]*(W-1)),int(self.sim_xy[1]*(H-1))
-            cv2.circle(preview,(px,py),14,(0,240,255),2)
-            cv2.putText(preview,f'SIM T{self.sim_card+1:02d}',(max(0,min(W-110,px+18)),max(20,py)),cv2.FONT_HERSHEY_SIMPLEX,.5,(0,240,255),1)
-          self.display(self.vis_label,cv2.cvtColor(preview,cv2.COLOR_BGR2RGB),'vis_photo')
+        self.last_visual_update=now_vis;frame_changed=True
+      if self.visual_window.state()=='normal' and (self.preview_dirty or frame_changed):
+        preview=self.card_preview_frame(self.preview_card,now_vis-self.t0) if self.preview_card is not None else self.last_frame.copy()
+        if self.sim_card is not None and self.sim_xy is not None:
+          px,py=int(self.sim_xy[0]*(W-1)),int(self.sim_xy[1]*(H-1))
+          cv2.circle(preview,(px,py),14,(0,240,255),2)
+          cv2.putText(preview,f'SIM T{self.sim_card+1:02d}',(max(0,min(W-110,px+18)),max(20,py)),cv2.FONT_HERSHEY_SIMPLEX,.5,(0,240,255),1)
+        self.display(self.vis_label,cv2.cvtColor(preview,cv2.COLOR_BGR2RGB),'vis_photo')
+        self.preview_dirty=False
       vis=self.last_frame
       if getattr(self,'projection',None) and self.projection.winfo_exists():
         width=max(1,self.proj_label.winfo_width());height=max(1,self.proj_label.winfo_height())

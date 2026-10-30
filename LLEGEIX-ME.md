@@ -51,3 +51,11 @@ La detecció de la targeta inicia el compàs des del primer pas i el repeteix me
 Utilitza el port loopMIDI d'entrada de la pista de bateria i activa l'escolta d'entrada a Sonar. El canal es pot ajustar a la configuració del ritme (sovint 10 per a bateria GM, o l'entrada Omni de la pista). Les notes proposades són 36, 38, 42, 46 i 49; les pots canviar a la mateixa finestra si el mapa del teu MT Power Drum Kit difereix. No s'ha provat el plugin real al núvol. No activa els grooves interns del plugin: genera les notes MIDI que l'instrument interpreta.
 
 El tempo és el del Wasteland. Cada bucle és un compàs de 4/4 i encara no se sincronitza automàticament amb el transport de Sonar. Retira una targeta abans d'ensenyar-ne una altra si vols canviar de ritme sense superposar-los.
+
+## Llista de targetes i mapes de configuració
+
+La finestra VISUAL té una llista lateral **TARGETES AMB FUNCIÓ**. Hi apareixen les targetes amb una funció diferent de **Cap acció**, incloses les assignacions inicials del programa. Les targetes actives es destaquen. Per treure'n una de la llista, selecciona Cap acció a l'editor i prem APLICAR; desa el projecte per conservar el canvi.
+
+Clica una fila per seleccionar la mateixa targeta a l'editor i veure el seu mapa sense activar-la: sectors d'harmonia/arpegis, graella de passos del patró o de tota la bateria, cercle cromàtic, visual assignat o paràmetres MIDI. La selecció no envia notes noves. Pots provar la targeta amb la simulació o la càmera quan vulguis. Canviar de selecció retira una simulació que estigués premuda.
+
+**SEGUIR DIRECTE** torna a la previsualització automàtica. Els mapes seleccionats són de consulta: no substitueixen el vídeo de gravació ni la sortida de projecció. La distribució de finestres desada es continua recuperant en arrencar.

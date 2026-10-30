@@ -57,4 +57,53 @@ class InteractionTests(unittest.TestCase):
             try:root.destroy()
             except m.tk.TclError:pass
 
+    def test_assigned_card_selection_previews_without_midi_or_recording_changes(self):
+        import numpy as np
+        root=m.tk.Tk()
+        try:
+            with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
+            a.arp_stop.set();a.arp_thread.join(timeout=1)
+            root.update()
+            a.midi=Mock()
+            a.cards[15]['function']='Cap acció'
+            a.cards[2]['function']='Arpegiador espacial'
+            a.cards[2]['harmony_scale']='Dòrica'
+            a.update_assigned_cards()
+            self.assertFalse(a.assigned_cards.exists('15'))
+            a.assigned_cards.selection_set('2')
+            a.assigned_cards.event_generate('<<TreeviewSelect>>')
+            root.update()
+            self.assertEqual(a.preview_card,2)
+            self.assertEqual(a.card_id.get(),'03')
+            self.assertEqual(a.fun.get(),'Arpegiador espacial')
+            self.assertEqual(a.harmony_scale.get(),'Dòrica')
+            self.assertFalse(a.active)
+            self.assertFalse(a.arp_states)
+            a.midi.send.assert_not_called()
+            visual=a.current_visual
+            live_frame=np.full((360,640,3),17,np.uint8)
+            a.last_frame=live_frame.copy();a.visual_paused=True
+            a.recording=Mock();a.preview_dirty=True
+            a.tick()
+            np.testing.assert_array_equal(a.recording.write.call_args.args[0],live_frame)
+            self.assertEqual(a.current_visual,visual)
+            self.assertTrue(hasattr(a,'vis_photo'))
+            for kind in m.FUNCS:
+                if kind=='Cap acció':continue
+                a.cards[2]['function']=kind
+                frame=a.card_preview_frame(2,1.0)
+                self.assertEqual(frame.shape,(360,640,3))
+                self.assertEqual(frame.dtype,np.uint8)
+                self.assertGreater(frame.std(),0)
+            a.midi.send.assert_not_called()
+            a.follow_live_preview();root.update()
+            self.assertIsNone(a.preview_card)
+            self.assertFalse(a.assigned_cards.selection())
+            a.cards[2]['function']='Cap acció';a.update_assigned_cards()
+            self.assertFalse(a.assigned_cards.exists('2'))
+            a.close()
+        finally:
+            try:root.destroy()
+            except m.tk.TclError:pass
+
 if __name__=='__main__':unittest.main()
