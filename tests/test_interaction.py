@@ -336,4 +336,39 @@ class InteractionTests(unittest.TestCase):
             try:root.destroy()
             except m.tk.TclError:pass
 
+    def test_synthetic_camera_lifecycle_and_diagnostic_window(self):
+        import numpy as np
+        root=m.tk.Tk()
+        try:
+            with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
+            a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
+            port=Mock();a.midi_choice.set('wasteland MIDI 1')
+            with patch.object(m.mido,'open_output',return_value=port):a.connect_midi()
+            a.open_midi_diagnostics()
+            dictionary=m.cv2.aruco.getPredefinedDictionary(m.cv2.aruco.DICT_4X4_50)
+            marker=m.cv2.aruco.generateImageMarker(dictionary,2,160)
+            present=np.full((240,240),255,np.uint8);present[40:200,40:200]=marker
+            present=m.cv2.cvtColor(present,m.cv2.COLOR_GRAY2BGR)
+            absent=np.full((240,240,3),255,np.uint8)
+            a.camera=Mock();a.camera.read.side_effect=[(True,frame.copy()) for frame in (present,present,absent,absent,present,absent)]
+            a.display=Mock()
+            for now in (10,10.1,10.3,10.36,11,11.26):
+                with patch.object(m.time,'monotonic',return_value=now):a.tick()
+            messages=[c.args[0] for c in port.send.call_args_list]
+            self.assertEqual([msg.type for msg in messages],['note_on','note_off','note_on','note_off'])
+            self.assertEqual([(msg.channel,msg.note) for msg in messages],[(0,38)]*4)
+            self.assertFalse(a.notes);self.assertNotIn(2,a.active)
+            a.update_midi_diagnostics()
+            self.assertIn('note_off canal=1 nota=38 velocitat=0',a.diagnostics_text.get('1.0','end'))
+            a.copy_midi_log();self.assertIn('RETIRADA T03',root.clipboard_get())
+            with tempfile.TemporaryDirectory() as folder:
+                file=str(Path(folder)/'diagnostic.txt')
+                with patch.object(m.filedialog,'asksaveasfilename',return_value=file):a.save_midi_log()
+                self.assertIn('ACCEPTAT PEL PORT LOCAL',Path(file).read_text(encoding='utf-8'))
+            a.clear_midi_log();self.assertEqual(a.midi_log_snapshot(),'')
+            close_test_app(a)
+        finally:
+            try:root.destroy()
+            except m.tk.TclError:pass
+
 if __name__=='__main__':unittest.main()

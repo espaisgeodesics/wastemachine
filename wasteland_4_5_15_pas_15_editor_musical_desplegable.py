@@ -11,7 +11,8 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.6.1'
+APP_VERSION='4.6.2'
+CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
 (ROOT/'GRAVACIONS').mkdir(exist_ok=True)
@@ -74,10 +75,26 @@ def arpeggio_note(pitches,index,direction):
     elif direction=='Pujada i baixada' and len(notes)>1:notes=notes+notes[-2:0:-1]
     return notes[index%len(notes)]
 
+class TracedMidiOutput:
+    """Report local send outcomes; this is not acknowledgement from the receiver."""
+    def __init__(self,port,record):
+        self._port=port;self._record=record
+    def _trace(self,message,error):
+        try:self._record(message,error)
+        except Exception:pass  # Diagnostics must never change the MIDI stream.
+    def send(self,message):
+        try:self._port.send(message)
+        except Exception as exc:
+            self._trace(message,str(exc));raise
+        self._trace(message,None)
+    def close(self):self._port.close()
+    def __getattr__(self,name):return getattr(self._port,name)
+
 class App:
  def __init__(self,root):
     self.root=root; root.title('WASTELAND MACHINE · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
     self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
+    self.midi_log=deque(maxlen=1000);self.midi_log_lock=threading.Lock();self.midi_log_revision=0;self.diagnostics_window=None;self.diagnostics_seen=-1
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -217,8 +234,10 @@ class App:
     self.midi_cb=ttk.Combobox(midi_box,textvariable=self.midi_choice,width=26,state='readonly');self.midi_cb.pack(fill='x',padx=7,pady=(7,3))
     ttk.Button(midi_box,text='ACTUALITZAR PORTS',command=self.refresh_midi).pack(fill='x',padx=7,pady=2)
     ttk.Button(midi_box,text='CONNECTAR / FIXAR MIDI',command=self.connect_midi,style='Accent.TButton').pack(fill='x',padx=7,pady=3)
-    self.midi_indicator=ttk.Label(midi_box,text='Estat: desconnectat',foreground='#7de0ac')
-    self.midi_indicator.pack(fill='x',padx=7,pady=(1,6))
+    midi_footer=ttk.Frame(midi_box);midi_footer.pack(fill='x',padx=7,pady=(1,6))
+    self.midi_indicator=ttk.Label(midi_footer,text='Estat: desconnectat',foreground='#7de0ac')
+    self.midi_indicator.pack(side='left',fill='x',expand=True)
+    ttk.Button(midi_footer,text='DIAGNOSI MIDI',command=self.open_midi_diagnostics).pack(side='right',padx=3)
     self.midi_cb.bind('<<ComboboxSelected>>',lambda e:self.connect_midi())
     ttk.Label(frame,text='Targeta / ID ArUco').pack(anchor='w',padx=8,pady=(5,0))
     cb=ttk.Combobox(frame,textvariable=self.card_id,values=[f'{i+1:02d}' for i in range(16)],state='readonly',width=24)
@@ -819,6 +838,71 @@ class App:
        self.status.set('Ports MIDI detectats: '+', '.join(ports))
      else:
        self.status.set('No hi ha ports MIDI disponibles. Python: '+sys.executable)
+ def log_midi_event(self,text):
+    # Lazy initialization also allows isolated lifecycle tests without Tk.
+    if not hasattr(self,'midi_log_lock'):
+      self.midi_log_lock=threading.Lock();self.midi_log=deque(maxlen=1000);self.midi_log_revision=0
+    line=datetime.datetime.now().isoformat(timespec='milliseconds')+' | '+text
+    with self.midi_log_lock:self.midi_log.append(line);self.midi_log_revision+=1
+ def record_midi_send(self,port,message,error=None):
+    fields=[message.type]
+    for key,label in [('channel','canal'),('note','nota'),('velocity','velocitat'),('control','CC'),('value','valor')]:
+      if hasattr(message,key):fields.append(f'{label}={getattr(message,key)+(1 if key=="channel" else 0)}')
+    outcome='ERROR LOCAL' if error is not None else 'ACCEPTAT PEL PORT LOCAL'
+    self.log_midi_event(f'{outcome} [{port}] '+ ' '.join(fields)+(f' | {error}' if error is not None else ''))
+ def midi_log_snapshot(self):
+    with self.midi_log_lock:return '\n'.join(self.midi_log)
+ def open_midi_diagnostics(self):
+    if self.diagnostics_window is not None and self.diagnostics_window.winfo_exists():
+      self.show_panel('diagnostic');self.update_midi_diagnostics();return
+    win=self.make_panel_window('diagnostic','DIAGNOSI MIDI','940x550+80+100');self.diagnostics_window=win
+    ttk.Label(win,text='Registre LOCAL: no confirma recepció a Sonar ni l’estat del Mute. Canals: 1–16. Absència ArUco: 250 ms.',wraplength=900).pack(fill='x',padx=10,pady=8)
+    holder=ttk.Frame(win);holder.pack(fill='both',expand=True,padx=10,pady=4)
+    self.diagnostics_text=tk.Text(holder,height=16,wrap='none',font=('Consolas',9),bg='#171411',fg='#f2dcc4',state='disabled')
+    scroll=ttk.Scrollbar(holder,orient='vertical',command=self.diagnostics_text.yview);scroll.pack(side='right',fill='y')
+    self.diagnostics_text.configure(yscrollcommand=scroll.set);self.diagnostics_text.pack(fill='both',expand=True)
+    tools=ttk.Frame(win);tools.pack(fill='x',padx=10,pady=5)
+    ttk.Button(tools,text='COPIAR REGISTRE',command=self.copy_midi_log).pack(side='left',padx=3)
+    ttk.Button(tools,text='DESAR REGISTRE…',command=self.save_midi_log).pack(side='left',padx=3)
+    ttk.Button(tools,text='NETEJAR',command=self.clear_midi_log).pack(side='left',padx=3)
+    test=ttk.LabelFrame(win,text='Prova CC explícit per verificar Remote Control a Sonar',padding=8);test.pack(fill='x',padx=10,pady=(4,10))
+    self.probe_channel=tk.IntVar(value=1);self.probe_cc=tk.IntVar(value=119)
+    for title,var,minimum,maximum in [('Canal',self.probe_channel,1,16),('CC',self.probe_cc,0,127)]:
+      ttk.Label(test,text=title).pack(side='left',padx=4)
+      tk.Spinbox(test,from_=minimum,to=maximum,textvariable=var,width=5).pack(side='left')
+    ttk.Button(test,text='ENVIAR 0',command=lambda:self.send_probe_cc(0)).pack(side='left',padx=8)
+    ttk.Button(test,text='ENVIAR 127',command=lambda:self.send_probe_cc(127)).pack(side='left',padx=8)
+    self.log_midi_event(f'DIAGNOSI {APP_VERSION} | Fitxer: {Path(__file__).resolve()} | No hi ha confirmació del receptor.')
+    self.update_midi_diagnostics()
+ def update_midi_diagnostics(self):
+    if self.diagnostics_window is None or not self.diagnostics_window.winfo_exists() or self.diagnostics_window.state()=='withdrawn':return
+    with self.midi_log_lock:
+      revision=self.midi_log_revision
+      if revision==self.diagnostics_seen:return
+      text='\n'.join(self.midi_log)
+    self.diagnostics_text.configure(state='normal');self.diagnostics_text.delete('1.0','end');self.diagnostics_text.insert('end',text)
+    self.diagnostics_text.see('end');self.diagnostics_text.configure(state='disabled');self.diagnostics_seen=revision
+ def copy_midi_log(self):
+    self.root.clipboard_clear();self.root.clipboard_append(self.midi_log_snapshot());self.status.set('Registre MIDI local copiat.')
+ def clear_midi_log(self):
+    with self.midi_log_lock:self.midi_log.clear();self.midi_log_revision+=1
+    self.update_midi_diagnostics()
+ def save_midi_log(self):
+    path=filedialog.asksaveasfilename(parent=self.diagnostics_window,defaultextension='.txt',initialfile='diagnosi_midi.txt',filetypes=[('Registre de text','*.txt')])
+    if not path:return
+    try:Path(path).write_text(self.midi_log_snapshot(),encoding='utf-8')
+    except OSError as exc:messagebox.showerror('Diagnosi MIDI',str(exc),parent=self.diagnostics_window)
+ def send_probe_cc(self,value):
+    if self.muted or not self.midi:
+      self.status.set('Connecta MIDI i desactiva el silenci abans de provar el CC.');return
+    try:
+      channel=int(self.probe_channel.get());control=int(self.probe_cc.get())
+      if not 1<=channel<=16 or not 0<=control<=127 or value not in (0,127):raise ValueError('Canal 1–16, CC 0–127 i valor 0 o 127.')
+      self.midi.send(mido.Message('control_change',channel=channel-1,control=control,value=value))
+    except Exception as exc:self.status.set('Error a la prova CC: '+str(exc))
+ def expire_missing_cards(self,seen,now):
+    for i in list(self.active):
+      if i not in seen and now-self.last_seen.get(i,now)>CARD_LOST_TIMEOUT:self.deactivate(i)
  def connect_midi(self):
     self.all_notes_off()
     if self.midi:
@@ -828,9 +912,13 @@ class App:
     if name=='Sense MIDI':
       self.status.set('MIDI desconnectat');self.midi_indicator.config(text='Estat: desconnectat');return
     try:
-      self.midi=mido.open_output(name);self.status.set('MIDI connectat a '+name)
+      port=mido.open_output(name)
+      self.midi=TracedMidiOutput(port,lambda message,error:self.record_midi_send(name,message,error))
+      self.log_midi_event('CONNEXIÓ LOCAL: '+name)
+      self.status.set('MIDI connectat a '+name)
       self.midi_indicator.config(text='CONNECTAT: '+name)
     except Exception as e:
+      self.log_midi_event('ERROR DE CONNEXIÓ LOCAL: '+str(e))
       self.midi_indicator.config(text='ERROR DE CONNEXIÓ');messagebox.showerror('MIDI',str(e))
  def toggle_panic(self):
     with self.arp_lock:
@@ -1194,6 +1282,7 @@ class App:
     was=i in self.active;self.active[i]=(x,y,angle)
     self.record_target_position(i,x,y)
     if not was:
+      self.log_midi_event(f'VISIBLE T{i+1:02d} ID={i} funció={c["function"]}')
       self.visual_dirty=True;self.follow_live_preview()
     if not was and c.get('visual')==12:self.select_visual(12)
     if i==1 and c.get('function')=='Control MIDI CC' and c.get('cc')==7:
@@ -1241,6 +1330,7 @@ class App:
             self.card2_cc_values[key]=value
           except Exception as exc:self.status.set('Error MIDI T02: '+str(exc))
  def deactivate(self,i):
+    if i in self.active:self.log_midi_event(f'RETIRADA T{i+1:02d} ID={i}')
     self.stop_arpeggio(i)
     self.stop_harmony(i)
     self.active.pop(i,None);self.target_trails.pop(i,None);self.last_cc.pop(i,None);self.audio_cc_values.pop(i,None);self.visual_dirty=True;self.preview_dirty=True
@@ -1543,8 +1633,7 @@ class App:
               ty=max(20,int(p[:,1].min())-9)
               cv2.rectangle(frame,(tx-2,ty-18),(min(frame.shape[1]-1,tx+316),ty+5),(10,25,30),-1)
               cv2.putText(frame,label,(tx,ty),cv2.FONT_HERSHEY_SIMPLEX,.48,(0,240,255),1,cv2.LINE_AA)
-          for i in list(self.active):
-            if i not in seen and now-self.last_seen.get(i,now)>0.25:self.deactivate(i)
+          self.expire_missing_cards(seen,now)
           # Mostrem la imatge original: els textos i els contorns es llegeixen correctament.
           if self.camera_window.state()=='normal':self.display(self.cam_label,cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),'cam_photo')
       now_vis=time.monotonic();frame_changed=False
@@ -1567,7 +1656,7 @@ class App:
       if self.recording:self.recording.write(vis)
       self.monitor_ticks+=1
       if self.monitor_ticks%4==0:
-        self.update_cards_table()
+        self.update_cards_table();self.update_midi_diagnostics()
     except Exception as e:
       import traceback
       traceback.print_exc()

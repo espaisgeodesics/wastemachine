@@ -122,3 +122,7 @@ La barra de títol mostra 4.6.1. A **Ajuda → Versió i fitxer que s'està exec
 La distribució inicial conserva càmera a dalt a l'esquerra, previsualització a dalt a la dreta i editor a sota a la dreta, amb totes tres de la mateixa mida. Si la distribució desada és anterior a aquesta revisió, les tres mides s'adapten en arrencar sense eliminar-ne el fitxer. Pots desar aquesta distribució nova o moure les finestres i tornar-la a desar. El MIDI continua en una finestra compacta independent.
 
 El camp **Nom assignat** és a l'editor, just sota Targeta / ID ArUco. Escriu-hi el nom, prem APLICAR i desa el projecte. La previsualització no té casella de simulació ni control de gir. Si encara els veus, consulta el fitxer real en execució a Ajuda i comprova que has actualitzat aquella carpeta.
+
+## Diagnosi del Mute a Sonar (4.6.2)
+
+Al panell MIDI, **DIAGNOSI MIDI** mostra aparicions/retirades i els missatges acceptats o rebutjats pel port local. Pots copiar o desar el registre. No confirma la recepció a Sonar. Les ordres de prova CC 0 i 127 serveixen per verificar manualment una assignació absoluta del Mute sense enviar notes. No s'ha afegit encara una funció de presència/Mute que depengui d'aquesta compatibilitat no comprovada. Instruccions i conclusions detallades a DIAGNOSI_MUTE_SONAR.md. L'accés OBRIR_WASTELAND_461.bat continua obrint el mateix fitxer principal actualitzat; la barra de títol ara indica 4.6.2.
