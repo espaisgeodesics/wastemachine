@@ -309,4 +309,31 @@ class InteractionTests(unittest.TestCase):
             try:root.destroy()
             except m.tk.TclError:pass
 
+    def test_equal_initial_panels_override_older_saved_sizes_and_report_runtime(self):
+        import json
+        root=m.tk.Tk()
+        try:
+            with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
+            a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
+            with tempfile.TemporaryDirectory() as folder:
+                a.window_layout_file=Path(folder)/'layout.json'
+                a.window_layout_file.write_text(json.dumps({'layout_version':2,'main':'790x265+0+0','panels':{
+                    'camera':{'geometry':'640x200+0+200'},'visual':{'geometry':'400x150+660+200'},'editor':{'geometry':'300x200+660+400'}}}))
+                a.raise_all_panels();root.update_idletasks()
+                sizes=[(w.winfo_width(),w.winfo_height()) for w in (a.camera_window,a.visual_window,a.editor_window)]
+                self.assertEqual(len(set(sizes)),1)
+                self.assertLess(a.camera_window.winfo_x(),a.visual_window.winfo_x())
+                self.assertLess(a.visual_window.winfo_y(),a.editor_window.winfo_y())
+            self.assertIn(m.APP_VERSION,root.title())
+            with patch.object(m.messagebox,'showinfo') as info:
+                a.show_runtime_info()
+            self.assertIn(str(Path(m.__file__).resolve()),info.call_args.args[1])
+            self.assertIsNotNone(a.banner_source)
+            self.assertTrue(a.card_name_entry.winfo_exists())
+            self.assertEqual(a.vis_label.bind('<ButtonPress-1>'),'')
+            close_test_app(a)
+        finally:
+            try:root.destroy()
+            except m.tk.TclError:pass
+
 if __name__=='__main__':unittest.main()

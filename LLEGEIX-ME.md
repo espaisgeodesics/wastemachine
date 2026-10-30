@@ -114,3 +114,11 @@ Moure un fader envia només el CC d'aquella franja; el màster envia els nivells
 El **Nom assignat** ara es pot editar directament sota el número de targeta a l'editor; prem APLICAR i desa el projecte. La previsualització ja no mostra la franja de simulació ni el control de gir. La finestra de targetes té una vista compacta, amb la casella **Detall ArUco** per veure totes les columnes quan calgui. Les distribucions antigues que tenien aquesta finestra molt ampla s'adapten una vegada; les noves distribucions desades respecten la mida que triïs.
 
 La capçalera gràfica utilitza `capcalera_wasteland_460.png`, que ha d'estar al costat del fitxer Python. Manté l'estètica i el títol centrat de la imatge original i n'elimina els falsos controls. No hi ha subtítol ni segona versió a sota.
+
+## Arrencada identificable i tres finestres iguals (4.6.1)
+
+La barra de títol mostra 4.6.1. A **Ajuda → Versió i fitxer que s'està executant** pots consultar el camí exacte del programa i el Python utilitzat. El nou **OBRIR_WASTELAND_461.bat** obre explícitament el fitxer principal de la mateixa carpeta, primer amb el Python 3.12 d'usuari que ja funciona, després amb el virtualenv local o el Python Launcher si cal. Mantén al costat la imatge capcalera_wasteland_460.png.
+
+La distribució inicial conserva càmera a dalt a l'esquerra, previsualització a dalt a la dreta i editor a sota a la dreta, amb totes tres de la mateixa mida. Si la distribució desada és anterior a aquesta revisió, les tres mides s'adapten en arrencar sense eliminar-ne el fitxer. Pots desar aquesta distribució nova o moure les finestres i tornar-la a desar. El MIDI continua en una finestra compacta independent.
+
+El camp **Nom assignat** és a l'editor, just sota Targeta / ID ArUco. Escriu-hi el nom, prem APLICAR i desa el projecte. La previsualització no té casella de simulació ni control de gir. Si encara els veus, consulta el fitxer real en execució a Ajuda i comprova que has actualitzat aquella carpeta.

@@ -11,7 +11,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.6.0'
+APP_VERSION='4.6.1'
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
 (ROOT/'GRAVACIONS').mkdir(exist_ok=True)
@@ -76,7 +76,7 @@ def arpeggio_note(pitches,index,direction):
 
 class App:
  def __init__(self,root):
-    self.root=root; root.title('WASTELAND MACHINE'); root.geometry('790x265'); root.minsize(570,205)
+    self.root=root; root.title('WASTELAND MACHINE · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
     self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
@@ -120,7 +120,9 @@ class App:
     fm.add_command(label='Recuperar distribució desada',command=self.restore_window_layout)
     fm.add_command(label='Restablir distribució inicial',command=self.default_window_layout)
     fm.add_separator();fm.add_command(label='Sortir',command=self.close)
-    menu.add_cascade(label='Projecte',menu=fm);self.root.config(menu=menu)
+    menu.add_cascade(label='Projecte',menu=fm)
+    help_menu=tk.Menu(menu,tearoff=False);help_menu.add_command(label='Versió i fitxer que s’està executant',command=self.show_runtime_info)
+    menu.add_cascade(label='Ajuda',menu=help_menu);self.root.config(menu=menu)
     banner=tk.Canvas(self.root,bg='#1c120e',height=60,highlightthickness=0)
     banner.pack(fill='x',padx=7,pady=(5,5))
     self.banner_source=None
@@ -296,16 +298,15 @@ class App:
     sw=self.root.winfo_screenwidth();sh=self.root.winfo_screenheight()
     # Deixem la barra de tasques i un marge superior per als controls principals.
     margin=12;top=max(175,min(245,int(sh*.24)))
-    usable_w=max(650,sw-3*margin)
-    left=max(300,int(usable_w*.53));right=max(300,usable_w-left)
-    usable_h=max(330,sh-top-2*margin-48)
-    upper=max(165,int(usable_h*.60));lower=max(145,usable_h-upper)
+    width=max(250,(sw-3*margin)//2)
+    height=max(140,(sh-top-3*margin-48)//2)
     layouts={
-      'camera':(margin,top,left,upper),
-      'visual':(margin*2+left,top,right,upper),
-      'midi':(margin,top+upper+margin,left,lower),
-      'editor':(margin*2+left,top+upper+margin,right,lower),
+      'camera':(margin,top,width,height),
+      'visual':(margin*2+width,top,width,height),
+      'midi':(margin,top+height+margin,min(420,width),min(200,height)),
+      'editor':(margin*2+width,top+height+margin,width,height),
     }
+    self.initial_panel_layouts=layouts
     for key,(x,y,w,h) in layouts.items():
       win=self.panel_windows.get(key)
       if win and win.winfo_exists():
@@ -316,9 +317,13 @@ class App:
  def raise_all_panels(self):
     # La distribució inicial serveix de base si no hi ha cap desat o és incomplet.
     self.default_window_layout()
-    if self.window_layout_file.exists():self.restore_window_layout()
+    if self.window_layout_file.exists():
+      self.restore_window_layout()
+      if getattr(self,'loaded_layout_version',0)<3:
+        for key in ('camera','visual','editor'):
+          x,y,w,h=self.initial_panel_layouts[key];self.panel_windows[key].geometry(f'{w}x{h}+{x}+{y}')
  def save_window_layout(self):
-    layout={'layout_version':2,'main':self.root.geometry(),'panels':{}}
+    layout={'layout_version':3,'main':self.root.geometry(),'panels':{}}
     for key,win in self.panel_windows.items():
       if not win.winfo_exists():continue
       state=win.state()
@@ -335,6 +340,7 @@ class App:
       return
     try:
       with open(self.window_layout_file,encoding='utf-8') as f:layout=json.load(f)
+      self.loaded_layout_version=layout.get('layout_version',0)
       if 'main' in layout:self.root.geometry(layout['main'])
       for key,data in layout.get('panels',{}).items():
         win=self.panel_windows.get(key)
@@ -353,6 +359,8 @@ class App:
       if not silent:self.status.set('Distribució de finestres recuperada.')
     except Exception as exc:
       self.status.set('No s’ha pogut recuperar la distribució: '+str(exc))
+ def show_runtime_info(self):
+    messagebox.showinfo('Wasteland · Versió i fitxer',f'Versió: {APP_VERSION}\n\nFitxer: {Path(__file__).resolve()}\n\nPython: {sys.executable}',parent=self.root)
  def resize_banner(self,event):
     width=max(1,event.width);height=min(112,max(48,round(width*.075)))
     self.banner_canvas.configure(height=height);self.banner_canvas.delete('all')
