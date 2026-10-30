@@ -54,7 +54,7 @@ El tempo és el del Wasteland. Cada bucle és un compàs de 4/4 i encara no se s
 
 ## Llista de targetes i mapes de configuració
 
-El botó superior **TARGETES EN FUNCIÓ** obre una finestra independent amb la llista de targetes i les columnes Targeta, Funció i Nom assignat. Fes doble clic a la columna Nom assignat, o prem CANVIAR NOM DE LA TARGETA, per donar-li un nom propi. Els noms es desen amb el projecte. La posició i visibilitat d’aquesta finestra es conserven amb la distribució de finestres. Hi apareixen les targetes amb una funció diferent de **Cap acció**, incloses les assignacions inicials del programa. Les targetes actives es destaquen. Per treure'n una de la llista, selecciona Cap acció a l'editor i prem APLICAR; desa el projecte per conservar el canvi.
+El botó superior **TARGETES EN FUNCIÓ** obre una finestra independent amb la llista de targetes i les columnes Targeta, Funció i Nom assignat. Escriu el Nom assignat directament a l’editor i prem APLICAR; també pots fer doble clic al nom a la llista. Els noms es desen amb el projecte. La posició i visibilitat d’aquesta finestra es conserven amb la distribució de finestres. Hi apareixen les targetes amb una funció diferent de **Cap acció**, incloses les assignacions inicials del programa. Les targetes actives es destaquen. Per treure'n una de la llista, selecciona Cap acció a l'editor i prem APLICAR; desa el projecte per conservar el canvi.
 
 Clica una fila per seleccionar la mateixa targeta a l'editor i veure el seu mapa sense activar-la: sectors d'harmonia/arpegis, graella de passos del patró o de tota la bateria, cercle cromàtic, visual assignat o paràmetres MIDI. La selecció no envia notes noves. Pots provar la targeta amb la simulació o la càmera quan vulguis. Canviar de selecció retira una simulació que estigués premuda.
 
@@ -85,7 +85,7 @@ El pols MIDI dura com a màxim 80 ms; el receptor ha d'ignorar-ne la finalitzaci
 
 ## Interfície simplificada
 
-S'han retirat el metrònom visual, el botó FINESTRES i els botons permanents de configuració de l'editor. Tria o torna a seleccionar una funció al desplegable per obrir la seva configuració. Els BPM continuen marcant el rellotge intern dels arpegis i patrons. La capçalera és nativa, mostra només v4.6.0 i no conté els falsos botons de finestra de la imatge anterior. El fitxer principal conserva el nom anterior per mantenir els accessos d'arrencada existents.
+S'han retirat el metrònom visual, el botó FINESTRES i els botons permanents de configuració de l'editor. Tria o torna a seleccionar una funció al desplegable per obrir la seva configuració. Els BPM continuen marcant el rellotge intern dels arpegis i patrons. La capçalera torna a mostrar el paisatge industrial amb el títol centrat, sense subtítol, versions duplicades ni controls falsos. El fitxer principal conserva el nom anterior per mantenir els accessos d'arrencada existents.
 
 ## Àudio: moviment, volum i efectes
 
@@ -102,3 +102,15 @@ Mentre la targeta és present, els moviments modifiquen els controls sense torna
 El directe mostra les guies de control: cercle cromàtic quan hi ha una targeta amb aquest visual, mapa de sectors quan hi ha harmonia/arpegis, i marcadors de totes les targetes actives amb número, orientació i un recorregut dels últims 2,5 segons. Cada targeta té un traç propi. Les coordenades del ratolí sobre el cercle utilitzen la mateixa escala que el mapa visible.
 
 La projecció i la gravació continuen rebent només la composició visual neta: color pla o visuals superposats, sense cercle, mapes, identificadors ni trajectòries. En retirar l'última targeta, el directe i la projecció tornen al negre; consultar una targeta a la llista continua permetent veure'n el mapa sense projectar-lo.
+
+## Taula de volums i noms a l'editor
+
+**TAULA DE VOLUMS** obre un mesclador MIDI per a les targetes amb funcions de so. Cada franja mostra el nom i un fader independent; el màster escala tots els nivells de les franges. La taula funciona també quan la targeta ja no és davant de la càmera i el clip continua sonant. Obrir-la o carregar el projecte no envia ordres de volum automàtiques.
+
+Cada franja té canal i CC configurables. Per defecte es proposen CC diferents (20 + ID de targeta) per poder assignar-los per separat a Sonar amb MIDI Learn / ACT. **No és un mesclador d'àudio local:** vincula cadascun d'aquests controls al volum de la pista corresponent de Sonar o del sampler. El botó Enviar / Learn envia el nivell actual per comprovar la ruta o fer-ne l'aprenentatge. Les rutes de franges diferents han de ser diferents (canal + CC); el programa impedeix duplicar-les. Els percentatges són valors de control MIDI, no mesuradors de dB.
+
+Moure un fader envia només el CC d'aquella franja; el màster envia els nivells escalats a totes. Si també tens un control de volum per moviment assignat al mateix paràmetre de Sonar, l'última ordre que rebi el paràmetre preval: desactiva aquell control de moviment si vols que el fader sigui l'únic que en governi el volum. Desa el projecte per conservar rutes, nivells i màster.
+
+El **Nom assignat** ara es pot editar directament sota el número de targeta a l'editor; prem APLICAR i desa el projecte. La previsualització ja no mostra la franja de simulació ni el control de gir. La finestra de targetes té una vista compacta, amb la casella **Detall ArUco** per veure totes les columnes quan calgui. Les distribucions antigues que tenien aquesta finestra molt ampla s'adapten una vegada; les noves distribucions desades respecten la mida que triïs.
+
+La capçalera gràfica utilitza `capcalera_wasteland_460.png`, que ha d'estar al costat del fitxer Python. Manté l'estètica i el títol centrat de la imatge original i n'elimina els falsos controls. No hi ha subtítol ni segona versió a sota.

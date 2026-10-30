@@ -77,6 +77,7 @@ def arpeggio_note(pitches,index,direction):
 class App:
  def __init__(self,root):
     self.root=root; root.title('WASTELAND MACHINE'); root.geometry('790x265'); root.minsize(570,205)
+    self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -120,17 +121,16 @@ class App:
     fm.add_command(label='Restablir distribució inicial',command=self.default_window_layout)
     fm.add_separator();fm.add_command(label='Sortir',command=self.close)
     menu.add_cascade(label='Projecte',menu=fm);self.root.config(menu=menu)
-    # Capçalera nativa: cap versió ni botó decoratiu incrustat en una imatge.
-    banner=tk.Frame(self.root,bg='#211812',highlightbackground='#9c6139',highlightthickness=1,height=88)
-    banner.pack(fill='x',padx=7,pady=(5,5));banner.pack_propagate(False)
-    accent=tk.Frame(banner,bg='#c8874f',width=5);accent.pack(side='left',fill='y',padx=(0,12))
-    brand=tk.Frame(banner,bg='#211812');brand.pack(side='left',fill='both',expand=True,pady=10)
-    tk.Label(brand,text='WASTELAND MACHINE',font=('Georgia',23,'bold'),fg='#edbc88',bg='#211812',anchor='w').pack(fill='x')
-    tk.Label(brand,text='TARGETES  ·  MÚSICA  ·  VISUALS',font=('Segoe UI',9),fg='#b89474',bg='#211812',anchor='w').pack(fill='x',pady=(3,0))
-    tk.Label(banner,text='v'+APP_VERSION,font=('Segoe UI',10),fg='#cfaa85',bg='#211812').pack(side='right',anchor='n',padx=14,pady=15)
+    banner=tk.Canvas(self.root,bg='#1c120e',height=60,highlightthickness=0)
+    banner.pack(fill='x',padx=7,pady=(5,5))
+    self.banner_source=None
+    try:self.banner_source=Image.open(ROOT/'capcalera_wasteland_460.png').convert('RGB')
+    except OSError:pass
+    self.banner_canvas=banner;banner.bind('<Configure>',self.resize_banner)
     toolbar=ttk.Frame(self.root);toolbar.pack(fill='x',padx=9,pady=(1,5))
     self.panic_button=tk.Button(toolbar,text='SILENCI ABSOLUT',command=self.toggle_panic,bg='#a52626',fg='white',font=('Segoe UI',10,'bold'));self.panic_button.pack(side='left',padx=3)
     ttk.Button(toolbar,text='TARGETES EN FUNCIÓ',command=lambda:self.show_panel('cards')).pack(side='left',padx=3)
+    ttk.Button(toolbar,text='TAULA DE VOLUMS',command=self.open_mixer).pack(side='left',padx=3)
     # Cada mòdul té una finestra nativa de Windows: es pot arrossegar,
     # canviar de mida, minimitzar i restaurar independentment.
     self.panel_windows={}
@@ -143,11 +143,12 @@ class App:
     self.visual_window=self.make_panel_window('visual','VISUAL · PREVISUALITZACIÓ','680x460+740+300')
     ttk.Label(self.visual_window,textvariable=self.preview_caption,wraplength=600).pack(fill='x',padx=5,pady=3)
     visual_content=ttk.Frame(self.visual_window);visual_content.pack(fill='both',expand=True)
-    self.cards_window=self.make_panel_window('cards','TARGETES EN FUNCIÓ · MONITOR ARUCO','1180x520+60+100')
-    self.cards_window.minsize(700,300)
+    self.cards_window=self.make_panel_window('cards','TARGETES EN FUNCIÓ · MONITOR ARUCO','790x420+60+100')
+    self.cards_window.minsize(600,300)
     card_sidebar=ttk.Frame(self.cards_window);card_sidebar.pack(fill='both',expand=True,padx=8,pady=8)
     ttk.Label(card_sidebar,text='TARGETES EN FUNCIÓ · Doble clic al nom per editar-lo').pack(anchor='w',pady=(0,4))
     ttk.Checkbutton(card_sidebar,text='Només targetes amb funció',variable=self.show_only_assigned,command=self.update_assigned_cards).pack(anchor='w',pady=4)
+    ttk.Checkbutton(card_sidebar,text='Detall ArUco',variable=self.monitor_details,command=self.update_monitor_columns).pack(anchor='w',pady=2)
     card_list=ttk.Frame(card_sidebar);card_list.pack(fill='both',expand=True)
     self.assigned_cards=ttk.Treeview(card_list,columns=('card','function','name','id','state','channel','note','cc','axis','value','x','y','angle','visual','audio'),show='headings',selectmode='browse',height=8)
     self.assigned_cards.heading('card',text='Targeta');self.assigned_cards.column('card',width=58,minwidth=48,stretch=False)
@@ -157,25 +158,31 @@ class App:
       self.assigned_cards.heading(column,text=title);self.assigned_cards.column(column,width=width,minwidth=35,stretch=False)
     horizontal=ttk.Scrollbar(card_list,orient='horizontal',command=self.assigned_cards.xview)
     self.assigned_cards.configure(xscrollcommand=horizontal.set);horizontal.pack(side='bottom',fill='x')
+    self.update_monitor_columns()
     card_scroll=ttk.Scrollbar(card_list,orient='vertical',command=self.assigned_cards.yview)
     self.assigned_cards.configure(yscrollcommand=card_scroll.set)
     card_scroll.pack(side='right',fill='y');self.assigned_cards.pack(fill='both',expand=True)
     self.assigned_cards.tag_configure('active',background='#29453d',foreground='white')
     self.assigned_cards.bind('<<TreeviewSelect>>',self.choose_assigned_card)
     self.assigned_cards.bind('<Double-1>',self.edit_card_name)
-    ttk.Button(card_sidebar,text='CANVIAR NOM DE LA TARGETA',command=self.edit_card_name).pack(fill='x',pady=(5,0))
     ttk.Button(card_sidebar,text='SEGUIR DIRECTE',command=self.follow_live_preview).pack(fill='x',pady=(5,0))
     self.cards_window.withdraw()
+    self.mixer_window=self.make_panel_window('mixer','TAULA DE VOLUMS','950x500+100+120')
+    self.mixer_window.minsize(650,400)
+    ttk.Label(self.mixer_window,text='Assigna cada CC al volum corresponent a Sonar amb MIDI Learn / ACT. El màster escala tots els volums.',wraplength=900).pack(fill='x',padx=10,pady=8)
+    master=ttk.Frame(self.mixer_window);master.pack(fill='x',padx=10)
+    ttk.Label(master,text='MÀSTER').pack(side='left',padx=5)
+    ttk.Scale(master,from_=0,to=127,variable=self.master_volume,command=self.change_master_volume).pack(side='left',fill='x',expand=True,padx=10)
+    self.master_label=ttk.Label(master,text='100 %',width=8);self.master_label.pack(side='right')
+    holder=ttk.Frame(self.mixer_window);holder.pack(fill='both',expand=True,padx=8,pady=8)
+    self.mixer_canvas=tk.Canvas(holder,bg='#151210',highlightthickness=0)
+    scroll=ttk.Scrollbar(holder,orient='horizontal',command=self.mixer_canvas.xview)
+    self.mixer_canvas.configure(xscrollcommand=scroll.set);scroll.pack(side='bottom',fill='x');self.mixer_canvas.pack(fill='both',expand=True)
+    self.mixer_body=ttk.Frame(self.mixer_canvas);self.mixer_canvas.create_window((0,0),window=self.mixer_body,anchor='nw')
+    self.mixer_body.bind('<Configure>',lambda e:self.mixer_canvas.configure(scrollregion=self.mixer_canvas.bbox('all')))
+    self.mixer_window.withdraw()
     self.vis_label=tk.Label(visual_content,bg='#0d0b0b',fg='#e0c3a0',anchor='center',bd=0)
     self.vis_label.pack(fill='both',expand=True,padx=5,pady=5)
-    simulation_bar=ttk.Frame(self.visual_window);simulation_bar.pack(fill='x',padx=5,pady=3)
-    ttk.Checkbutton(simulation_bar,text='SIMULAR AMB RATOLÍ',variable=self.simulation,command=self.toggle_simulation).pack(side='left')
-    ttk.Label(simulation_bar,text='Gir').pack(side='left',padx=4)
-    ttk.Scale(simulation_bar,from_=0,to=359,variable=self.sim_angle).pack(side='left',fill='x',expand=True)
-    ttk.Label(self.visual_window,text='Targeta de l’editor · Mantén el clic i arrossega · Deixa anar per retirar-la').pack(fill='x',padx=5,pady=3)
-    self.vis_label.bind('<ButtonPress-1>',self.simulation_press)
-    self.vis_label.bind('<B1-Motion>',self.simulation_motion)
-    self.root.bind_all('<ButtonRelease-1>',self.simulation_release,add='+')
     self.midi_window=self.make_panel_window('midi','CONNEXIÓ MIDI → CAKEWALK','315x210+815+65')
     midi_box=ttk.Frame(self.midi_window);midi_box.pack(fill='both',expand=True,padx=6,pady=6)
     self.editor_window=self.make_panel_window('editor','EDITOR DE TARGETES','350x650+1430+80')
@@ -214,6 +221,8 @@ class App:
     ttk.Label(frame,text='Targeta / ID ArUco').pack(anchor='w',padx=8,pady=(5,0))
     cb=ttk.Combobox(frame,textvariable=self.card_id,values=[f'{i+1:02d}' for i in range(16)],state='readonly',width=24)
     cb.pack(padx=8,fill='x');cb.bind('<<ComboboxSelected>>',lambda e:self.load_card())
+    ttk.Label(frame,text='Nom assignat').pack(anchor='w',padx=8,pady=(7,2))
+    self.card_name_entry=ttk.Entry(frame,textvariable=self.card_name);self.card_name_entry.pack(fill='x',padx=8,pady=(0,4))
     for label,var,vals in [('Funció',self.fun,FUNCS)]:
       ttk.Label(frame,text=label).pack(anchor='w',padx=8,pady=(5,0))
       combo=ttk.Combobox(frame,textvariable=var,values=vals,state='readonly',width=25)
@@ -309,7 +318,7 @@ class App:
     self.default_window_layout()
     if self.window_layout_file.exists():self.restore_window_layout()
  def save_window_layout(self):
-    layout={'main':self.root.geometry(),'panels':{}}
+    layout={'layout_version':2,'main':self.root.geometry(),'panels':{}}
     for key,win in self.panel_windows.items():
       if not win.winfo_exists():continue
       state=win.state()
@@ -330,7 +339,13 @@ class App:
       for key,data in layout.get('panels',{}).items():
         win=self.panel_windows.get(key)
         if not win or not win.winfo_exists():continue
-        if 'geometry' in data:win.geometry(data['geometry'])
+        if 'geometry' in data:
+          geometry=data['geometry']
+          if key=='cards' and layout.get('layout_version',0)<2:
+            import re
+            match=re.match(r'(\d+)x(\d+)(.*)',geometry)
+            if match and (int(match[1])>1000 or int(match[2])>520):geometry=f'{min(820,int(match[1]))}x{min(450,int(match[2]))}{match[3]}'
+          win.geometry(geometry)
         if data.get('visible',True):
           win.deiconify()
           win.lift(self.root)
@@ -338,6 +353,80 @@ class App:
       if not silent:self.status.set('Distribució de finestres recuperada.')
     except Exception as exc:
       self.status.set('No s’ha pogut recuperar la distribució: '+str(exc))
+ def resize_banner(self,event):
+    width=max(1,event.width);height=min(112,max(48,round(width*.075)))
+    self.banner_canvas.configure(height=height);self.banner_canvas.delete('all')
+    if self.banner_source is None:
+      self.banner_canvas.create_text(width/2,height/2,text='WASTELAND MACHINE',fill='#edbc88',font=('Georgia',23,'bold'));return
+    image_height=round(self.banner_source.height*width/self.banner_source.width)
+    self.banner_photo=ImageTk.PhotoImage(self.banner_source.resize((width,max(1,image_height)),Image.Resampling.LANCZOS))
+    # El llenç mostra la franja panoràmica centrada, sense les vores del recurs.
+    self.banner_canvas.create_image(width/2,height/2,image=self.banner_photo,anchor='center')
+ def update_monitor_columns(self):
+    self.assigned_cards.configure(displaycolumns='#all' if self.monitor_details.get() else ('card','name','function','state','channel','note','cc','value'))
+ def mixer_config(self,i):
+    c=self.cards[i]
+    return dict({'channel':c['channel'],'cc':20+i,'level':100},**c.get('mixer',{}))
+ def open_mixer(self):
+    self.refresh_mixer();self.show_panel('mixer')
+ def refresh_mixer(self,force=False):
+    if not hasattr(self,'mixer_body'):return
+    self.master_label.config(text=f'{round(self.master_volume.get()*100/127)} %')
+    sources=[i for i,c in enumerate(self.cards) if c['function'] in ('Nota MIDI','Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria','Àudio')]
+    signature=tuple(sources)
+    if force or signature!=self.mixer_signature:
+      for child in self.mixer_body.winfo_children():child.destroy()
+      self.mixer_rows={};self.mixer_signature=signature
+      if not sources:ttk.Label(self.mixer_body,text='Assigna una funció amb so a alguna targeta per veure’n el volum.').pack(padx=20,pady=40)
+      for column,i in enumerate(sources):
+        config=self.mixer_config(i);strip=ttk.LabelFrame(self.mixer_body,text=f'Targeta {i+1:02d}',padding=8);strip.grid(row=0,column=column,sticky='ns',padx=4,pady=4)
+        name=ttk.Label(strip,text=self.cards[i].get('name',''),width=18,wraplength=135);name.pack(pady=4)
+        variables={key:tk.DoubleVar(value=config[key]) if key=='level' else tk.IntVar(value=config[key]) for key in ('channel','cc','level')}
+        level_label=ttk.Label(strip,text=f'{round(config["level"]*100/127)} %');level_label.pack()
+        slider=tk.Scale(strip,from_=127,to=0,orient='vertical',variable=variables['level'],showvalue=False,length=175,bg='#261c16',fg='#edbc88',highlightthickness=0,command=lambda value,index=i:self.change_mixer_volume(index,value));slider.pack(pady=4)
+        route=ttk.Frame(strip);route.pack()
+        for title,key,minimum,maximum in [('Canal','channel',1,16),('CC','cc',0,127)]:
+          line=ttk.Frame(route);line.pack(fill='x',pady=2);ttk.Label(line,text=title,width=6).pack(side='left')
+          tk.Spinbox(line,from_=minimum,to=maximum,width=4,textvariable=variables[key]).pack(side='left')
+        ttk.Button(strip,text='Enviar / Learn',command=lambda index=i:self.send_mixer_volume(index)).pack(fill='x',pady=(6,0))
+        self.mixer_rows[i]={'variables':variables,'name':name,'label':level_label}
+    for i,row in self.mixer_rows.items():row['name'].config(text=self.cards[i].get('name',f'Targeta {i+1:02d}'))
+ def read_mixer_route(self,i):
+    config=self.mixer_config(i)
+    row=self.mixer_rows.get(i)
+    if row:config={key:var.get() for key,var in row['variables'].items()}
+    config={'channel':int(config['channel']),'cc':int(config['cc']),'level':max(0,min(127,float(config['level'])))}
+    if not 1<=config['channel']<=16 or not 0<=config['cc']<=127:raise ValueError('Canal: 1–16; CC: 0–127.')
+    for other,c in enumerate(self.cards):
+      if other==i or c['function'] not in ('Nota MIDI','Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria','Àudio'):continue
+      route=self.mixer_config(other)
+      if (route['channel'],route['cc'])==(config['channel'],config['cc']):raise ValueError(f'La ruta coincideix amb la targeta {other+1:02d}. Assigna un altre canal o CC per controlar-les per separat.')
+    self.cards[i]['mixer']=config
+    return config
+ def send_mixer_volume(self,i):
+    try:config=self.read_mixer_route(i)
+    except (ValueError,tk.TclError) as exc:self.status.set('Taula de volums: '+str(exc));return False
+    if self.muted or not self.midi:
+      self.status.set('Taula de volums: connecta la sortida MIDI i comprova que no estigui en silenci.');return False
+    value=round(config['level']*self.master_volume.get()/127)
+    try:self.midi.send(mido.Message('control_change',channel=config['channel']-1,control=config['cc'],value=value))
+    except Exception as exc:self.status.set('Error de volum MIDI: '+str(exc));return False
+    self.status.set(f'Volum T{i+1:02d}: CC{config["cc"]}, canal {config["channel"]}, valor {value}. Desa el projecte per conservar-lo.')
+    return True
+ def change_mixer_volume(self,i,value):
+    row=self.mixer_rows.get(i)
+    if not row:return
+    level=max(0,min(127,float(value)));row['variables']['level'].set(level);row['label'].config(text=f'{round(level*100/127)} %')
+    self.send_mixer_volume(i)
+ def change_master_volume(self,value):
+    if not hasattr(self,'master_label'):return
+    self.master_volume.set(max(0,min(127,float(value))))
+    self.master_label.config(text=f'{round(self.master_volume.get()*100/127)} %')
+    try:
+      for i in self.mixer_rows:self.read_mixer_route(i)
+    except (ValueError,tk.TclError) as exc:
+      self.status.set('Taula de volums: '+str(exc));return
+    for i in self.mixer_rows:self.send_mixer_volume(i)
  def sidebar_panel(self,parent,title,pady=3):
     # Marc de ferro rovellat, capçalera de coure i reblons decoratius.
     outer=tk.Frame(parent,bg='#241711',highlightbackground='#b77943',highlightthickness=2,bd=2,relief='ridge')
@@ -366,6 +455,7 @@ class App:
     self.load_card()
  def update_cards_table(self):
     self.update_assigned_cards()
+    self.refresh_mixer()
     if not hasattr(self,'cards_table'):return
     for i,c in enumerate(self.cards):
       val=(f'{i+1:02d}',c.get('name',f'Targeta {i+1:02d}'),c['function'],c['channel'],c['note'] if c['function']=='Nota MIDI' else c['cc'],NAMES[c['visual']] if c['function']=='Canviar visual' else '—',c['axis'])
@@ -393,7 +483,10 @@ class App:
  def edit_card_name(self,event=None):
     tree=self.assigned_cards
     if event is not None:
-      if tree.identify_column(event.x)!='#3':return
+      column=tree.identify_column(event.x)
+      if not column or column=='#0':return
+      columns=tuple(tree['columns']) if tuple(tree['displaycolumns'])==('#all',) else tuple(tree['displaycolumns'])
+      if columns[int(column[1:])-1]!='name':return
       iid=tree.identify_row(event.y)
       if not iid:return
       tree.selection_set(iid)
@@ -406,6 +499,7 @@ class App:
     name=simpledialog.askstring('Nom assignat',f'Nom per a la targeta {i+1:02d}:',initialvalue=self.cards[i].get('name',''),parent=self.cards_window)
     if name is None:return
     self.cards[i]['name']=name.strip()
+    if self.card_id.get()==f'{i+1:02d}':self.card_name.set(name.strip())
     self.update_cards_table()
     if self.preview_card==i:self.select_card_preview(i)
     self.status.set(f'Nom de la targeta {i+1:02d} actualitzat. Desa el projecte per conservar-lo.')
@@ -625,6 +719,7 @@ class App:
     ttk.Label(pane,text='Per conservar els canvis en disc: Projecte → Desar projecte.',wraplength=320).pack(anchor='w',pady=(5,0))
  def load_card(self):
     c=self.cards[int(self.card_id.get())-1]; self.fun.set(c['function']); self.axis.set(c['axis']); self.note.set(c['note']); self.cc.set(c['cc']); self.channel.set(c['channel']); self.visual.set(NAMES[c['visual']]); self.harmony_key.set(c.get('harmony_key','La menor')); self.harmony_root.set(NOTE_NAMES[int(c.get('harmony_root',9))%12]); self.harmony_scale.set(c.get('harmony_scale','Menor natural (eòlica)')); self.harmony_velocity.set(c.get('harmony_velocity',85)); self.arp_division.set(c.get('arp_division','1/2 temps')); self.arp_gate.set(c.get('arp_gate',60)); self.arp_direction.set(c.get('arp_direction','Ascendent'))
+    self.card_name.set(c.get('name',f'Targeta {int(self.card_id.get()):02d}'))
     self.audio_duration.set(c.get('audio_duration',0))
     for role,variables in self.audio_control_vars.items():
       for key,var in variables.items():var.set(c.get('audio_controls',{}).get(role,{}).get(key,AUDIO_CONTROLS[role][key]))
@@ -644,7 +739,7 @@ class App:
         if config['enabled']:used.append(config['cc'])
       if len(set(used))!=len(used):raise ValueError('Cada control d’àudio actiu ha de tenir un número CC diferent.')
       self.deactivate(card_index)
-      c=self.cards[card_index]; c.update(audio_controls=control_configs,audio_duration=duration,drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
+      c=self.cards[card_index]; c.update(name=self.card_name.get().strip(),audio_controls=control_configs,audio_duration=duration,drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
       if c['visual']==12 and int(self.card_id.get())-1 in self.active:self.select_visual(12)
       self.select_card_preview(card_index)
       self.status.set(f'Targeta {self.card_id.get()} configurada. Desa el projecte per conservar els canvis.');self.update_cards_table()
@@ -652,7 +747,7 @@ class App:
     except Exception as e:
       messagebox.showerror('Configuració',str(e));return False
  def new_project(self):
-    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol'; self.load_card();self.update_cards_table(); self.status.set('Projecte nou')
+    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table(); self.status.set('Projecte nou')
  def update_bpm(self):
     try:
       with self.arp_lock:
@@ -665,12 +760,16 @@ class App:
     except (ValueError,tk.TclError):self.status.set('Tempo no vàlid')
  def save_project(self,as_new=False):
     if not self.apply_card():return
+    try:
+      for i in self.mixer_rows:self.read_mixer_route(i)
+    except (ValueError,tk.TclError) as exc:
+      messagebox.showerror('Taula de volums',str(exc));return
     if as_new or self.project=='Sense títol':
       path=filedialog.asksaveasfilename(initialdir=ROOT/'PROJECTES',defaultextension='.json',filetypes=[('Projecte Wasteland','*.json')])
       if not path:return
       self.project=path
     try:
-      with open(self.project,'w',encoding='utf-8') as f:json.dump({'version':4,'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual},f,ensure_ascii=False,indent=2)
+      with open(self.project,'w',encoding='utf-8') as f:json.dump({'version':4,'master_volume':self.master_volume.get(),'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual},f,ensure_ascii=False,indent=2)
       self.status.set(f'Projecte desat: {Path(self.project).name}')
     except Exception as e:messagebox.showerror('Desar',str(e))
  def open_project(self):
@@ -679,7 +778,7 @@ class App:
     try:
       with open(path,encoding='utf-8') as f:d=json.load(f)
       if len(d['cards'])!=16:raise ValueError('El projecte no conté 16 targetes')
-      self.all_notes_off(); self.cards=d['cards']; self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path; self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
+      self.all_notes_off(); self.cards=d['cards'];self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path; self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
     except Exception as e:messagebox.showerror('Obrir',str(e))
  def refresh_midi(self):
      # No amaguem els errors: aixi podem diagnosticar loopMIDI.

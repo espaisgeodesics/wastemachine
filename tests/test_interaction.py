@@ -195,11 +195,12 @@ class InteractionTests(unittest.TestCase):
                 for child in widget.winfo_children():result.extend(texts(child))
                 return result
             labels=texts(root)
-            self.assertEqual(labels.count('v'+m.APP_VERSION),1)
+            self.assertEqual(labels.count('v'+m.APP_VERSION),0)
+            self.assertNotIn('TARGETES  ·  MÚSICA  ·  VISUALS',labels)
             self.assertNotIn('FINESTRES',labels)
             self.assertNotIn('METRÒNOM: OFF',labels)
             self.assertFalse(hasattr(a,'function_settings_button'))
-            self.assertFalse(hasattr(a,'banner_source'))
+            self.assertIsNotNone(a.banner_source)
             a.midi=Mock();a.card_id.set('05');a.load_card();a.fun.set('Àudio');a.on_function_selected()
             self.assertTrue(a.audio_settings_window.winfo_exists())
             a.audio_duration.set(0)
@@ -258,6 +259,51 @@ class InteractionTests(unittest.TestCase):
             a.deactivate(0);a.deactivate(2);a.tick()
             self.assertFalse(a.last_frame.any());self.assertFalse(a.live_preview_frame().any())
             self.assertFalse(a.target_trails)
+            close_test_app(a)
+        finally:
+            try:root.destroy()
+            except m.tk.TclError:pass
+
+    def test_mixer_editor_names_compact_monitor_and_saved_levels(self):
+        root=m.tk.Tk()
+        try:
+            with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
+            a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
+            a.midi=Mock();a.open_mixer();root.update()
+            a.midi.send.assert_not_called()
+            self.assertIn(0,a.mixer_rows);self.assertIn(2,a.mixer_rows)
+            a.card_id.set('01');a.load_card();a.card_name.set('Veu principal')
+            self.assertTrue(a.apply_card())
+            self.assertEqual(a.cards[0]['name'],'Veu principal')
+            self.assertEqual(a.mixer_rows[0]['name'].cget('text'),'Veu principal')
+            a.change_mixer_volume(0,64)
+            message=a.midi.send.call_args.args[0]
+            self.assertEqual((message.type,message.control,message.value),('control_change',20,64))
+            self.assertEqual(a.cards[2].get('mixer',{}).get('level',100),100)
+            a.change_master_volume(63.5)
+            messages=[c.args[0] for c in a.midi.send.call_args_list if c.args[0].type=='control_change']
+            self.assertEqual({msg.control:msg.value for msg in messages}[20],32)
+            self.assertTrue(all(msg.type!='note_on' for msg in messages))
+            a.mixer_rows[2]['variables']['cc'].set(20)
+            calls=a.midi.send.call_count
+            self.assertFalse(a.send_mixer_volume(2));self.assertEqual(a.midi.send.call_count,calls)
+            a.mixer_rows[2]['variables']['cc'].set(22)
+            self.assertEqual(tuple(a.assigned_cards['displaycolumns'])[:3],('card','name','function'))
+            a.monitor_details.set(True);a.update_monitor_columns()
+            self.assertEqual(tuple(a.assigned_cards['displaycolumns']),('#all',))
+            a.monitor_details.set(False);a.update_monitor_columns()
+            a.show_panel('cards');root.update()
+            x,y,w,h=a.assigned_cards.bbox('0','name')
+            with patch.object(m.simpledialog,'askstring',return_value='Veu editada'):
+                a.edit_card_name(SimpleNamespace(x=x+w//2,y=y+h//2))
+            self.assertEqual(a.card_name.get(),'Veu editada')
+            with tempfile.TemporaryDirectory() as folder:
+                a.project=str(Path(folder)/'project.json');a.save_project()
+                a.cards[0]['name']='Temporal';a.master_volume.set(127)
+                with patch.object(m.filedialog,'askopenfilename',return_value=a.project):a.open_project()
+                self.assertEqual(a.card_name.get(),'Veu editada')
+                self.assertEqual(a.master_volume.get(),63.5)
+                self.assertEqual(a.mixer_config(0)['level'],64)
             close_test_app(a)
         finally:
             try:root.destroy()
