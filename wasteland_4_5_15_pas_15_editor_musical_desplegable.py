@@ -532,8 +532,13 @@ class App:
       self.midi_indicator.config(text='ERROR DE CONNEXIÓ');messagebox.showerror('MIDI',str(e))
  def toggle_cam(self):
     if self.camera:
-      self.camera.release();self.camera=None;self.status.set('Càmera tancada');return
-    self.camera=cv2.VideoCapture(0,cv2.CAP_DSHOW)
+      self.camera.release();self.camera=None
+      for i in list(self.active):self.deactivate(i)
+      self.all_notes_off()
+      self.cam_label.config(image='',text='Càmera desconnectada')
+      self.status.set('Càmera tancada');return
+    backend=cv2.CAP_DSHOW if sys.platform=='win32' else cv2.CAP_ANY
+    self.camera=cv2.VideoCapture(self.cam_index.get(),backend)
     if not self.camera.isOpened():
       self.camera.release();self.camera=None;messagebox.showwarning('Càmera','No es pot obrir la webcam. Tanca altres programes que la utilitzin.');return
     self.camera.set(cv2.CAP_PROP_FRAME_WIDTH,640);self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT,480)
@@ -970,6 +975,9 @@ class App:
       self.update_metronome_light()
       if self.camera:
         ok,frame=self.camera.read()
+        if not ok:
+          self.toggle_cam()
+          self.status.set('S’ha perdut la imatge de la càmera. Torna-la a obrir.')
         if ok:
           # Detectem sobre la imatge ORIGINAL: els ArUco no admeten el reflex de mirall.
           gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
