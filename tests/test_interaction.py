@@ -87,7 +87,7 @@ class InteractionTests(unittest.TestCase):
             a.midi.send.assert_not_called()
             visual=a.current_visual
             live_frame=np.full((360,640,3),17,np.uint8)
-            a.last_frame=live_frame.copy();a.visual_paused=True
+            a.last_frame=live_frame.copy();a.visual_paused=True;a.visual_dirty=False
             a.recording=Mock();a.preview_dirty=True
             a.tick()
             np.testing.assert_array_equal(a.recording.write.call_args.args[0],live_frame)
@@ -119,7 +119,7 @@ class InteractionTests(unittest.TestCase):
             a.midi=Mock()
             self.assertIs(a.assigned_cards.winfo_toplevel(),a.cards_window)
             self.assertIsNot(a.cards_window,a.visual_window)
-            self.assertEqual(tuple(a.assigned_cards['columns']),('card','function','name'))
+            self.assertEqual(tuple(a.assigned_cards['columns'])[:3],('card','function','name'))
             a.show_panel('cards');a.assigned_cards.selection_set('0');root.update()
             with patch.object(m.simpledialog,'askstring',return_value='Bateria principal – Jordi'):
                 a.edit_card_name()
@@ -134,12 +134,49 @@ class InteractionTests(unittest.TestCase):
                 self.assertEqual(a.cards[0]['name'],'Bateria principal – Jordi')
                 self.assertEqual(a.assigned_cards.item('0','values')[2],'Bateria principal – Jordi')
                 a.window_layout_file=Path(folder)/'layout.json'
-                a.cards_window.geometry('600x400+60+70');root.update_idletasks()
+                a.cards_window.geometry('800x400+60+70');root.update_idletasks()
                 a.save_window_layout();a.cards_window.withdraw();a.restore_window_layout()
                 root.update_idletasks()
                 self.assertEqual(a.cards_window.state(),'normal')
-                self.assertEqual(a.cards_window.geometry(),'600x400+60+70')
+                self.assertEqual(a.cards_window.geometry(),'800x400+60+70')
             a.midi.send.assert_not_called()
+            close_test_app(a)
+        finally:
+            try:root.destroy()
+            except m.tk.TclError:pass
+
+    def test_unified_live_monitor_cc_dialog_and_projection(self):
+        import numpy as np
+        root=m.tk.Tk()
+        try:
+            with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
+            a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
+            a.midi=Mock();a.open_aruco_monitor()
+            self.assertEqual(a.cards_window.state(),'normal')
+            self.assertIsNone(a.monitor_window)
+            self.assertIn('angle',a.assigned_cards['columns'])
+            a.cards[15]['function']='Cap acció';a.show_only_assigned.set(False);a.update_assigned_cards()
+            self.assertTrue(a.assigned_cards.exists('15'))
+            a.card_id.set('04');a.load_card();a.fun.set('Control MIDI CC');a.on_function_selected()
+            self.assertTrue(a.cc_settings_window.winfo_exists())
+            a.axis.set('Vertical');a.cc.set(11);a.apply_card();a.cc_settings_window.destroy()
+            self.assertEqual(a.cards[3]['axis'],'Vertical')
+            a.activate(3,.2,.75,0)
+            self.assertEqual(a.midi.send.call_args.args[0].control,11)
+            self.assertEqual(a.midi.send.call_args.args[0].value,95)
+            a.update_assigned_cards()
+            self.assertEqual(a.assigned_cards.item('3','values')[4],'ACTIU')
+            self.assertEqual(a.assigned_cards.item('3','values')[10],'20.0')
+            a.open_projection();root.update_idletasks()
+            a.display=Mock();a.visual_dirty=True;a.tick()
+            projected=[c.args[1] for c in a.display.call_args_list if c.args[0] is a.proj_label][-1]
+            previewed=[c.args[1] for c in a.display.call_args_list if c.args[0] is a.vis_label][-1]
+            np.testing.assert_array_equal(projected,previewed)
+            self.assertTrue(projected.any())
+            a.deactivate(3);a.tick()
+            self.assertFalse(a.last_frame.any())
+            projected=[c.args[1] for c in a.display.call_args_list if c.args[0] is a.proj_label][-1]
+            self.assertFalse(projected.any())
             close_test_app(a)
         finally:
             try:root.destroy()

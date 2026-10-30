@@ -71,7 +71,7 @@ class App:
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.metronome_enabled=False; self.metronome_start=time.monotonic(); self.metronome_last_beat=-1; self.metronome_last_bpm=self.bpm; self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
-    self.preview_card=None; self.preview_dirty=True; self.preview_caption=tk.StringVar(value='Previsualització en directe'); self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
+    self.show_only_assigned=tk.BooleanVar(value=True); self.visual_dirty=True; self.preview_card=None; self.preview_dirty=True; self.preview_caption=tk.StringVar(value='Previsualització en directe'); self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
     self.camera=None; self.midi=None; self.midi_name=''; self.recording=None; self.record_file=None; self.t0=time.monotonic(); self.last_frame=None; self.visual_paused=False; self.visual_paused_at=None; self.monitor_window=None; self.monitor_table=None; self.monitor_ticks=0
     self.aruco_detector=cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
     self.last_visual_update=0.0; self.visual_interval=1/12; self._closing=False
@@ -79,7 +79,7 @@ class App:
     self._visual_coords=(u,v,np.sqrt(u*u+v*v)+1e-4,np.arctan2(v,u))
     self.last_color_xy=None; self.smooth_color_xy=None; self.color_smooth_time=None; self.color_transition_seconds=0.5; self.color_max_brightness=0.80; self.card2_rotation_prev=None; self.card2_rotation_total=0.0; self.card2_last_send=0.0; self.card2_cc_values={}; self.card2_volume=0; self.card2_filter=64; self.full=tk.BooleanVar(value=False); self.cam_index=tk.IntVar(value=0)
     self.harmony_key=tk.StringVar(value='La menor'); self.harmony_root=tk.StringVar(value='La'); self.harmony_scale=tk.StringVar(value='Menor natural (eòlica)'); self.bpm_var=tk.IntVar(value=self.bpm); self.harmony_velocity=tk.IntVar(value=85); self.arp_division=tk.StringVar(value='1/2 temps'); self.arp_gate=tk.IntVar(value=60); self.card_id=tk.StringVar(value='01'); self.fun=tk.StringVar(); self.axis=tk.StringVar(); self.note=tk.IntVar(); self.cc=tk.IntVar(); self.channel=tk.IntVar(); self.visual=tk.StringVar(); self.midi_choice=tk.StringVar(value='Sense MIDI'); self.status=tk.StringVar(value='Preparat · Obre la càmera per detectar les targetes')
-    self.cards[0]['visual']=12; self.cards[1]['function']='Control MIDI CC'; self.cards[1]['cc']=7; self.cards[1]['axis']='Horitzontal'; self.build(); self.select_visual(12); self.load_card(); self.refresh_midi(); self.root.protocol('WM_DELETE_WINDOW',self.close); self.root.after(50,self.tick); self.root.after(450,self.raise_all_panels); self.arp_thread=threading.Thread(target=self.arpeggio_worker,daemon=True); self.arp_thread.start()
+    self.cards[0]['visual']=12; self.cards[1]['function']='Control MIDI CC'; self.cards[1]['cc']=7; self.cards[1]['axis']='Horitzontal'; self.build(); self.select_visual(12); self.load_card(); self.follow_live_preview(); self.refresh_midi(); self.root.protocol('WM_DELETE_WINDOW',self.close); self.root.after(50,self.tick); self.root.after(450,self.raise_all_panels); self.arp_thread=threading.Thread(target=self.arpeggio_worker,daemon=True); self.arp_thread.start()
  def build(self):
     bg='#151210'; panel='#261c16'; copper='#ba7945'; cream='#f0d9b5'
     self.root.configure(bg=bg)
@@ -121,7 +121,6 @@ class App:
     toolbar=ttk.Frame(self.root);toolbar.pack(fill='x',padx=9,pady=(1,5))
     self.panic_button=tk.Button(toolbar,text='SILENCI ABSOLUT',command=self.toggle_panic,bg='#a52626',fg='white',font=('Segoe UI',10,'bold'));self.panic_button.pack(side='left',padx=3)
     ttk.Button(toolbar,text='TARGETES EN FUNCIÓ',command=lambda:self.show_panel('cards')).pack(side='left',padx=3)
-    ttk.Button(toolbar,text='MONITOR ARUCO',command=self.open_aruco_monitor).pack(side='left',padx=2)
     ttk.Button(toolbar,text='FINESTRES',command=self.show_all_panels).pack(side='left',padx=7)
     ttk.Label(toolbar,text='v 4.5.15 · Pas 15',foreground='#d5a16b').pack(side='right',padx=7)
     # Cada mòdul té una finestra nativa de Windows: es pot arrossegar,
@@ -136,15 +135,20 @@ class App:
     self.visual_window=self.make_panel_window('visual','VISUAL · PREVISUALITZACIÓ','680x460+740+300')
     ttk.Label(self.visual_window,textvariable=self.preview_caption,wraplength=600).pack(fill='x',padx=5,pady=3)
     visual_content=ttk.Frame(self.visual_window);visual_content.pack(fill='both',expand=True)
-    self.cards_window=self.make_panel_window('cards','TARGETES EN FUNCIÓ','620x470+80+100')
-    self.cards_window.minsize(440,260)
+    self.cards_window=self.make_panel_window('cards','TARGETES EN FUNCIÓ · MONITOR ARUCO','1180x520+60+100')
+    self.cards_window.minsize(700,300)
     card_sidebar=ttk.Frame(self.cards_window);card_sidebar.pack(fill='both',expand=True,padx=8,pady=8)
     ttk.Label(card_sidebar,text='TARGETES EN FUNCIÓ · Doble clic al nom per editar-lo').pack(anchor='w',pady=(0,4))
+    ttk.Checkbutton(card_sidebar,text='Només targetes amb funció',variable=self.show_only_assigned,command=self.update_assigned_cards).pack(anchor='w',pady=4)
     card_list=ttk.Frame(card_sidebar);card_list.pack(fill='both',expand=True)
-    self.assigned_cards=ttk.Treeview(card_list,columns=('card','function','name'),show='headings',selectmode='browse',height=8)
+    self.assigned_cards=ttk.Treeview(card_list,columns=('card','function','name','id','state','channel','note','cc','axis','value','x','y','angle','visual'),show='headings',selectmode='browse',height=8)
     self.assigned_cards.heading('card',text='Targeta');self.assigned_cards.column('card',width=58,minwidth=48,stretch=False)
     self.assigned_cards.heading('function',text='Funció');self.assigned_cards.column('function',width=165,minwidth=100)
     self.assigned_cards.heading('name',text='Nom assignat');self.assigned_cards.column('name',width=240,minwidth=120)
+    for column,title,width in [('id','ID',38),('state','Estat',70),('channel','Canal',50),('note','Nota',48),('cc','CC',45),('axis','Eix',90),('value','Valor',55),('x','X %',55),('y','Y %',55),('angle','Graus',55),('visual','Visual',160)]:
+      self.assigned_cards.heading(column,text=title);self.assigned_cards.column(column,width=width,minwidth=35,stretch=False)
+    horizontal=ttk.Scrollbar(card_list,orient='horizontal',command=self.assigned_cards.xview)
+    self.assigned_cards.configure(xscrollcommand=horizontal.set);horizontal.pack(side='bottom',fill='x')
     card_scroll=ttk.Scrollbar(card_list,orient='vertical',command=self.assigned_cards.yview)
     self.assigned_cards.configure(yscrollcommand=card_scroll.set)
     card_scroll.pack(side='right',fill='y');self.assigned_cards.pack(fill='both',expand=True)
@@ -206,15 +210,16 @@ class App:
     ttk.Label(frame,text='Targeta / ID ArUco').pack(anchor='w',padx=8,pady=(5,0))
     cb=ttk.Combobox(frame,textvariable=self.card_id,values=[f'{i+1:02d}' for i in range(16)],state='readonly',width=24)
     cb.pack(padx=8,fill='x');cb.bind('<<ComboboxSelected>>',lambda e:self.load_card())
-    for label,var,vals in [('Funció',self.fun,FUNCS),('Moviment que controla el valor',self.axis,['Rotació','Horitzontal','Vertical'])]:
+    for label,var,vals in [('Funció',self.fun,FUNCS)]:
       ttk.Label(frame,text=label).pack(anchor='w',padx=8,pady=(5,0))
       combo=ttk.Combobox(frame,textvariable=var,values=vals,state='readonly',width=25)
       combo.pack(fill='x',padx=8)
       if label=='Funció':combo.bind('<<ComboboxSelected>>',self.on_function_selected)
-    for label,var,from_,to in [('Canal MIDI (1-16)',self.channel,1,16),('Nota MIDI (0-127)',self.note,0,127),('Control CC (0-127)',self.cc,0,127)]:
+    for label,var,from_,to in [('Canal MIDI (1-16)',self.channel,1,16),('Nota MIDI (0-127)',self.note,0,127)]:
       ttk.Label(frame,text=label).pack(anchor='w',padx=8,pady=(5,0))
       tk.Spinbox(frame,textvariable=var,from_=from_,to=to,width=8,bg='#e9d8c2').pack(anchor='w',padx=8)
-    ttk.Button(frame,text='CONFIGURAR MÚSICA / PATRÓ…',command=self.open_music_settings).pack(fill='x',padx=8,pady=(9,4))
+    self.function_settings_button=ttk.Button(frame,text='CONFIGURAR FUNCIÓ…',command=self.open_function_settings)
+    self.function_settings_button.pack(fill='x',padx=8,pady=(9,4))
     ttk.Label(frame,text='Les escales, la força i el ritme són dins la finestra de configuració musical.',wraplength=245,foreground='#c9aa83').pack(anchor='w',padx=8,pady=(0,5))
     ttk.Label(frame,text='Visual assignat').pack(anchor='w',padx=8,pady=(5,0))
     ttk.Combobox(frame,textvariable=self.visual,values=NAMES,state='readonly',width=25).pack(fill='x',padx=8)
@@ -401,12 +406,15 @@ class App:
  def update_assigned_cards(self):
     if not hasattr(self,'assigned_cards'):return
     tree=self.assigned_cards
-    ids={str(i) for i,c in enumerate(self.cards) if c.get('function','Cap acció')!='Cap acció'}
+    ids={str(i) for i,c in enumerate(self.cards) if not self.show_only_assigned.get() or c.get('function','Cap acció')!='Cap acció'}
     for iid in tree.get_children():
       if iid not in ids:tree.delete(iid)
     for i,c in enumerate(self.cards):
       if str(i) not in ids:continue
-      values=(f'{i+1:02d}',c['function'],c.get('name',f'Targeta {i+1:02d}'))
+      position=self.active.get(i)
+      x,y,angle=position if position is not None else (None,None,None)
+      value={'Rotació':angle,'Horitzontal':x,'Vertical':y}.get(c.get('axis'),angle)
+      values=(f'{i+1:02d}',c['function'],c.get('name',f'Targeta {i+1:02d}'),i,'ACTIU' if position is not None else 'Inactiu',c['channel'],c['note'],c['cc'],c['axis'],round(max(0,min(1,value))*127) if value is not None else '--',f'{x*100:.1f}' if x is not None else '--',f'{y*100:.1f}' if y is not None else '--',f'{angle*360:.1f}' if angle is not None else '--',NAMES[c['visual']])
       tags=('active',) if i in self.active else ()
       if tree.exists(str(i)):tree.item(str(i),values=values,tags=tags)
       else:tree.insert('','end',iid=str(i),values=values,tags=tags)
@@ -443,7 +451,7 @@ class App:
     self.status.set(f'Targeta {i+1:02d}: mapa de configuració. Per provar-la, activa la simulació o ensenya la targeta.')
  def follow_live_preview(self):
     self.preview_card=None;self.preview_dirty=True
-    self.preview_caption.set('Previsualització en directe')
+    self.preview_caption.set('Previsualització en directe' if self.active else 'Repòs · Cap targeta activa')
     selected=self.assigned_cards.selection()
     if selected:self.assigned_cards.selection_remove(*selected)
  def select_card_preview(self,i):
@@ -526,48 +534,34 @@ class App:
     d.line((26,28,26,21),fill='#e1b778',width=2);d.ellipse((24,18,28,22),fill='#f5c47a')
     return ImageTk.PhotoImage(im)
  def open_aruco_monitor(self):
-    if self.monitor_window is not None and self.monitor_window.winfo_exists():
-      self.monitor_window.lift(); self.monitor_window.focus_force(); return
-    win=tk.Toplevel(self.root)
-    win.title('MONITOR ARUCO · Valors en directe')
-    win.geometry('1120x570'); win.minsize(850,400); win.configure(bg='#161a1e')
-    self.monitor_window=win
-    ttk.Label(win,text='16 TARGETES · CONFIGURACIO I LECTURA EN DIRECTE',font=('Segoe UI',13,'bold'),foreground='#ffae58').pack(anchor='w',padx=12,pady=(12,4))
-    ttk.Label(win,text='ID ArUco: 0-15  |  Targeta: 01-16  |  Posicio: percentatge  |  Rotacio: graus  |  Valor: 0-127').pack(anchor='w',padx=12,pady=(0,8))
-    holder=ttk.Frame(win); holder.pack(fill='both',expand=True,padx=12,pady=4)
-    cols=('targeta','id','estat','funcio','canal','nota','cc','eix','valor','x','y','angle','visual')
-    headings=('Targeta','ID','Estat','Funcio','Canal','Nota','CC','Eix','Valor','X %','Y %','Graus','Visual')
-    widths=(68,42,85,135,55,55,45,95,65,60,60,65,155)
-    tree=ttk.Treeview(holder,columns=cols,show='headings',height=16)
-    for col,title,width in zip(cols,headings,widths):
-      tree.heading(col,text=title); tree.column(col,width=width,minwidth=40,anchor='center',stretch=(col in ('funcio','visual')))
-    tree.tag_configure('on',background='#29453d',foreground='#ffffff')
-    tree.tag_configure('off',background='#22272b',foreground='#b9c0c4')
-    scroll=ttk.Scrollbar(holder,orient='vertical',command=tree.yview)
-    tree.configure(yscrollcommand=scroll.set)
-    scroll.pack(side='right',fill='y');tree.pack(side='left',fill='both',expand=True)
-    self.monitor_table=tree
-    self.update_aruco_monitor()
-    ttk.Label(win,text='Els valors en directe nomes apareixen quan el marcador es detecta. Els canvis de configuracio es veuen despres de prémer APLICAR A LA TARGETA.').pack(anchor='w',padx=12,pady=(5,12))
-    def on_close():
-      self.monitor_table=None;self.monitor_window=None;win.destroy()
-    win.protocol('WM_DELETE_WINDOW',on_close)
+    # Compatibilitat amb les crides antigues: un únic monitor per a tot.
+    self.show_panel('cards')
  def update_aruco_monitor(self):
-    tree=self.monitor_table
-    if tree is None or not tree.winfo_exists():return
-    for i,c in enumerate(self.cards):
-      active=i in self.active
-      x,y,a=self.active[i] if active else (None,None,None)
-      axis_value={'Rotació':a,'Horitzontal':x,'Vertical':y}.get(c['axis'],a) if active else None
-      val=round(max(0,min(1,axis_value))*127) if axis_value is not None else '--'
-      values=(f'{i+1:02d}',i,'ACTIU' if active else 'Inactiu',c['function'],c['channel'],c['note'],c['cc'],c['axis'],val,
-              f'{x*100:.1f}' if active else '--',f'{y*100:.1f}' if active else '--',f'{a*360:.1f}' if active else '--',NAMES[c['visual']])
-      iid=str(i)
-      if tree.exists(iid):tree.item(iid,values=values,tags=('on' if active else 'off',))
-      else:tree.insert('', 'end',iid=iid,values=values,tags=('on' if active else 'off',))
+    self.update_assigned_cards()
+ def update_function_settings_button(self):
+    kind=self.fun.get()
+    enabled=kind in ('Control MIDI CC','Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria')
+    self.function_settings_button.config(text='CONFIGURAR CONTROL MIDI CC…' if kind=='Control MIDI CC' else 'CONFIGURAR MÚSICA / PATRÓ…',state='normal' if enabled else 'disabled')
  def on_function_selected(self,event=None):
-    if self.fun.get() in ('Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria'):
-      self.open_music_settings()
+    self.update_function_settings_button()
+    self.open_function_settings()
+ def open_function_settings(self):
+    if self.fun.get()=='Control MIDI CC':self.open_cc_settings()
+    elif self.fun.get() in ('Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria'):self.open_music_settings()
+ def open_cc_settings(self):
+    old=getattr(self,'cc_settings_window',None)
+    if old is not None and old.winfo_exists():old.destroy()
+    win=tk.Toplevel(self.root);self.cc_settings_window=win
+    win.title('CONTROL MIDI CC · TARGETA '+self.card_id.get());win.geometry('400x390');win.configure(bg='#151210');win.transient(self.root)
+    pane=ttk.Frame(win);pane.pack(fill='both',expand=True,padx=16,pady=12)
+    ttk.Label(pane,text='CONTROL MIDI CC',font=('Segoe UI',12,'bold')).pack(anchor='w',pady=8)
+    for title,var,maximum,minimum in [('Canal MIDI',self.channel,16,1),('Número de controlador CC',self.cc,127,0)]:
+      ttk.Label(pane,text=title).pack(anchor='w',pady=(6,2))
+      tk.Spinbox(pane,textvariable=var,from_=minimum,to=maximum,width=8).pack(anchor='w')
+    ttk.Label(pane,text='Moviment que controla el valor').pack(anchor='w',pady=(10,2))
+    ttk.Combobox(pane,textvariable=self.axis,values=['Rotació','Horitzontal','Vertical'],state='readonly').pack(fill='x')
+    ttk.Label(pane,text='T02 amb CC7 conserva el control especial: distància al centre = volum; gir = filtre CC74.',wraplength=360).pack(anchor='w',pady=10)
+    ttk.Button(pane,text='APLICAR A LA TARGETA I TANCAR',command=lambda:(self.apply_card(),win.destroy())).pack(fill='x',pady=10)
  def open_music_settings(self):
     kind=self.fun.get()
     if kind not in ('Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria'):
@@ -626,6 +620,7 @@ class App:
     for name,var in self.drum_notes.items():var.set(c.get('drum_notes',{}).get(name,DRUM_NOTES[name]))
     for j,var in enumerate(self.rhythm_steps):var.set(bool(c.get('rhythm_pattern',[k%4==0 for k in range(16)])[j]))
     self.select_card_preview(int(self.card_id.get())-1)
+    self.update_function_settings_button()
  def apply_card(self):
     try:
       card_index=int(self.card_id.get())-1
@@ -789,7 +784,7 @@ class App:
  def open_projection(self):
     if getattr(self,'projection',None) and self.projection.winfo_exists():
       self.projection.lift();return
-    self.projection=tk.Toplevel(self.root);self.projection.title('PROJECCIÓ · COLOR PLA · WASTELAND MACHINE');self.projection.geometry('960x540');self.projection.configure(bg='black')
+    self.projection=tk.Toplevel(self.root);self.projection.title('PROJECCIÓ · WASTELAND MACHINE');self.projection.geometry('960x540');self.projection.configure(bg='black')
     self.proj_label=tk.Label(self.projection,bg='black');self.proj_label.pack(fill='both',expand=True)
     self.projection.bind('<F11>',lambda e:self.projection.attributes('-fullscreen',not self.projection.attributes('-fullscreen')))
     self.projection.bind('<Escape>',lambda e:self.projection.attributes('-fullscreen',False))
@@ -971,6 +966,8 @@ class App:
     if self.muted:return
     c=self.cards[i];v={'Rotació':angle,'Horitzontal':x,'Vertical':y}.get(c['axis'],angle);v=max(0,min(1,v))
     was=i in self.active;self.active[i]=(x,y,angle)
+    if not was:
+      self.visual_dirty=True;self.follow_live_preview()
     if not was and c.get('visual')==12:self.select_visual(12)
     if i==1 and c.get('function')=='Control MIDI CC' and c.get('cc')==7:
       self.activate_card2(x,y,angle)
@@ -1016,70 +1013,107 @@ class App:
  def deactivate(self,i):
     self.stop_arpeggio(i)
     self.stop_harmony(i)
-    self.active.pop(i,None);self.last_cc.pop(i,None)
+    self.active.pop(i,None);self.last_cc.pop(i,None);self.visual_dirty=True;self.preview_dirty=True
     if self.cards[i].get('visual')==12 and not any(self.cards[j].get('visual')==12 for j in self.active):
       self.last_color_xy=None;self.smooth_color_xy=None
     if i==1:self.card2_rotation_prev=None;self.card2_rotation_total=0.
+    if not self.active and self.preview_card is None:self.preview_caption.set('Repòs · Cap targeta activa')
     if i in self.notes:
       ch,note=self.notes.pop(i)
       if self.midi:
         try:self.midi.send(mido.Message('note_off',channel=ch,note=note,velocity=0))
         except Exception:pass
+ def compose_live_visuals(self,t):
+    visuals=sorted({int(self.cards[i].get('visual',0))%len(NAMES) for i in self.active if self.cards[i].get('function')!='Cap acció'})
+    if not visuals:return np.zeros((H,W,3),np.uint8)
+    if 12 in visuals:self.color_by_position(None)
+    layers=[self.projection_color_frame() if n==12 else self.render(t,visual=n) for n in visuals]
+    if len(layers)==1:return layers[0]
+    # Mescla de tipus pantalla: els negres són transparents i les llums se superposen.
+    remaining=np.ones((H,W,3),np.float32)
+    gain=1/math.sqrt(len(layers))
+    for layer in layers:remaining*=1-layer.astype(np.float32)*(gain/255)
+    return np.clip((1-remaining)*255,0,255).astype(np.uint8)
  def render(self,t,visual=None):
-    # Procedural original visuals: offline, no external assets.
-    yy,xx=np.mgrid[0:H,0:W].astype(np.float32);u=(xx-W/2)/(H/2);v=(yy-H/2)/(H/2);r=np.sqrt(u*u+v*v)+1e-4;a=np.arctan2(v,u)
-    n=self.current_visual if visual is None else visual;beat=math.sin(t*self.bpm/60*math.pi*2); intensity=0.4+0.6*len(self.active)/16
-    frame=np.zeros((H,W,3),np.uint8);frame[:]=(7,10,14)
-    def rings(scale=8):
-      z=np.sin(r*scale-t*2+np.sin(a*6+t)*.4);return np.clip((z-.35)*230,0,255).astype(np.uint8)
+    # Camps continus en coordenades precalculades: animació sense soroll aleatori.
+    n=self.current_visual if visual is None else visual
+    if n==12:return self.projection_color_frame()
+    if not hasattr(self,'_render_coords'):self._render_coords=tuple(np.ascontiguousarray(coord[::2,::2]) for coord in self._visual_coords)
+    u,v,r,a=self._render_coords
+    phase=t*.45;beat=.5+.5*math.sin(t*self.bpm/60*math.tau)
+    palettes=[
+      ((8,6,13),(40,90,175),(155,220,255)),
+      ((9,13,22),(44,96,145),(150,205,235)),
+      ((12,12,5),(85,135,35),(205,255,125)),
+      ((21,6,10),(160,55,85),(255,220,165)),
+      ((12,7,18),(85,65,165),(225,205,255)),
+      ((5,4,18),(20,65,205),(105,220,255)),
+      ((20,12,4),(130,110,30),(255,245,170)),
+      ((18,9,5),(125,80,35),(255,225,155)),
+      ((20,5,12),(100,50,125),(240,185,235)),
+      ((7,15,5),(45,150,55),(180,255,185)),
+      ((9,7,12),(70,105,165),(205,235,255)),
+      ((15,7,24),(50,75,170),(150,200,255)),
+    ]
     if n==0:
-      m=rings(19);frame[:,:,2]=m;frame[:,:,1]=m//3
-      for k in range(12):
-        ang=t*.3+k*math.tau/12;cv2.line(frame,(320,180),(int(320+150*math.cos(ang)),int(180+150*math.sin(ang))),(35,110,200),3)
-      cv2.circle(frame,(320,180),int(38+beat*8),(30,125,240),5)
+      blades=np.cos(a*14-r*9+phase*2)
+      field=np.exp(-((r-.67-.025*np.sin(a*7-phase))/.16)**2)*(.4+.6*np.maximum(0,blades)**3)
+      field+=.3*np.exp(-((r-.24)/.045)**2)*(1+.25*beat)
     elif n==1:
-      noise=np.random.default_rng(int(t*8)).integers(0,80,(H,W),dtype=np.uint8);frame[:,:,2]=noise+35;frame[:,:,1]=noise//2+15
-      for k in range(30):
-        x=int((k*89+t*70*(1+k%3))%W);y=int((k*61+math.sin(t+k)*30)%H);cv2.line(frame,(x,y),(x-35,y+12),(30,95,180),1)
+      dunes=np.sin(v*5+np.sin(u*2+phase)*1.7+phase)
+      field=(.5+.5*dunes)*.45+.45*np.exp(-((v+.2+np.sin(u*1.7-phase)*.2)/.15)**2)
+      field*=np.exp(-r*.18)
     elif n==2:
-      f=np.sin(u*10+np.sin(v*8+t)*3+t)+np.cos(v*9-t*.6);z=np.clip((f+2)*50,0,255).astype(np.uint8);frame[:,:,1]=z;frame[:,:,2]=z//2;frame[:,:,0]=z//3
+      curl=np.sin(u*3+np.sin(v*4-phase))+np.cos(v*5+np.sin(u*3+phase))
+      field=np.exp(-((curl-.35)/.45)**2)*(.5+.5*np.sin(a+phase)**2)
     elif n==3:
-      m=rings(12);frame[:,:,0]=m;frame[:,:,2]=m//2
-      rng=random.Random(int(t*6)); pts=[(rng.randrange(W),rng.randrange(H)) for _ in range(13)];cv2.polylines(frame,[np.array(pts,np.int32)],False,(80,190,255),2)
+      arcs=np.sin(a*5+np.sin(r*6-phase)*2+phase)
+      field=np.exp(-((r-.6-.13*arcs)/.025)**2)*.9
+      field+=.32*np.exp(-((r-.6)/.22)**2)+.55*np.exp(-r*r*22)*(1+.2*beat)
     elif n==4:
-      z=np.abs(np.sin(a*10+t*.3))*np.abs(np.sin(12/(r+.1)-t*3));m=(z*240).astype(np.uint8);frame[:,:,2]=m;frame[:,:,1]=m//2
+      depth=1/(r+.23)
+      field=(.5+.5*np.cos(depth*9-phase*5))**12*np.exp(-r*.8)
+      field*=.55+.45*(.5+.5*np.cos(a*12+phase))
     elif n==5:
-      m=rings(10);frame[:,:,2]=m;frame[:,:,1]=m//4
-      rng=random.Random(int(t*5));
-      for _ in range(60):
-        x=rng.randrange(W);y=rng.randrange(H);cv2.circle(frame,(x,y),rng.randrange(1,4),(20,110,255),-1)
+      flame=np.sin(u*5+np.sin(v*4+phase*3)*2)+np.sin(u*9-v*3+phase*4)*.4
+      field=np.exp(-((flame-v*.65)/.7)**2)*np.clip((v+1.3)/2,0,1)
+      field+=.28*np.exp(-((v-.6)/.25)**2)
     elif n==6:
-      rng=np.random.default_rng(int(t*12));m=rng.integers(0,256,(H,W),dtype=np.uint8);mask=(m>235);frame[mask]=(200,180,60)
-      for _ in range(10):
-        y=int(rng.integers(H));cv2.rectangle(frame,(0,y),(W,y+int(rng.integers(1,6))),(int(rng.integers(100)),80,170),-1)
+      lattice=(np.maximum(0,np.cos(u*19+phase*1.3))**16+np.maximum(0,np.cos(v*25-phase*1.8))**20)*.35
+      field=lattice*(.4+.6*np.sin(u*2+v*3+phase)**2)+.4*np.exp(-((v-.35*np.sin(u*2+phase))/.13)**2)
     elif n==7:
-      for k in range(13):
-        points=[]
-        for x in range(0,W,4):points.append((x,int(H/2+math.sin(x*.018+t*2+k*.3)*25+math.sin(x*.006-t+k)*k*4)))
-        cv2.polylines(frame,[np.array(points,np.int32)],False,(30+k*5,90+k*6,170+k*5),1)
+      waves=np.sin(v*10+np.sin(u*2-phase)*3+phase*2)
+      field=(.5+.5*waves)**12*(.45+.55*np.cos(u*1.3+phase)**2)
+      field+=.18*np.exp(-((v+.15)/.6)**2)
     elif n==8:
-      rng=random.Random(47)
-      for k in range(30):
-        x=int((rng.randrange(W)+math.sin(t*.3+k)*35)%W);y=int((rng.randrange(H)+math.cos(t*.4+k)*35)%H);size=5+k%22
-        cv2.rectangle(frame,(x-size,y-size),(x+size,y+size),(40+k*3,70+k*3,140+k*3),2)
+      swirl=a+r*3-phase
+      field=np.exp(-((r-.65)/.22)**2)*(.3+.7*(.5+.5*np.cos(swirl*3))**4)
+      for k in range(5):
+        ang=phase*(.3+k*.06)+k*math.tau/5
+        field+=.5*np.exp(-((u-math.cos(ang)*.85)**2+(v-math.sin(ang)*.55)**2)*170)
     elif n==9:
-      z=np.clip((1/(r+.15)+np.sin(a*8+t*2))*70,0,255).astype(np.uint8);frame[:,:,1]=z;frame[:,:,0]=z//3;cv2.circle(frame,(320,180),int(50+beat*10),(40,255,100),3)
+      field=.65*np.exp(-r*r*10)*(1+.25*beat)
+      field+=.65*np.exp(-((r-.58-.035*math.sin(phase*3))/.04)**2)
+      field+=(.5+.5*np.cos(r*26-phase*4))**14*np.exp(-r*2)*.3
     elif n==10:
-      for k in range(14):
-        ang=t*.2+k*math.tau/14;rad=20+k*11;cv2.ellipse(frame,(320,180),(rad,int(rad*.55)),int(ang*180/math.pi),10,260,(20+k*8,80+k*7,170+k*5),2)
-      cv2.circle(frame,(320,180),int(24+beat*6),(70,200,240),-1)
+      iris=(.5+.5*np.cos(a*65+np.sin(r*17-phase)*2))**5
+      field=np.exp(-((r-.55)/.19)**2)*(.4+.6*iris)
+      field+=.45*np.exp(-((r-.31)/.025)**2)+.5*np.exp(-((u+.23)**2+(v+.24)**2)*95)
     else:
-      frame[:,:,2]=np.clip(25+100*np.exp(-((r-.8)**2)*12),0,255).astype(np.uint8)
-      cv2.circle(frame,(320,200),int(65+beat*4),(30,95,230),-1);cv2.circle(frame,(320,200),int(65+beat*4),(15,50,150),4)
-      for k in range(14):
-        y=int(210+k*11);cv2.line(frame,(0,y),(W,y),(20,30+k*3,55+k*6),1)
-    cv2.putText(frame,NAMES[n].upper(),(16,H-20),cv2.FONT_HERSHEY_SIMPLEX,.65,(160,195,225),1,cv2.LINE_AA)
-    return frame
+      sun=np.sqrt((u*.85)**2+((v+.2)*1.1)**2)
+      disc=np.clip((.46-sun)*100,0,1)
+      stripes=.45+.55*(.5+.5*np.cos(v*65+phase))
+      field=disc*stripes*.9+.25*np.exp(-sun*2)
+      field+=.45*np.exp(-(u/(.12+np.maximum(v,0)*.8))**2)*np.clip(v,0,1)*(.5+.5*np.cos(v*40-phase*2))**4
+    field=np.clip(field,0,1)
+    dark,mid,light=(np.array(color,np.float32) for color in palettes[n%12])
+    lower=np.minimum(1,field[...,None]*2)
+    upper=np.maximum(0,field[...,None]*2-1)
+    rgb=dark+(mid-dark)*lower+(light-mid)*upper
+    # Halo suau i vinyeta: conservar detall a les llums i profunditat al fons.
+    glow=cv2.GaussianBlur(np.maximum(rgb-95,0),(0,0),2)
+    rgb=(rgb+glow*.55)*np.clip(1-r[...,None]*.18,.35,1)
+    return cv2.resize(np.clip(rgb,0,255).astype(np.uint8),(W,H),interpolation=cv2.INTER_CUBIC)
  def color_by_position(self,frame):
     chromatic_cards=[i for i in self.active if self.cards[i].get('visual')==12]
     if chromatic_cards:
@@ -1283,14 +1317,10 @@ class App:
           # Mostrem la imatge original: els textos i els contorns es llegeixen correctament.
           if self.camera_window.state()=='normal':self.display(self.cam_label,cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),'cam_photo')
       now_vis=time.monotonic();frame_changed=False
-      if self.last_frame is None or (not self.visual_paused and now_vis-self.last_visual_update>=self.visual_interval):
+      if self.last_frame is None or self.visual_dirty or (not self.visual_paused and now_vis-self.last_visual_update>=self.visual_interval):
         t=now_vis-self.t0
-        if any(self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial') for i in self.active):
-          self.last_frame=self.harmony_map_preview(chromatic=any(self.cards[j].get('visual')==12 for j in self.active))
-        elif self.current_visual==12:
-          self.last_frame=self.color_by_position(None)
-        else:
-          self.last_frame=self.render(t)
+        self.last_frame=self.compose_live_visuals(t)
+        self.visual_dirty=False
         self.last_visual_update=now_vis;frame_changed=True
       if self.visual_window.state()=='normal' and (self.preview_dirty or frame_changed):
         preview=self.card_preview_frame(self.preview_card,now_vis-self.t0) if self.preview_card is not None else self.last_frame.copy()
@@ -1302,12 +1332,11 @@ class App:
         self.preview_dirty=False
       vis=self.last_frame
       if getattr(self,'projection',None) and self.projection.winfo_exists():
-        width=max(1,self.proj_label.winfo_width());height=max(1,self.proj_label.winfo_height())
-        self.display(self.proj_label,cv2.cvtColor(cv2.resize(self.projection_color_frame(),(width,height)),cv2.COLOR_BGR2RGB),'proj_photo')
+        self.display(self.proj_label,cv2.cvtColor(self.last_frame,cv2.COLOR_BGR2RGB),'proj_photo')
       if self.recording:self.recording.write(vis)
       self.monitor_ticks+=1
       if self.monitor_ticks%4==0:
-        self.update_aruco_monitor();self.update_cards_table()
+        self.update_cards_table()
     except Exception as e:
       import traceback
       traceback.print_exc()

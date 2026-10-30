@@ -59,3 +59,13 @@ El botó superior **TARGETES EN FUNCIÓ** obre una finestra independent amb la l
 Clica una fila per seleccionar la mateixa targeta a l'editor i veure el seu mapa sense activar-la: sectors d'harmonia/arpegis, graella de passos del patró o de tota la bateria, cercle cromàtic, visual assignat o paràmetres MIDI. La selecció no envia notes noves. Pots provar la targeta amb la simulació o la càmera quan vulguis. Canviar de selecció retira una simulació que estigués premuda.
 
 **SEGUIR DIRECTE** torna a la previsualització automàtica. Els mapes seleccionats són de consulta: no substitueixen el vídeo de gravació ni la sortida de projecció. La distribució de finestres desada es continua recuperant en arrencar.
+
+## Monitor unificat, controls CC i visuals en directe
+
+**TARGETES EN FUNCIÓ** inclou ara el monitor ArUco: nom, funció, ID, estat, canal, nota, CC, eix, valor, X/Y, gir i visual assignat. Ja no s'obre una segona finestra de monitor. Utilitza la barra horitzontal per veure totes les columnes i desmarca **Només targetes amb funció** si vols consultar també les inactives amb Cap acció. Els noms i la distribució desada es conserven.
+
+En seleccionar **Control MIDI CC** s'obre la seva configuració, amb canal, número CC i desplegable de moviment (rotació, horitzontal o vertical). Es pot tornar a obrir amb CONFIGURAR CONTROL MIDI CC. La T02 amb CC7 conserva el control especial radial de volum i filtre CC74, indicat a la finestra.
+
+Les targetes actives generen els visuals assignats. Diversos visuals diferents se superposen mitjançant una mescla de llum; en retirar una targeta desapareix la seva capa, i sense cap targeta la sortida en directe queda negra. Activar una targeta amb càmera o simulació torna automàticament al directe; seleccionar una fila permet inspeccionar el seu mapa sense activar MIDI ni projectar-lo.
+
+La projecció i la gravació reben la mateixa composició en directe. La projecció ja no està limitada al color pla: mostra també els dotze visuals renovats, amb llum, halo i moviment continu. El cercle cromàtic conserva la seva projecció de color pla, que també es pot combinar amb altres visuals. Els mapes i els indicadors del ratolí són només d'ajuda a la previsualització. S'ha comprovat la finestra de projecció en pantalla virtual; cal provar el monitor/projector físic al teu ordinador. Les assignacions numèriques i els noms dels visuals es mantenen per compatibilitat amb els projectes anteriors.
