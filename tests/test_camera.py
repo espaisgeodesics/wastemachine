@@ -15,6 +15,8 @@ class CameraTests(unittest.TestCase):
         app.cam_index = Mock()
         app.cam_index.get.return_value = 2
         app.status = Mock()
+        app.simulation = Mock()
+        app.simulation.get.return_value = False
         return app
 
     def test_camera_backend_and_selected_index(self):

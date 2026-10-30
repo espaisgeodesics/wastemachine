@@ -32,3 +32,12 @@ La càmera física, MIDI/Cakewalk i el llançador BAT necessiten comprovació al
 La versió actual és wasteland_4_5_15_pas_15_editor_musical_desplegable.py. Amb Python 3.12, crea un entorn virtual, instal·la requirements.txt i executa aquest fitxer des d'un escriptori amb Tkinter. OpenCV headless és suficient perquè les finestres les dibuixa Tkinter.
 
 Proves: `python -m unittest discover -s tests -v`.
+
+## Simulació, silenci i patrons
+
+- A la finestra VISUAL, activa **SIMULAR AMB RATOLÍ**. Tria una targeta a l'editor, configura-la i prem APLICAR. Mantén premut el botó esquerre sobre la imatge i arrossega per simular-ne la posició; un cercle groc indica la targeta. Deixa anar el clic per retirar-la. El control Gir simula la rotació. La càmera i la simulació són alternatives; activar-ne una desactiva l'altra.
+- **SILENCI ABSOLUT** atura les notes, allibera el pedal de sustain i envia All Sound Off i All Notes Off als 16 canals de la sortida MIDI connectada. També bloqueja noves activacions fins a prémer **REPRENDRE MIDI**. No silencia pistes d'àudio o instruments que no rebin aquesta sortida MIDI.
+- A **Arpegiador espacial → CONFIGURAR MÚSICA / PATRÓ**, tria Ascendent, Descendent, Pujada i baixada o Aleatori. Es conserven la divisió rítmica, durada, escala i intensitat.
+- La funció **Patró rítmic** ofereix 16 passos repetits. Activa els cops a la configuració musical; la nota i el canal es trien a l'editor de la targeta. La divisió 1/4 temps equival a semicorxeres: 16 passos formen un compàs de 4/4. El patró segueix el rellotge intern i comença a la fase actual de la graella quan detecta la targeta; s'atura en retirar-la. No hi ha sincronització externa amb Cakewalk en aquesta versió.
+- Per a bateria General MIDI, pots assignar targetes diferents a bombo (nota 36), caixa (38) i hi-hat (42), normalment al canal 10; depèn de l'instrument receptor. La simulació amb ratolí activa una targeta cada vegada; la càmera permet diverses targetes.
+- Desa el projecte per conservar les direccions i els patrons. Els projectes anteriors continuen fent servir arpegis ascendents per defecte.
