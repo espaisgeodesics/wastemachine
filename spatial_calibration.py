@@ -1,5 +1,6 @@
 """Four fixed floor references selected on an unmirrored camera snapshot."""
 import time
+import math
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
@@ -14,6 +15,7 @@ class CalibrationEditor:
         self.get_calibration=get_calibration;self.on_apply=on_apply
         self.frame=None;self.stamp=None;self.context=None;self.frozen=False
         self.points=[None]*4;self.selected=tk.IntVar(value=0);self.photo=None;self.bounds=None
+        self.outline=tk.StringVar(value='Circumferència del domo')
         self.notice=tk.StringVar(value='Obre la càmera i prem CONGELAR IMATGE.')
         ttk.Label(window,text='Marca quatre punts FIXOS del perímetre del terra: NORD, EST, SUD i OEST.\n'
                   'La càmera ha de quedar immòbil. Imatge original, sense mirall. Els punts no són les posicions de la targeta.',wraplength=850).pack(fill='x',padx=10,pady=8)
@@ -22,6 +24,12 @@ class CalibrationEditor:
         ttk.Button(controls,text='REPETIR CAPTURA',command=self.restart).pack(side='left',padx=3)
         for i,name in enumerate(REFERENCES):
             ttk.Radiobutton(controls,text=name,variable=self.selected,value=i,command=self.draw).pack(side='left',padx=7)
+        perimeter=ttk.Frame(window);perimeter.pack(fill='x',padx=10,pady=(6,0))
+        ttk.Label(perimeter,text='Contorn de referència:').pack(side='left',padx=3)
+        outline=ttk.Combobox(perimeter,textvariable=self.outline,state='readonly',width=27,
+                             values=('Circumferència del domo','Quatre costats'))
+        outline.pack(side='left',padx=5);outline.bind('<<ComboboxSelected>>',lambda event:self.draw())
+        ttk.Label(perimeter,text='Els quatre punts continuen definint la calibració.').pack(side='left',padx=5)
         self.canvas=tk.Canvas(window,bg='#101519',highlightthickness=0,width=800,height=450)
         self.canvas.pack(fill='both',expand=True,padx=10,pady=8)
         self.canvas.bind('<Configure>',lambda event:self.draw())
@@ -90,9 +98,16 @@ class CalibrationEditor:
         self.canvas.create_image(x,y,image=self.photo,anchor='nw')
         if not self.frozen:return
         coords=[(x+p[0]*dw,y+p[1]*dh) if p is not None else None for p in self.points]
+        if self.outline.get()=='Circumferència del domo' and all(p is not None for p in self.points):
+            try:
+                calibration=Calibration(tuple(self.points))
+                perimeter=[calibration.unproject((.5+.5*math.sin(i*math.tau/180),.5-.5*math.cos(i*math.tau/180))) for i in range(181)]
+                vertices=[value for point in perimeter if point is not None for value in (x+point[0]*dw,y+point[1]*dh)]
+                if len(vertices)==362:self.canvas.create_line(*vertices,fill='#ffbb55',width=2,tags='perimeter')
+            except ValueError:pass  # Invalid drafts are explained when the user applies them.
         for i,point in enumerate(coords):
             following=coords[(i+1)%4]
-            if point and following:self.canvas.create_line(*point,*following,fill='#ffbb55',width=2)
+            if self.outline.get()=='Quatre costats' and point and following:self.canvas.create_line(*point,*following,fill='#ffbb55',width=2,tags='perimeter')
             if point:
                 px,py=point;color='#ffff77' if i==self.selected.get() else '#55ffee'
                 self.canvas.create_oval(px-6,py-6,px+6,py+6,outline=color,width=3)

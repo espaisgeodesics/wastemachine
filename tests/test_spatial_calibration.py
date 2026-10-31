@@ -54,6 +54,22 @@ class CalibrationTests(unittest.TestCase):
             self.editor.points=points;self.assertFalse(self.editor.apply())
         self.applied.assert_not_called()
 
+    def test_circle_and_four_sides_share_the_same_calibration(self):
+        self.mark();self.editor.draw()
+        items=self.editor.canvas.find_withtag('perimeter');self.assertEqual(len(items),1)
+        vertices=self.editor.canvas.coords(items[0]);self.assertEqual(len(vertices),362)
+        left,top,width,height=self.editor.bounds
+        for index,point in zip((0,45,90,135),self.editor.points):
+            self.assertAlmostEqual(vertices[2*index],left+point[0]*width,places=6)
+            self.assertAlmostEqual(vertices[2*index+1],top+point[1]*height,places=6)
+        before=list(self.editor.points)
+        self.editor.outline.set('Quatre costats');self.editor.draw()
+        self.assertEqual(len(self.editor.canvas.find_withtag('perimeter')),4)
+        self.assertEqual(before,self.editor.points);self.assertTrue(self.editor.apply())
+        self.editor.outline.set('Circumferència del domo');self.editor.draw()
+        self.assertEqual(len(self.editor.canvas.find_withtag('perimeter')),1)
+        self.assertEqual(before,self.editor.points)
+
     def test_stale_or_absent_camera_cannot_be_captured(self):
         self.stamp=time.monotonic()-2;self.assertFalse(self.editor.freeze())
         self.frame=None;self.assertFalse(self.editor.freeze())
@@ -97,5 +113,16 @@ class CalibrationIntegrationTests(unittest.TestCase):
         finally:
             for timer in root.tk.call('after','info'):root.after_cancel(timer)
             app.close()
+
+
+
+class InverseCalibrationTests(unittest.TestCase):
+    def test_perspective_circle_roundtrips_through_camera(self):
+        calibration=Calibration(((.45,.1),(.9,.45),(.6,.9),(.12,.5)))
+        for angle in np.linspace(0,2*np.pi,37):
+            floor=(.5+.5*np.sin(angle),.5+.5*np.cos(angle))
+            camera=calibration.unproject(floor)
+            np.testing.assert_allclose(calibration.project(camera),floor,atol=1e-8)
+        self.assertIsNone(calibration.unproject((1.1,.5)))
 
 if __name__=='__main__':unittest.main()

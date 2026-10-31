@@ -164,3 +164,14 @@ Validació 4.7.2: **93 proves correctes**, incloses 7 proves noves de captura, c
 ### Prova física proposada
 
 Crea dues zones separades amb fotografies diferents i autoritza la mateixa targeta a totes dues. Comprova primer que el punt del mapa coincideixi amb la zona física. Mantén la targeta unes dècimes de segon a la primera zona: ha d’aparèixer la primera fotografia. Retira-la: la fotografia ha de continuar. Entra a la segona zona: ha de substituir-la per la segona. Una targeta no autoritzada no ha de canviar la fotografia. Si la posició no coincideix, revisa l’ordre dels quatre punts i torna a calibrar abans de retocar el mapa.
+
+
+## Contorn circular de calibració (4.7.3)
+
+A **CALIBRAR TERRA**, el desplegable **Contorn de referència** permet triar **Circumferència del domo** (per defecte) o **Quatre costats**. Mantén els quatre punts físics nord, est, sud i oest: la circumferència calculada passa per aquestes referències i es transforma a la perspectiva de la càmera. Pot aparèixer com una el·lipse a la fotografia. No és un dibuix lliure ni canvia la calibració o el terra circular del mapa; és una guia per comprovar el perímetre real. Si els quatre punts encara no són vàlids, no es dibuixa la circumferència. L’opció només afecta aquesta finestra, no afegeix contorns a la projecció.
+
+### Una fotografia per casella
+
+Cada zona té una fotografia. Per assignar una fotografia diferent a cada casella, crea una zona independent per casella: NOVA ZONA, selecciona una sola casella, dona-li nom, autoritza la targeta, tria la imatge i desa la zona. Repeteix-ho amb cada casella i desa el projecte. Pots autoritzar la mateixa targeta a diverses zones. Si selecciones quatre caselles en una mateixa zona, les quatre comparteixen la fotografia. Els efectes visuals per zona encara no estan implementats; les zones actuals activen fotografies JPG/PNG.
+
+Validació 4.7.3: **95 proves correctes**, incloent el retorn de coordenades amb perspectiva i el canvi de contorn sense modificar els punts de calibració. Revisió visual del contorn circular en pantalla virtual.

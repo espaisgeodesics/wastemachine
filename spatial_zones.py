@@ -177,6 +177,17 @@ class Calibration:
         matrix.setflags(write=False)
         object.__setattr__(self, '_matrix', matrix)
 
+    def unproject(self, floor_point: Point) -> Point | None:
+        """Map a normalized floor point back onto the original camera image."""
+        x, y = _point(floor_point)
+        if not (0 <= x <= 1 and 0 <= y <= 1):
+            return None
+        result = np.linalg.solve(self._matrix, np.array((x, y, 1)))
+        if abs(result[2]) < 1e-10:
+            return None
+        point = result[:2] / result[2]
+        return (float(point[0]), float(point[1])) if np.isfinite(point).all() else None
+
     def project(self, camera_point: Point) -> Point | None:
         x, y = _point(camera_point)
         if not (0 <= x <= 1 and 0 <= y <= 1):
