@@ -6,7 +6,7 @@ from uuid import uuid4
 from experience_rules import ExperienceRule, RuleAction, RulesConfig, TRIGGERS, ACTION_KINDS
 
 TRIGGER_NAMES = dict(zip(TRIGGERS, ('Entrada de zona', 'Sortida de zona', 'Aparició', 'Absència confirmada', 'Ordre manual')))
-ACTION_NAMES = dict(zip(ACTION_KINDS, ('Color', 'Imatge', 'Nota MIDI', 'MIDI CC', 'Alliberar grup visual')))
+ACTION_NAMES = dict(zip(ACTION_KINDS, ('Color', 'Imatge', 'Nota MIDI', 'MIDI CC', 'Alliberar grup visual', 'Reproduir so local', 'Aturar so local', 'Volum local')))
 
 
 class RuleEditor(ttk.Frame):
@@ -45,7 +45,7 @@ class RuleEditor(ttk.Frame):
         self.fields = {}
         form=ttk.Frame(body);form.pack(fill='x')
         specs=(('name','Nom','',None),('trigger','Quan passa',TRIGGER_NAMES['zone_entered'],list(TRIGGER_NAMES.values())),
-               ('priority','Prioritat','10',None),('group','Grup visual','escena',None),
+               ('priority','Prioritat','10',None),('group','Grup de regla (visual / so)','escena',None),
                ('source_id','Font (buit = totes)','',None),('marker_id','ID (buit = tots)','',None),
                ('participant_id','Participant (buit = tots)','',[]),('zone_id','Zona (buit = totes)','',[]),
                ('reason','Motiu de sortida','movement',['movement','missing','any']))
@@ -68,18 +68,21 @@ class RuleEditor(ttk.Frame):
         self.af_widgets={}
         for i,(key,label,value) in enumerate((('kind','Acció','Color'),('value','Color / imatge / valor CC','#FFFFFF'),
                                              ('channel','Canal MIDI','16'),('number','Nota / CC','60'),
-                                             ('velocity','Velocitat','90'),('duration_s','Durada s (0 = persistent)','0'))):
+                                             ('velocity','Velocitat','90'),('duration_s','Durada s (0 = persistent)','0'),
+                                             ('audio_group','Grup d’àudio (buit = grup regla)',''),('gain','Volum local (0–1)','1'),
+                                             ('fade_s','Fade (segons)','0.25'),('loop','Bucle','No'),('audio_scope','Abast del control de so','Participant / marcador'))):
             var=self.af[key]=tk.StringVar(value=value)
             row,col=divmod(i,3)
             ttk.Label(action_form,text=label).grid(row=row*2,column=col,sticky='w',padx=4)
-            widget=ttk.Combobox(action_form,textvariable=var,values=list(ACTION_NAMES.values()),state='readonly') if key=='kind' else ttk.Entry(action_form,textvariable=var)
+            choices=list(ACTION_NAMES.values()) if key=='kind' else ['Sí','No'] if key=='loop' else ['Participant / marcador','Tot el grup'] if key=='audio_scope' else None
+            widget=ttk.Combobox(action_form,textvariable=var,values=choices,state='readonly') if choices else ttk.Entry(action_form,textvariable=var)
             self.af_widgets[key]=widget
             widget.grid(row=row*2+1,column=col,sticky='ew',padx=4);action_form.columnconfigure(col,weight=1)
             var.trace_add('write',self.action_changed)
         self.af['kind'].trace_add('write',self.update_action_fields)
         buttons=ttk.Frame(body);buttons.pack(fill='x',pady=4)
         for label,callback in (('AFEGIR ACCIÓ',lambda:self.put_action(False)),('CANVIAR ACCIÓ',lambda:self.put_action(True)),
-                               ('TREURE ACCIÓ',self.remove_action),('IMATGE...',self.choose_image),('COLOR...',self.choose_color)):
+                               ('TREURE ACCIÓ',self.remove_action),('IMATGE...',self.choose_image),('COLOR...',self.choose_color),('SO...',self.choose_sound)):
             ttk.Button(buttons,text=label,command=callback).pack(side='left',padx=2)
         buttons=ttk.Frame(body);buttons.pack(fill='x',pady=4)
         for label,callback in (('NOVA',self.new),('APLICAR REGLA',self.apply_rule),('ELIMINAR',self.remove_rule),
@@ -99,7 +102,9 @@ class RuleEditor(ttk.Frame):
 
     def update_action_fields(self,*args):
         active={'Color':{'value','duration_s'},'Imatge':{'value','duration_s'},
-                'Nota MIDI':{'channel','number','velocity','duration_s'},'MIDI CC':{'value','channel','number'}}.get(self.af['kind'].get(),set())
+                'Nota MIDI':{'channel','number','velocity','duration_s'},'MIDI CC':{'value','channel','number'},
+                'Reproduir so local':{'value','audio_group','gain','fade_s','loop'},
+                'Aturar so local':{'audio_group','fade_s','audio_scope'},'Volum local':{'audio_group','gain','fade_s','audio_scope'}}.get(self.af['kind'].get(),set())
         for key,widget in self.af_widgets.items():
             if key!='kind':widget.state(['!disabled'] if key in active else ['disabled'])
 
@@ -113,7 +118,8 @@ class RuleEditor(ttk.Frame):
         self.loading=True;self.pid=None;self.action_index=None;self.actions=[]
         defaults={'name':'','trigger':'Entrada de zona','priority':'10','group':'escena','source_id':'','marker_id':'','participant_id':'','zone_id':'','reason':'movement'}
         for key,value in defaults.items():self.fields[key].set(value)
-        for key,value in {'kind':'Color','value':'#FFFFFF','channel':'16','number':'60','velocity':'90','duration_s':'0'}.items():self.af[key].set(value)
+        for key,value in {'kind':'Color','value':'#FFFFFF','channel':'16','number':'60','velocity':'90','duration_s':'0',
+                          'audio_group':'','gain':'1','fade_s':'.25','loop':'No','audio_scope':'Participant / marcador'}.items():self.af[key].set(value)
         self.enabled.set(True)
         self.dirty=False;self.action_dirty=False;self.loading=False
         self.refresh_tables();self.notice.set('Les accions visuals persisteixen amb durada 0. Una nota necessita entre 0,05 i 60 s.')
@@ -125,6 +131,7 @@ class RuleEditor(ttk.Frame):
         for iid in self.action_table.get_children():self.action_table.delete(iid)
         for i,action in enumerate(self.actions):
             detail=('Grup visual de la regla' if action.kind=='release_visual' else action.value) if action.kind not in ('note','cc') else f'Canal {action.channel} · {action.number} · {action.value if action.kind=="cc" else str(action.duration_s)+" s"}'
+            if action.kind in ('stop_sound','audio_volume'):detail=f'Grup {action.audio_group or "de la regla"} · fade {action.fade_s} s'+(f' · {round(action.gain*100)} %' if action.kind=='audio_volume' else '')
             self.action_table.insert('','end',iid=str(i),values=(ACTION_NAMES[action.kind],detail))
 
     def new(self):
@@ -156,18 +163,26 @@ class RuleEditor(ttk.Frame):
                 else:self.action_table.selection_remove(*selection)
                 return
         self.action_index=int(selection[0]);action=self.actions[self.action_index];self.loading=True
-        for key,var in self.af.items():var.set(ACTION_NAMES[action.kind] if key=='kind' else str(getattr(action,key)))
+        for key,var in self.af.items():
+            value=ACTION_NAMES[action.kind] if key=='kind' else ('Sí' if action.loop else 'No') if key=='loop' else ('Tot el grup' if action.audio_scope=='group' else 'Participant / marcador') if key=='audio_scope' else str(getattr(action,key))
+            var.set(value)
         self.loading=False;self.action_dirty=False
 
     def put_action(self,replace_existing):
         try:
             values={k:v.get() for k,v in self.af.items()}
             values['kind']=next(k for k,v in ACTION_NAMES.items() if v==values['kind'])
-            active={'color':{'value','duration_s'},'image':{'value','duration_s'},'note':{'channel','number','velocity','duration_s'},'cc':{'value','channel','number'},'release_visual':set()}[values['kind']]|{'kind'}
+            active={'color':{'value','duration_s'},'image':{'value','duration_s'},'note':{'channel','number','velocity','duration_s'},'cc':{'value','channel','number'},'release_visual':set(),
+                    'play_sound':{'value','audio_group','gain','fade_s','loop'},'stop_sound':{'audio_group','fade_s','audio_scope'},
+                    'audio_volume':{'audio_group','gain','fade_s','audio_scope'}}[values['kind']]|{'kind'}
             values={k:v for k,v in values.items() if k in active}
             for key in ('channel','number','velocity'):
                 if key in values:values[key]=int(values[key])
             if 'duration_s' in values:values['duration_s']=float(values['duration_s'])
+            for key in ('gain','fade_s'):
+                if key in values:values[key]=float(values[key])
+            if 'loop' in values:values['loop']=values['loop']=='Sí'
+            if 'audio_scope' in values:values['audio_scope']='group' if values['audio_scope']=='Tot el grup' else 'marker'
             action=RuleAction(**values)
             if replace_existing:
                 if self.action_index is None:raise ValueError('Selecciona una acció de la llista')
@@ -189,6 +204,10 @@ class RuleEditor(ttk.Frame):
     def choose_color(self):
         color=colorchooser.askcolor(parent=self)[1]
         if color:self.af['kind'].set('Color');self.af['value'].set(color.upper())
+
+    def choose_sound(self):
+        path=filedialog.askopenfilename(parent=self,filetypes=[('Sons locals','*.wav *.ogg')])
+        if path:self.af['kind'].set('Reproduir so local');self.af['value'].set(path)
 
     def apply_rule(self):
         try:

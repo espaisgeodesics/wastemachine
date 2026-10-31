@@ -4,7 +4,9 @@ from math import isfinite
 import re
 
 TRIGGERS = ('zone_entered', 'zone_exited', 'marker_appeared', 'marker_absent', 'manual')
-ACTION_KINDS = ('color', 'image', 'note', 'cc', 'release_visual')
+ACTION_KINDS = ('color', 'image', 'note', 'cc', 'release_visual', 'play_sound', 'stop_sound', 'audio_volume')
+AUDIO_KINDS = ('play_sound', 'stop_sound', 'audio_volume')
+AUDIO_FIELDS = ('audio_group', 'gain', 'fade_s', 'loop', 'audio_scope')
 MIDI_FUNCTIONS = {'Nota MIDI', 'Harmonia espacial', 'Arpegiador espacial', 'Control MIDI CC',
                   'Patró rítmic', 'Ritme de bateria', 'Àudio', 'Control d’àudio / Mute'}
 
@@ -29,6 +31,11 @@ class RuleAction:
     number: int = 60
     velocity: int = 90
     duration_s: float = .25
+    audio_group: str = ''
+    gain: float = 1.
+    fade_s: float = .25
+    loop: bool = False
+    audio_scope: str = 'marker'
 
     def __post_init__(self):
         if self.kind not in ACTION_KINDS:
@@ -47,6 +54,12 @@ class RuleAction:
             raise ValueError('Tria una imatge JPG o PNG')
         if self.kind == 'cc' and (not self.value.isascii() or not self.value.isdecimal() or not 0 <= int(self.value) <= 127):
             raise ValueError('El valor CC ha de ser un enter entre 0 i 127')
+        text(self.audio_group,'Grup d’àudio',optional=True)
+        object.__setattr__(self,'audio_group',self.audio_group.strip())
+        for number,label,high in ((self.gain,'Volum local',1),(self.fade_s,'Fade',10)):
+            if isinstance(number,bool) or not isinstance(number,(int,float)) or not isfinite(number) or not 0<=number<=high:raise ValueError(f'{label} no vàlid')
+        if type(self.loop) is not bool or self.audio_scope not in ('marker','group'):raise ValueError('Bucle o abast d’àudio no vàlid')
+        if self.kind == 'play_sound' and (not self.value.strip() or not self.value.lower().endswith(('.wav','.ogg'))):raise ValueError('Tria un WAV PCM o OGG')
 
 
 @dataclass(frozen=True)
@@ -99,14 +112,20 @@ class RulesConfig:
         object.__setattr__(self, 'rules', rules)
 
     def to_dict(self):
-        return {'schema_version': 1, 'rules': [dict(asdict(rule), actions=[asdict(a) for a in rule.actions]) for rule in self.rules]}
+        def action_data(action):
+            data=asdict(action)
+            if action.kind not in AUDIO_KINDS:
+                for field in AUDIO_FIELDS:data.pop(field)
+            return data
+        version=2 if any(a.kind in AUDIO_KINDS for r in self.rules for a in r.actions) else 1
+        return {'schema_version': version, 'rules': [dict(asdict(rule), actions=[action_data(a) for a in rule.actions]) for rule in self.rules]}
 
     @classmethod
     def from_project(cls, data):
         if 'experience_rules' not in data:
             return cls()
         block = data['experience_rules']
-        if not isinstance(block, dict) or type(block.get('schema_version')) is not int or block['schema_version'] != 1 or not isinstance(block.get('rules'), list):
+        if not isinstance(block, dict) or type(block.get('schema_version')) is not int or block['schema_version'] not in (1,2) or not isinstance(block.get('rules'), list):
             raise ValueError('Format de regles no compatible')
         if len(block['rules']) > 128:
             raise ValueError('Massa regles')
@@ -116,7 +135,9 @@ class RulesConfig:
                 if not isinstance(row, dict) or not isinstance(row.get('actions'), list) or not 1 <= len(row['actions']) <= 8:
                     raise ValueError('Accions de regla no vàlides')
                 rules.append(ExperienceRule(**dict(row, actions=tuple(RuleAction(**a) for a in row['actions']))))
-            return cls(tuple(rules))
+            result=cls(tuple(rules))
+            if block['schema_version']==1 and any(a.kind in AUDIO_KINDS for r in rules for a in r.actions):raise ValueError('Les regles d’àudio necessiten schema_version 2')
+            return result
         except (TypeError, KeyError) as exc:
             raise ValueError('Configuració de regles no vàlida') from exc
 
@@ -174,12 +195,12 @@ def rebase_rule_images(config, old_project, new_project):
     from pathlib import Path
     from spatial_zones import image_reference
     def rebase(action):
-        if action.kind != 'image':
+        if action.kind not in ('image','play_sound'):
             return action
         path = Path(action.value)
         if not path.is_absolute():
             if old_project is None:
-                raise ValueError('Cal resoldre la imatge de la regla abans de desar')
+                raise ValueError('Cal resoldre el recurs de la regla abans de desar')
             path = Path(old_project).resolve().parent / path
         return replace(action, value=image_reference(path, new_project))
     return RulesConfig(tuple(replace(rule, actions=tuple(rebase(a) for a in rule.actions)) for rule in config.rules))

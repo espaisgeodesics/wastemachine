@@ -23,6 +23,7 @@ class SimulatorWindow(ttk.Frame):
         self.rules_window = None
         self.rules_editor = None
         self.preview_token = None
+        self.preview_size=None
         self.timer = None
         self.closed = False
         self.dragging = None
@@ -60,6 +61,10 @@ class SimulatorWindow(ttk.Frame):
         for key,label in (('kind','MIDI simulat'),('channel','Canal'),('number','Nota / CC'),('value','Valor')):
             self.output_midi.heading(key,text=label);self.output_midi.column(key,width=100)
         self.output_midi.pack(fill='x');self.midi_preview=()
+        self.output_audio=ttk.Treeview(self.output_tab,columns=('group','marker','file','gain','fade'),show='headings',height=4)
+        for key,label in (('group','Àudio simulat (sense so)'),('marker','ID'),('file','Clip'),('gain','Volum %'),('fade','Fade')):
+            self.output_audio.heading(key,text=label);self.output_audio.column(key,width=90 if key!='file' else 180)
+        self.output_audio.pack(fill='x')
         self.canvas = tk.Canvas(map_tab, width=700, height=420, background='#171B24', highlightthickness=0)
         self.canvas.pack(fill='both', expand=True)
         self.canvas.bind('<Button-1>', self.pick)
@@ -255,12 +260,14 @@ class SimulatorWindow(ttk.Frame):
             self.session.advance(time.monotonic())
             self.draw()
             winner=self.session.rule_outputs.winner()
-            if winner is not self.preview_token:
-                frame=self.session.rule_outputs.frame((640,360))
-                image=Image.new('RGB',(640,360),'black') if frame is None else Image.fromarray(frame[:,:,::-1])
+            size=max(1,min(640,self.output_label.winfo_width())),max(1,min(360,self.output_label.winfo_height()))
+            if winner is not self.preview_token or size!=self.preview_size:
+                frame=self.session.rule_outputs.frame(size)
+                image=Image.new('RGB',size,'black') if frame is None else Image.fromarray(frame[:,:,::-1])
                 self.output_photo=ImageTk.PhotoImage(image,master=self.output_label)
                 self.output_label.config(image=self.output_photo)
                 self.preview_token=winner
+                self.preview_size=size
             self.output_status.set(('Propietari: '+winner.request.rule.name if winner else 'Sense ordre visual de prova')+
                                   f' · MIDI simulat: {len(self.session.midi_commands)} missatges')
             commands=tuple(self.session.midi_commands)[-12:]
@@ -269,6 +276,14 @@ class SimulatorWindow(ttk.Frame):
                 for i,command in enumerate(commands):self.output_midi.insert('','end',iid=str(i),values=(command.kind,command.channel,command.number,command.value))
                 if commands:self.output_midi.see(str(len(commands)-1))
                 self.midi_preview=commands
+            voices={str(voice.slot):voice for voice in self.session.audio.snapshot()}
+            for iid in self.output_audio.get_children():
+                if iid not in voices:self.output_audio.delete(iid)
+            for iid,voice in voices.items():
+                from pathlib import Path
+                values=voice.group,voice.marker_id if voice.marker_id is not None else '—',Path(voice.path).name,round(voice.gain*100),'Sí' if voice.fading else 'No'
+                if self.output_audio.exists(iid):self.output_audio.item(iid,values=values)
+                else:self.output_audio.insert('','end',iid=iid,values=values)
         except ValueError as exc:
             self.status.set(str(exc))
         self.timer = self.after(100, self.pulse)
@@ -280,6 +295,7 @@ class SimulatorWindow(ttk.Frame):
         if event.widget is self:
             self.closed = True
             self.session.rule_outputs.stop_midi(self.session.send_rule_midi)
+            self.session.audio.stop_all()
             if self.timer is not None:
                 self.after_cancel(self.timer)
                 self.timer = None

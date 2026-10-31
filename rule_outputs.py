@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 from spatial_projection import ImageStore
+from local_audio import command_from_request
 
 
 @dataclass(frozen=True)
@@ -36,24 +37,50 @@ class RuleOutputs:
     def log_snapshot(self):
         with self.lock:return tuple(self.log)
 
-    def apply(self, requests, now, send=None, project_file=None, midi_enabled=True):
+    def apply(self, requests, now, send=None, project_file=None, midi_enabled=True, audio=None):
         # Apply the whole batch before rendering: no intermediate black frame.
         cc_winners = {}
+        audio_winners={}
+        play_winners={}
         for request in requests:
             if request.action.kind == 'cc':
                 key = request.action.channel, request.action.number
                 if key not in cc_winners or self.rank(request) < self.rank(cc_winners[key]):cc_winners[key] = request
+            if request.action.kind in ('stop_sound','audio_volume'):
+                key=(request.action.kind,request.action.audio_group or request.rule.group,request.action.audio_scope,
+                     (request.event.source_id,request.event.marker_id) if request.action.audio_scope=='marker' else None)
+                if key not in audio_winners or self.rank(request)<self.rank(audio_winners[key]):audio_winners[key]=request
+            if request.action.kind=='play_sound':
+                key=(request.action.audio_group or request.rule.group,request.event.source_id,request.event.marker_id)
+                if key not in play_winners or self.rank(request)<self.rank(play_winners[key]):play_winners[key]=request
         for request in requests:
             if request.action.kind == 'cc' and cc_winners[request.action.channel, request.action.number] is not request:
                 self.log.append((now, request.rule.name, 'cc', 'descartada per prioritat'));continue
             try:
-                self._apply(request, now, send, project_file, midi_enabled)
-                self.log.append((now, request.rule.name, request.action.kind, 'acceptada'))
+                if request.action.kind in ('stop_sound','audio_volume'):
+                    key=(request.action.kind,request.action.audio_group or request.rule.group,request.action.audio_scope,
+                         (request.event.source_id,request.event.marker_id) if request.action.audio_scope=='marker' else None)
+                    if audio_winners[key] is not request:
+                        self.log.append((now,request.rule.name,request.action.kind,'descartada per prioritat'));continue
+                if request.action.kind == 'play_sound':
+                    group=request.action.audio_group or request.rule.group
+                    if play_winners[group,request.event.source_id,request.event.marker_id] is not request:
+                        self.log.append((now,request.rule.name,'play_sound','descartada per prioritat'));continue
+                    stops=[r for r in requests if r.action.kind=='stop_sound' and (r.action.audio_group or r.rule.group)==group
+                           and (r.action.audio_scope=='group' or (r.event.source_id,r.event.marker_id)==(request.event.source_id,request.event.marker_id))]
+                    if any(self.rank(stop)<self.rank(request) for stop in stops):
+                        self.log.append((now,request.rule.name,'play_sound','suprimida per aturada prioritària'));continue
+                queued=self._apply(request, now, send, project_file, midi_enabled,audio)
+                self.log.append((now, request.rule.name, request.action.kind, 'en cua d’àudio' if queued else 'acceptada'))
             except Exception as exc:
                 self.log.append((now, request.rule.name, request.action.kind, str(exc)))
 
-    def _apply(self, request, now, send, project_file, midi_enabled):
+    def _apply(self, request, now, send, project_file, midi_enabled,audio):
         action, rule, event = request.action, request.rule, request.event
+        if action.kind in ('play_sound','stop_sound','audio_volume'):
+            if not midi_enabled:raise ValueError('Sortides de so bloquejades pel silenci absolut')
+            if audio is None or audio(command_from_request(request,project_file)) is False:raise ValueError('Àudio local no activat; no es reproduirà més tard')
+            return True
         if action.kind == 'release_visual':
             for owner in list(self.claims):
                 if owner[0] == rule.group and (event.marker_id is None or owner[1:3] == (event.source_id, event.marker_id)):

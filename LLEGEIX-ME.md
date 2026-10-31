@@ -168,3 +168,13 @@ Al simulador, **CARREGAR ZONES DEL PROJECTE** copia el mapa a una superfície vi
 Obre **Regles → Regles i sortides…**. Configura un activador, els filtres opcionals de participant/zona/ID, la prioritat i una o més accions. Afegeix cada acció a la llista i prem **APLICAR REGLA**. Color i imatge persisteixen amb durada 0; les notes tenen durada de 0,05 a 60 segons. Els canals MIDI de regles han de ser diferents dels de les targetes i del mesclador. **EXECUTAR** envia les accions reals; **ALLIBERAR SORTIDA** retorna la propietat visual al camí existent. Aplicar regles reinicia les seves sortides anteriors. Desa el projecte per conservar-les.
 
 Per provar sense dispositius, obre el simulador i prem **CARREGAR ZONES I REGLES DEL PROJECTE**. **REGLES DE PROVA...** edita la còpia virtual; **Sortida de prova** mostra la imatge/color i els missatges MIDI simulats sense tocar la projecció o el port real. Els projectes antics obren sense regles i conserven el seu funcionament. Instruccions, prioritats, grups visuals i límits a [ATMO_ESFERA_FX_FASE_4.md](ATMO_ESFERA_FX_FASE_4.md).
+
+## Àudio local i BOSC VIU — prototip ATMO fase 5A (4.8.0)
+
+**Projecte → Crear BOSC VIU de prova...** crea una carpeta nova amb cinc zones, regles i WAV sintètics. Obre el simulador per provar ocells, riu, vent, clariana i alarma sense càmera ni dispositiu d’àudio. Els sons són de prova, no gravacions de natura; la clariana és un color substituïble per una fotografia.
+
+El complement real és opcional: **INSTAL_LAR_AUDIO_LOCAL.bat**, després **OBRIR_WASTELAND.bat** i **Àudio → Àudio local opcional... → ACTIVAR**. Hi ha fins a setze capes, bucles curts, volum/fade per participant o grup i màster local. Les noves accions són Reproduir so local, Aturar so local i Volum local. La funció antiga Àudio de les targetes continua sent MIDI per a Sonar.
+
+**ATURAR ÀUDIO LOCAL** només atura el reproductor local. El silenci absolut també el bloqueja; tancar el panell no atura la reproducció. El simulador continua silenciós i mostra les veus a Sortida de prova. No s’activa el dispositiu automàticament ni es desa l’activació al projecte.
+
+Validat al núvol amb SDL `dummy`; **Windows, altaveus i latència acústica encara no estan validats**. Abans d’utilitzar-lo en una instal·lació real, cal completar la prova documentada. Detalls, límits, format de regles 2 i evidència a [ATMO_ESFERA_FX_FASE_5.md](ATMO_ESFERA_FX_FASE_5.md). Les dependències bàsiques MIDI/visuals no han canviat.

@@ -14,6 +14,9 @@ from common_spatial import CommonSpatialObserver
 from experience_rules import RulesConfig, RuleEngine, rebase_rule_images
 from rule_outputs import RuleOutputs
 from rule_editor import RuleEditor
+from audio_controller import AudioController
+from audio_window import AudioWindow
+from bosc_viu import create_bosc_viu
 from spatial_calibration import CalibrationEditor
 from spatial_zones import SpatialMap
 from spatial_projection import ZoneProjection
@@ -28,7 +31,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.7.9'
+APP_VERSION='4.8.0'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
@@ -132,6 +135,7 @@ class App:
     self.spatial_map=SpatialMap();self.zone_projection=ZoneProjection(self.spatial_map);self.spatial_warning=None;self.zone_editor=None;self.zone_window=None
     self.common_spatial=CommonSpatialObserver(self.spatial_map)
     self.rule_config=RulesConfig();self.rule_engine=RuleEngine();self.rule_outputs=RuleOutputs();self.rule_queue=[];self.rules_window=None;self.rules_editor=None
+    self.local_audio=AudioController();self.audio_window=None;self.audio_view=None
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -171,6 +175,7 @@ class App:
     fm.add_command(label='Obrir projecte...',command=self.open_project)
     fm.add_command(label='Desar projecte',command=self.save_project)
     fm.add_command(label='Desar com...',command=lambda:self.save_project(True))
+    fm.add_command(label='Crear BOSC VIU de prova...',command=self.create_bosc_demo)
     fm.add_separator()
     fm.add_command(label='Desar distribució de finestres',command=self.save_window_layout)
     fm.add_command(label='Recuperar distribució desada',command=self.restore_window_layout)
@@ -183,6 +188,8 @@ class App:
     menu.add_cascade(label='Participants',menu=participants_menu)
     rules_menu=tk.Menu(menu,tearoff=False);rules_menu.add_command(label='Regles i sortides…',command=self.open_rules)
     menu.add_cascade(label='Regles',menu=rules_menu)
+    audio_menu=tk.Menu(menu,tearoff=False);audio_menu.add_command(label='Àudio local opcional...',command=self.open_local_audio)
+    menu.add_cascade(label='Àudio',menu=audio_menu)
     help_menu=tk.Menu(menu,tearoff=False);help_menu.add_command(label='Versió i fitxer que s’està executant',command=self.show_runtime_info)
     menu.add_cascade(label='Ajuda',menu=help_menu);self.root.config(menu=menu)
     banner=tk.Canvas(self.root,bg='#1c120e',height=60,highlightthickness=0)
@@ -991,11 +998,20 @@ class App:
     def close():
       if self.rules_editor.discard():window.destroy();self.rules_window=None;self.rules_editor=None
     window.protocol('WM_DELETE_WINDOW',close)
+ def open_local_audio(self):
+    if self.audio_window is not None and self.audio_window.winfo_exists():self.audio_window.lift();return
+    window=self.audio_window=tk.Toplevel(self.root);window.title('ÀUDIO LOCAL · '+APP_VERSION);window.geometry('940x600')
+    self.audio_view=AudioWindow(window,self.local_audio)
+    def close():window.destroy();self.audio_window=None;self.audio_view=None
+    window.protocol('WM_DELETE_WINDOW',close)
+ def stop_local_audio(self):
+    if hasattr(self,'local_audio'):self.local_audio.stop_all()
  def confirm_rule_discard(self):
     return self.rules_editor is None or self.rules_editor.discard()
  def configure_rules(self,config):
     if not isinstance(config,RulesConfig):raise ValueError('Configuració de regles no vàlida')
     config.validate_channels(self.cards)
+    self.stop_local_audio()
     self.rule_outputs.stop_midi(self.send_rule_midi)
     self.rule_config=config;self.rule_engine=RuleEngine(config);self.rule_outputs=RuleOutputs();self.rule_queue.clear()
     self.visual_dirty=True;self.preview_dirty=True
@@ -1003,7 +1019,7 @@ class App:
     self.rule_outputs.clear_visuals();self.visual_dirty=True;self.preview_dirty=True
  def manual_rule(self,rule_id):
     now=time.monotonic()
-    self.rule_outputs.apply(self.rule_engine.manual(rule_id,now),now,self.send_rule_midi,self.zone_project_path(),not self.muted)
+    self.rule_outputs.apply(self.rule_engine.manual(rule_id,now),now,self.send_rule_midi,self.zone_project_path(),not self.muted,audio=self.local_audio.submit)
     self.visual_dirty=True;self.preview_dirty=True
  def send_rule_midi(self,command):
     if not self.midi or mido is None:return False
@@ -1014,7 +1030,7 @@ class App:
  def process_rule_actions(self,now):
     before=self.rule_outputs.winner()
     requests=tuple(self.rule_queue);self.rule_queue.clear()
-    self.rule_outputs.apply(requests,now,self.send_rule_midi,self.zone_project_path(),not self.muted)
+    self.rule_outputs.apply(requests,now,self.send_rule_midi,self.zone_project_path(),not self.muted,audio=self.local_audio.submit)
     self.rule_outputs.tick(now,self.send_rule_midi)
     if requests or before is not self.rule_outputs.winner():self.visual_dirty=True;self.preview_dirty=True
  def open_simulator(self):
@@ -1105,6 +1121,18 @@ class App:
     if not self.confirm_zone_discard():return
     path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte Wasteland','*.json')]);
     if not path:return
+    return self.load_project_file(path)
+ def create_bosc_demo(self):
+    if not self.confirm_rule_discard() or not self.confirm_participant_discard() or not self.confirm_zone_discard():return
+    if not messagebox.askyesno('BOSC VIU de prova','Crear i obrir una experiència nova amb sons sintètics? El projecte actual no es desa automàticament.',parent=self.root):return
+    folder=filedialog.askdirectory(parent=self.root,title='Carpeta on crear BOSC VIU de prova')
+    if not folder:return
+    destination=Path(folder)/'BOSC_VIU_PROVA';index=2
+    while destination.exists():destination=Path(folder)/f'BOSC_VIU_PROVA_{index}';index+=1
+    try:path=create_bosc_viu(destination,DEFAULTS)
+    except Exception as exc:messagebox.showerror('BOSC VIU',str(exc),parent=self.root);return
+    if self.load_project_file(path):self.open_simulator();self.simulator_view.load_zones()
+ def load_project_file(self,path):
     try:
       with open(path,encoding='utf-8') as f:d=json.load(f)
       spatial=SpatialMap.from_project(d)
@@ -1115,7 +1143,8 @@ class App:
       self.replace_participants(participants)
       self.configure_rules(rules)
       if self.rules_editor is not None:self.rules_editor.reload()
-    except Exception as e:messagebox.showerror('Obrir',str(e))
+      return True
+    except Exception as e:messagebox.showerror('Obrir',str(e));return False
  def refresh_midi(self):
      # No amaguem els errors: aixi podem diagnosticar loopMIDI.
      if mido is None:
@@ -1234,6 +1263,7 @@ class App:
     with self.arp_lock:
       self.muted=not self.muted
       if self.muted:
+        self.stop_local_audio()
         self.simulation_release()
         for i in list(self.active):self.deactivate(i)
         self.all_notes_off()
@@ -1287,6 +1317,7 @@ class App:
     self.camera_generation=getattr(self,'camera_generation',0)+1
     self.camera_frame=None;self.camera_frame_stamp=0
     if self.camera:
+      self.stop_local_audio()
       self.camera.release();self.camera=None
       for i in list(self.active):self.deactivate(i)
       self.all_notes_off()
@@ -2066,6 +2097,7 @@ class App:
     if self.recording:self.recording.release()
     if self.camera:self.camera.release()
     if self.midi:self.midi.close()
+    if not self.local_audio.close():print('El backend d’àudio encara s’està aturant; comprova el dispositiu.')
     self.root.destroy()
 
 if __name__=='__main__':

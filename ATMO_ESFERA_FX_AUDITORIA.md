@@ -12,6 +12,8 @@ La [fase 3, versió 4.7.8](ATMO_ESFERA_FX_FASE_3.md), adapta el motor de zones a
 
 La [fase 4, versió 4.7.9](ATMO_ESFERA_FX_FASE_4.md), incorpora regles declaratives, prioritats i propietat visual, notes compartides i CC en canals reservats, configuració versionada i sortides de prova independents al simulador.
 
+La [fase 5A, prototip 4.8.0](ATMO_ESFERA_FX_FASE_5.md), afegeix àudio local opcional i BOSC VIU de prova, validats a Linux amb SDL `dummy`. La validació Windows/dispositiu físic exigida per la fase 5 continua pendent; el backend no es declara definitiu ni obligatori.
+
 Document de requisits: [document mestre](ATMO_ESFERA_FX_DOCUMENT_MESTRE.md), especialment l’apartat 25. Aquesta revisió lliura els punts A–G que demana, sense reescriure l’aplicació ni canviar-ne la marca encara.
 
 La base inspeccionada és **Wasteland Machine 4.7.4**, commit `bde3ccac6cf25d14e3078b192eb41d26c1cb0ede`, a la branca `codex/wasteland-camera-windows-launcher`. El nom del fitxer principal conserva «4.5.15 pas 15», però `APP_VERSION` és 4.7.4. No s’ha de partir de la còpia pas 14 ni assumir que `main` contingui les últimes entregues.

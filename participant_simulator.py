@@ -15,6 +15,7 @@ from spatial_zones import Calibration, SpatialMap
 from collections import deque
 from experience_rules import RulesConfig, RuleEngine
 from rule_outputs import RuleOutputs
+from local_audio import AudioEngine,SilentAudioBackend
 
 
 SOURCE_ID = 'simulator:0'
@@ -53,11 +54,13 @@ class SimulatorSession:
         self.rule_outputs = RuleOutputs()
         self.midi_commands = deque(maxlen=200)
         self.rule_project = None
+        self.audio=AudioEngine(SilentAudioBackend());self.audio_commands=deque(maxlen=100);self.audio_time=0.
 
     def reset(self):
         """Start a new virtual session, preserving no old detections or events."""
         config = self.spatial.config
         rules, project = self.rule_engine.config, self.rule_project
+        self.audio.close()
         self.__init__()
         self.configure_spatial(config)
         self.configure_rules(rules, project)
@@ -70,12 +73,17 @@ class SimulatorSession:
         if not isinstance(config, RulesConfig):
             raise ValueError('Cal una configuració de regles vàlida')
         self.rule_outputs.stop_midi(self.send_rule_midi)
+        self.audio.close();self.audio=AudioEngine(SilentAudioBackend())
         self.rule_engine = RuleEngine(config)
         self.rule_outputs = RuleOutputs()
         self.rule_project = project_file
 
     def manual_rule(self, rule_id, now):
-        self.rule_outputs.apply(self.rule_engine.manual(rule_id, now), now, self.send_rule_midi, self.rule_project)
+        self.audio_time=now
+        self.rule_outputs.apply(self.rule_engine.manual(rule_id, now), now, self.send_rule_midi, self.rule_project,audio=self.send_audio)
+
+    def send_audio(self,command):
+        self.audio.dispatch(command,self.audio_time);self.audio_commands.append(command);return True
 
     def configure_spatial(self, config):
         if not isinstance(config, SpatialMap):
@@ -122,8 +130,10 @@ class SimulatorSession:
         batch = self.events.consume(frame, tracked, self.registry)
         batch += self.events.record_zones(frame, self.spatial.update(frame), self.registry, self.spatial.zone_names())
         requests = self.rule_engine.consume(batch, self.registry)
-        self.rule_outputs.apply(requests, now, self.send_rule_midi, self.rule_project)
+        self.audio_time=now
+        self.rule_outputs.apply(requests, now, self.send_rule_midi, self.rule_project,audio=self.send_audio)
         self.rule_outputs.tick(now, self.send_rule_midi)
+        self.audio.tick(now)
         self.sequence = frame.sequence
         self._last_time = now
         return frame, batch
