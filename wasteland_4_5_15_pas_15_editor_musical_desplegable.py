@@ -1,6 +1,8 @@
 import os, sys, json, time, math, random, datetime, threading
 from pathlib import Path
 from collections import deque
+from spatial_zones import SpatialMap
+from spatial_zone_editor import ZoneEditor, rebase_map_images
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 import numpy as np
@@ -11,15 +13,16 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.6.3'
+APP_VERSION='4.7.0'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
 (ROOT/'GRAVACIONS').mkdir(exist_ok=True)
 W,H=640,360
 NAMES=['Motor de ferro','Tempesta de pols','Vapor tòxic','Reactor elèctric','Túnel mecànic','Forja de foc','Fantasma digital','Ones mecàniques','Ferralla orbital','Nucli radioactiu','Ull de la màquina','Sol terminal','Cercle cromàtic 360°']
+ZONE_FUNCTION='Activar zona espacial'
 MUTE_FUNCTION='Control d’àudio / Mute'
-FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Ritme de bateria','Àudio',MUTE_FUNCTION,'Cap acció']
+FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Ritme de bateria','Àudio',MUTE_FUNCTION,ZONE_FUNCTION,'Cap acció']
 DEFAULTS=[]
 for i in range(16):
     DEFAULTS.append({'name':f'Targeta {i+1:02d}','function':'Nota MIDI' if i<4 else ('Control MIDI CC' if i<12 else 'Canviar visual'), 'channel':1,'note':36+i,'cc':20+i,'visual':i%12,'axis':'Rotació','min':0,'max':127,'harmony_key':'La menor','harmony_root':9,'harmony_scale':'Menor natural (eòlica)','harmony_velocity':85,'arp_division':'1/2 temps','arp_gate':60})
@@ -96,6 +99,7 @@ class App:
     self.root=root; root.title('WASTELAND MACHINE · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
     self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
     self.midi_log=deque(maxlen=1000);self.midi_log_lock=threading.Lock();self.midi_log_revision=0;self.diagnostics_window=None;self.diagnostics_seen=-1
+    self.spatial_map=SpatialMap();self.zone_editor=None;self.zone_window=None
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -151,6 +155,7 @@ class App:
     toolbar=ttk.Frame(self.root);toolbar.pack(fill='x',padx=9,pady=(1,5))
     self.panic_button=tk.Button(toolbar,text='SILENCI ABSOLUT',command=self.toggle_panic,bg='#a52626',fg='white',font=('Segoe UI',10,'bold'));self.panic_button.pack(side='left',padx=3)
     ttk.Button(toolbar,text='TARGETES EN FUNCIÓ',command=lambda:self.show_panel('cards')).pack(side='left',padx=3)
+    ttk.Button(toolbar,text='ZONES ESPACIALS',command=self.open_zone_editor).pack(side='left',padx=3)
     ttk.Button(toolbar,text='TAULA DE VOLUMS',command=self.open_mixer).pack(side='left',padx=3)
     # Cada mòdul té una finestra nativa de Windows: es pot arrossegar,
     # canviar de mida, minimitzar i restaurar independentment.
@@ -564,6 +569,12 @@ class App:
       return self.harmony_map_preview(chromatic=c.get('visual')==12,card_index=i)
     if kind in ('Patró rítmic','Ritme de bateria'):
       return self.rhythm_map_preview(i)
+    if kind==ZONE_FUNCTION:
+      frame=np.full((H,W,3),(25,20,17),np.uint8)
+      cv2.putText(frame,'MAPA DE ZONES | FASE 2',(24,60),cv2.FONT_HERSHEY_SIMPLEX,.8,(245,228,205),1,cv2.LINE_AA)
+      cv2.putText(frame,'Obre ZONES ESPACIALS per configurar el mapa.',(24,130),cv2.FONT_HERSHEY_SIMPLEX,.6,(245,228,205),1,cv2.LINE_AA)
+      cv2.putText(frame,'Activacio i projeccio: fase 3.',(24,200),cv2.FONT_HERSHEY_SIMPLEX,.6,(245,228,205),1,cv2.LINE_AA)
+      return frame
     if kind==MUTE_FUNCTION:
       frame=np.full((H,W,3),(25,20,17),np.uint8)
       for text,y in [(f'MUTE | TARGETA {i+1:02d}',45),(f'CANAL {c["channel"]} | CC {c["cc"]}',110),(f'VISIBLE: {c.get("mute_audible",0)} | ABSENT: {c.get("mute_silent",127)}',175),('Control de presencia | No envia notes MIDI',240)]:
@@ -647,10 +658,27 @@ class App:
  def on_function_selected(self,event=None):
     self.open_function_settings()
  def open_function_settings(self):
-    if self.fun.get()==MUTE_FUNCTION:self.open_mute_settings()
+    if self.fun.get()==ZONE_FUNCTION:self.open_zone_editor(default_card=int(self.card_id.get())-1)
+    elif self.fun.get()==MUTE_FUNCTION:self.open_mute_settings()
     elif self.fun.get()=='Àudio':self.open_audio_settings()
     elif self.fun.get()=='Control MIDI CC':self.open_cc_settings()
     elif self.fun.get() in ('Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria'):self.open_music_settings()
+ def zone_project_path(self):
+    return None if self.project=='Sense títol' else self.project
+ def open_zone_editor(self,default_card=None):
+    if self.zone_window is None or not self.zone_window.winfo_exists():
+      self.zone_window=self.make_panel_window('zones','EDITOR DE ZONES ESPACIALS','1080x660+60+60')
+      self.zone_window.minsize(920,580)
+      self.zone_editor=ZoneEditor(self.zone_window,self.spatial_map,lambda:self.cards,self.zone_project_path,self.apply_spatial_map,default_card)
+    else:self.zone_editor.set_default_card(default_card)
+    self.show_panel('zones')
+ def apply_spatial_map(self,config):
+    self.spatial_map=config
+    self.status.set('Mapa de zones actualitzat. Desa el projecte. Fase 2: encara no activa la projecció.')
+ def refresh_zone_editor(self):
+    if self.zone_editor is not None:self.zone_editor.set_map(self.spatial_map)
+ def confirm_zone_discard(self):
+    return self.zone_editor is None or self.zone_editor.confirm_discard()
  def open_mute_settings(self):
     old=getattr(self,'mute_settings_window',None)
     if old is not None and old.winfo_exists():old.destroy()
@@ -816,7 +844,9 @@ class App:
     except Exception as e:
       messagebox.showerror('Configuració',str(e));return False
  def new_project(self):
-    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table(); self.status.set('Projecte nou')
+    if not self.confirm_zone_discard():return
+    self.spatial_map=SpatialMap()
+    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table();self.refresh_zone_editor(); self.status.set('Projecte nou')
  def update_bpm(self):
     try:
       with self.arp_lock:
@@ -828,26 +858,35 @@ class App:
       self.status.set(f'Rellotge musical: {self.bpm} BPM. Acords quantitzats si activats; Cakewalk conserva el seu tempo.')
     except (ValueError,tk.TclError):self.status.set('Tempo no vàlid')
  def save_project(self,as_new=False):
+    if self.zone_editor is not None and self.zone_editor.dirty:
+      messagebox.showwarning('Zones espacials','Hi ha canvis de zona sense aplicar. Obre ZONES ESPACIALS i prem DESAR ZONA AL MAPA abans de desar el projecte.',parent=self.root);return
     if not self.apply_card():return
     try:
       for i in self.mixer_rows:self.read_mixer_route(i)
     except (ValueError,tk.TclError) as exc:
       messagebox.showerror('Taula de volums',str(exc));return
+    old_project=self.zone_project_path()
+    path=self.project
     if as_new or self.project=='Sense títol':
       path=filedialog.asksaveasfilename(initialdir=ROOT/'PROJECTES',defaultextension='.json',filetypes=[('Projecte Wasteland','*.json')])
       if not path:return
-      self.project=path
     try:
-      with open(self.project,'w',encoding='utf-8') as f:json.dump({'version':4,'master_volume':self.master_volume.get(),'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual},f,ensure_ascii=False,indent=2)
+      spatial=rebase_map_images(self.spatial_map,old_project,path)
+      data={'version':4,'master_volume':self.master_volume.get(),'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual}
+      data=spatial.into_project(data)
+      with open(path,'w',encoding='utf-8') as f:json.dump(data,f,ensure_ascii=False,indent=2)
+      self.project=path;self.spatial_map=spatial;self.refresh_zone_editor()
       self.status.set(f'Projecte desat: {Path(self.project).name}')
     except Exception as e:messagebox.showerror('Desar',str(e))
  def open_project(self):
+    if not self.confirm_zone_discard():return
     path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte Wasteland','*.json')]);
     if not path:return
     try:
       with open(path,encoding='utf-8') as f:d=json.load(f)
+      spatial=SpatialMap.from_project(d)
       if len(d['cards'])!=16:raise ValueError('El projecte no conté 16 targetes')
-      self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path; self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
+      self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path;self.spatial_map=spatial;self.refresh_zone_editor(); self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
     except Exception as e:messagebox.showerror('Obrir',str(e))
  def refresh_midi(self):
      # No amaguem els errors: aixi podem diagnosticar loopMIDI.
@@ -1314,7 +1353,7 @@ class App:
  def radial_preview(self):
     cards=[self.preview_card] if self.preview_card is not None else list(self.active)
     if not cards and self.simulation.get():cards=[int(self.card_id.get())-1]
-    return any(self.cards[i].get('visual')==12 or self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial') for i in cards)
+    return any(self.cards[i]['function']!=ZONE_FUNCTION and (self.cards[i].get('visual')==12 or self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial')) for i in cards)
  def tracking_point(self,x,y,radial=False):
     if not radial:return (round(max(0,min(1,x))*(W-1)),round(max(0,min(1,y))*(H-1)))
     dx=(x-.5)*2;dy=(y-.5)*2;length=max(1,math.hypot(dx,dy))
@@ -1323,7 +1362,7 @@ class App:
  def live_preview_frame(self):
     if not self.active:return self.last_frame.copy()
     musical=[i for i in self.active if self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial')]
-    chromatic=any(self.cards[i].get('visual')==12 for i in self.active)
+    chromatic=any(self.cards[i]['function']!=ZONE_FUNCTION and self.cards[i].get('visual')==12 for i in self.active)
     if musical:frame=self.harmony_map_preview(chromatic=chromatic,card_index=musical[0])
     elif chromatic:frame=self.color_wheel_preview()
     else:frame=self.last_frame.copy()
@@ -1351,10 +1390,11 @@ class App:
     if not was:
       self.log_midi_event(f'VISIBLE T{i+1:02d} ID={i} funció={c["function"]}')
       self.visual_dirty=True;self.follow_live_preview()
-    if not was and c.get('visual')==12:self.select_visual(12)
+    if not was and c['function']!=ZONE_FUNCTION and c.get('visual')==12:self.select_visual(12)
     if i==1 and c.get('function')=='Control MIDI CC' and c.get('cc')==7:
       self.activate_card2(x,y,angle)
       return
+    if c['function']==ZONE_FUNCTION:return
     if c['function']==MUTE_FUNCTION:
       self.send_mute_state(i,True)
     elif c['function']=='Àudio':
@@ -1414,7 +1454,7 @@ class App:
         try:self.midi.send(mido.Message('note_off',channel=ch,note=note,velocity=0))
         except Exception:pass
  def compose_live_visuals(self,t):
-    visuals=sorted({int(self.cards[i].get('visual',0))%len(NAMES) for i in self.active if self.cards[i].get('function')!='Cap acció'})
+    visuals=sorted({int(self.cards[i].get('visual',0))%len(NAMES) for i in self.active if self.cards[i].get('function') not in ('Cap acció',ZONE_FUNCTION)})
     if not visuals:return np.zeros((H,W,3),np.uint8)
     if 12 in visuals:self.color_by_position(None)
     layers=[self.projection_color_frame() if n==12 else self.render(t,visual=n) for n in visuals]
@@ -1744,6 +1784,7 @@ class App:
     photo=ImageTk.PhotoImage(Image.fromarray(rgb))
     setattr(self,attr,photo);label.config(image=photo,text='')
  def close(self):
+    if not self.confirm_zone_discard():return
     self._closing=True
     self.arp_stop.set()
     self.arp_thread.join(timeout=1.0)

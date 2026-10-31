@@ -1,8 +1,8 @@
-# Mapa de zones espacials — fase 1
+# Mapa de zones espacials — fases 1 i 2
 
 ## Abast real d'aquesta entrega
 
-S'afegeixen exclusivament `spatial_zones.py`, `tests/test_spatial_zones.py` i aquest document. El programa principal continua sent **Wasteland 4.6.3**: no s'ha canviat cap funció MIDI, Mute, harmonia, arpegiador, càmera, finestra o projecció. El motor encara **no està connectat al programa**; no hi ha editor gràfic de zones ni opció «Activar zona espacial» al desplegable en aquesta fase. No cal actualitzar el Python principal al PC per aquesta entrega.
+La fase 1 va afegir el motor independent `spatial_zones.py` i les seves proves. La fase 2, a **Wasteland 4.7.0**, afegeix `spatial_zone_editor.py`, integra la configuració a l'editor de targetes i incorpora el bloc espacial al desament/obertura de projectes. La resta de funcions existents es conserva. La projecció d'imatges de zones encara no s'ha connectat: correspon a la fase 3.
 
 El motor produeix esdeveniments i sol·licituds d'escena. No obre una càmera, no envia MIDI, no carrega ni dibuixa fotografies i no executa vídeo. L'estat persistent d'una escena aquí és una referència d'imatge; la càrrega, validació real i presentació de la imatge són tasques de la fase de projecció.
 
@@ -60,7 +60,7 @@ La prioritat entre color cromàtic i escena de zona encara no s'implementa: arri
 
 `SpatialMap.to_dict()` i `from_dict()` serialitzen i validen la versió 1 del bloc espacial. `into_project(project)` retorna una còpia del diccionari amb el camp `spatial_zones`, preservant els altres camps; `from_project(project)` retorna un mapa buit si un projecte antic no té aquest camp. Es conserven quadrícula, zones, autoritzacions, imatges, calibració i opcions d'estabilitat. Els estats temporals de detecció i l'escena en curs no es desen: obrir un altre projecte crearà un motor nou.
 
-**Aquest còdec encara no modifica `save_project()` / `open_project()` del programa.** No afegeixis el bloc manualment al teu projecte habitual esperant que el Wasteland actual el conservi: el seu desament encara no incorpora zones. La integració dels camps es farà en connectar l'editor al programa.
+**Des de la 4.7.0, `save_project()` / `open_project()` conserven el bloc espacial.** Els projectes antics s'obren amb un mapa buit. En fer Desar com, les rutes es recalculen respecte del nou fitxer de projecte mantenint la mateixa imatge d'origen; una ruta relativa no es resol mai assumint la carpeta de treball del procés.
 
 `image_reference(image_file, project_file)` proposa una ruta relativa si la imatge és dins de la carpeta del projecte; per a imatges externes conserva una ruta absoluta. `check_image_asset(reference, project_file)` distingeix `not_assigned`, `unresolved`, `unsupported`, `missing`, `unreadable` i `exists`, sense carregar imatges. `exists` només comprova l'existència del fitxer, no que el seu contingut es pugui decodificar. Les rutes es resolen amb les regles del sistema operatiu on s'executa el programa.
 
@@ -95,7 +95,7 @@ python -m unittest discover -s tests -p test_spatial_zones.py -v
 
 ## Fases pendents
 
-2. Editor gràfic de caselles, noms, autoritzacions, imatges i configuració des de les targetes; integració del bloc JSON amb el programa.
+2. **Completada a la 4.7.0:** editor gràfic i integració JSON. Vegeu les instruccions següents.
 3. Càrrega d'imatges amb memòria cau, proporcions preservades, gestió d'errors i prioritat amb el color; previsualització amb guies i projecció neta.
 4. Captura dels punts de calibració i proves amb la càmera i el terra físic.
 
@@ -104,3 +104,21 @@ No s'ha afegit vídeo, OSC, múltiples projectors ni cap altra ampliació de la 
 ## Resultat de la validació d'aquesta entrega
 
 Han passat les 23 proves del motor espacial i les 41 proves existents del projecte: **64 executades, 64 correctes, cap omesa**. Les proves d'interfície antigues s'han executat amb Xvfb. No s'ha modificat el fitxer principal ni les dependències. Aquest resultat no valida una instal·lació física de la cúpula, un editor de zones encara inexistent ni fotografies en un projector real.
+
+## Fase 2 — ús de l'editor (4.7.0)
+
+Fitxers d'execució necessaris a la mateixa carpeta: el Python principal, `spatial_zones.py` i `spatial_zone_editor.py`. No s'han afegit dependències. L'accés d'arrencada existent continua servint.
+
+1. Prem **ZONES ESPACIALS** a dalt, o selecciona **Activar zona espacial** com a funció de la targeta. En aquest segon cas, la targeta actual queda proposada per a una zona nova; no s'afegeix automàticament a una zona existent.
+2. Prem NOVA ZONA. Fes clic o arrossega sobre el cercle per seleccionar caselles; tornar-hi a clicar les treu. Les caselles completament fora del cercle no es poden seleccionar.
+3. Escriu un nom, marca les targetes autoritzades (01–16, equivalents als IDs 0–15) i, si vols, tria una imatge JPG/PNG. La miniatura es carrega només en triar o obrir aquella zona, no en cada moviment de ratolí. Si el fitxer falta o és corrupte es mostra un avís al lloc de la miniatura.
+4. Prem **DESAR ZONA AL MAPA** per aplicar les dades. Per conservar-les al disc, desa després el projecte al menú Projecte. Una zona sense imatge o sense targetes autoritzades es pot preparar com a esborrany; encara no produeix cap escena.
+5. Clica una zona de la llista per modificar-la, o prem ELIMINAR ZONA per retirar-la del mapa. Els solapaments entre zones habilitades es rebutgen, també si s'han seleccionat caselles mentre la zona estava deshabilitada.
+
+Els canvis de formulari no aplicats no es desen silenciosament: l'aplicació demana aplicar-los abans de desar el projecte, i consulta abans de descartar-los en canviar de zona o projecte o en tancar. Tancar només la finestra de zones l'amaga i conserva el formulari en memòria.
+
+L'avís **SENSE CALIBRACIÓ** continua visible quan no hi ha dades vàlides. Si es carrega un projecte amb una calibració matemàtica vàlida, encara s'indica que queda pendent validar-la físicament. La captura de punts de càmera encara no té interfície en aquesta fase.
+
+La funció nova no envia notes ni controls MIDI i no substitueix la projecció actual. Només prepara l'assignació de la targeta i el mapa. El motor en directe, l'indicador d'última escena activada i la càrrega persistent de fotografies arribaran amb la fase 3.
+
+Validació de la fase 2: **72 proves executades i correctes**, incloses les 8 noves de l'editor i de rutes d'imatges. S'han comprovat creació/modificació/eliminació, agrupació, bloqueig de solapaments, miniatures absents/corruptes, projectes antics, rutes relatives, Desar com i conservació de les funcions musicals. La interfície s'ha provat amb pantalla virtual; queden pendents les proves a Windows i la instal·lació real de la cúpula.

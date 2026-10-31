@@ -1,5 +1,7 @@
 # Wasteland Machine
 
+**Des de la versió 4.7.0**, el fitxer principal necessita `spatial_zones.py` i `spatial_zone_editor.py` a la mateixa carpeta. Actualitza primer aquests dos mòduls i després el programa principal.
+
 ## Obrir-lo a Windows
 
 1. Instal·la **Python 3.12 de 64 bits** des de https://www.python.org/downloads/windows/. Inclou els components Python Launcher i Tcl/Tk (normalment seleccionats per defecte).
@@ -134,3 +136,9 @@ A l'editor tria **Control d’àudio / Mute**, una funció diferent de Nota MIDI
 La targeta visible envia 0 i deixa sentir la pista; retirar-la més de 250 ms envia 127 i activa el Mute. No canvia el transport, per tant el projecte de Sonar pot continuar en bucle. No es generen notes d'instrument. En aplicar la funció amb la targeta absent, connectar MIDI o carregar el projecte es posa l'estat de silenci; si la targeta ja està activa en reconnectar, se sincronitza l'estat visible. Tancar la càmera, el programa o activar SILENCI ABSOLUT silencia també aquests controls mentre hi hagi connexió MIDI operativa. No canviïs a mà el Mute de Sonar si vols deixar-ne el control a la targeta: l'aplicació no en rep l'estat de retorn.
 
 Cada pista independent necessita una ruta canal+CC pròpia. El monitor mostra l'últim valor acceptat pel port local al camp Valor; la diagnosi permet comprovar els missatges i els errors. Els projectes antics no es modifiquen per convertir automàticament les seves funcions: assigna expressament la funció nova a les targetes que hagin de controlar el Mute.
+
+## Editor de zones espacials (4.7.0 — fase 2)
+
+El botó superior ZONES ESPACIALS obre un editor independent de la quadrícula circular 8×8. Pots seleccionar i agrupar caselles, posar nom a cada zona, autoritzar targetes, triar una imatge i veure'n la miniatura. La funció Activar zona espacial de l'editor de targetes també obre aquesta configuració. Prem DESAR ZONA AL MAPA i després desa el projecte per conservar-la. Els projectes antics continuen obrint-se; les zones i les rutes d'imatges també es conserven en fer Desar com.
+
+Aquesta fase configura el mapa però encara no activa fotografies a la projecció. No envia MIDI i no interpreta les coordenades de càmera com si estiguessin calibrades. La fase següent integrarà la projecció persistent. Documentació completa a MAPA_ZONES.md.
