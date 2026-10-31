@@ -1,4 +1,4 @@
-# Mapa de zones espacials — fases 1, 2 i 3
+# Mapa de zones espacials — fases 1, 2, 3 i 4
 
 ## Abast real d'aquesta entrega
 
@@ -97,7 +97,7 @@ python -m unittest discover -s tests -p test_spatial_zones.py -v
 
 2. **Completada a la 4.7.0:** editor gràfic i integració JSON. Vegeu les instruccions següents.
 3. **Completada a la 4.7.1:** càrrega d’imatges amb memòria cau, proporcions preservades, errors i prioritat amb el color; previsualització amb guies i projecció neta.
-4. Captura dels punts de calibració i proves amb la càmera i el terra físic.
+4. **Captura implementada a la 4.7.2.** Queda pendent la prova amb la càmera i el terra físic de la instal·lació.
 
 No s'ha afegit vídeo, OSC, múltiples projectors ni cap altra ampliació de la fase 5.
 
@@ -117,7 +117,7 @@ Fitxers d’execució necessaris a la mateixa carpeta: el Python principal, `spa
 
 Els canvis de formulari no aplicats no es desen silenciosament: l'aplicació demana aplicar-los abans de desar el projecte, i consulta abans de descartar-los en canviar de zona o projecte o en tancar. Tancar només la finestra de zones l'amaga i conserva el formulari en memòria.
 
-L'avís **SENSE CALIBRACIÓ** continua visible quan no hi ha dades vàlides. Si es carrega un projecte amb una calibració matemàtica vàlida, encara s'indica que queda pendent validar-la físicament. La captura de punts de càmera encara no té interfície en aquesta fase.
+L'avís **SENSE CALIBRACIÓ** continua visible quan no hi ha dades vàlides. Si es carrega un projecte amb una calibració matemàtica vàlida, encara s'indica que queda pendent validar-la físicament. La fase 4 incorpora la captura de punts de càmera, descrita a continuació.
 
 La funció de zones no envia notes ni controls MIDI. Des de la fase 3, una entrada autoritzada i confirmada amb calibració vàlida activa la fotografia assignada i actualitza l’indicador de l’editor.
 
@@ -140,6 +140,27 @@ Prioritat:
 
 Una fotografia absent o malmesa mostra un avís i conserva la sortida anterior. Les imatges vàlides es descodifiquen només quan cal activar-les i es reutilitzen; les memòries cau estan limitades a quatre originals i quatre fotogrames redimensionats. Els originals es redueixen a un màxim de 4096×4096. Modificar el mapa reinicia la detecció i la memòria cau, conservant la fotografia actual; obrir un altre projecte esborra l’escena anterior.
 
-**La captura gràfica de calibració continua pendent de la fase 4.** Sense calibració vàlida les zones no s’activen, i no s’assumeix que càmera i terra tinguin les mateixes coordenades. Les proves automàtiques utilitzen dades sintètiques o una calibració coneguda; no substitueixen la prova a Windows amb càmera i projector físics.
+**La captura gràfica de calibració està disponible des de la 4.7.2; vegeu les instruccions següents.** Sense calibració vàlida les zones no s’activen, i no s’assumeix que càmera i terra tinguin les mateixes coordenades. Les proves automàtiques utilitzen dades sintètiques o una calibració coneguda; no substitueixen la prova a Windows amb càmera i projector físics.
 
 Validació de la fase 3: **86 proves correctes**, amb proves del motor, errors d’imatge, prioritat cromàtica, memòria cau, proporcions, transparència i integració amb la interfície en pantalla virtual. Es mantenen les proves existents de MIDI, àudio i funcions musicals.
+
+
+## Fase 4 — captura de calibració (4.7.2)
+
+Fitxer addicional necessari: `spatial_calibration.py`, al costat del principal i dels altres tres mòduls espacials. `OBRIR_WASTELAND.bat` és l’accés amb nom estable; l’accés anterior també continua funcionant.
+
+1. Obre la càmera. Situa-la de manera fixa i identifica quatre referències físiques al perímetre del cercle del terra: nord, est, sud i oest. Són noms de referència del mapa, no cal una brúixola. Marca-les físicament per poder repetir la prova.
+2. Obre **ZONES ESPACIALS → CALIBRAR TERRA**. La finestra mostra la imatge original de càmera sense mirall ni anotacions ArUco. Prem **CONGELAR IMATGE**.
+3. Fes clic als quatre punts, en ordre nord, est, sud i oest. La selecció avança automàticament. Pots seleccionar qualsevol nom i tornar a clicar per corregir-lo. Els clics a les franges exteriors de la imatge s’ignoren. Els punts s’emmagatzemen normalitzats respecte de la imatge original, independentment de la mida de la finestra.
+4. Prem **APLICAR CALIBRACIÓ**. Es rebutgen els punts incomplets, repetits, col·lineals, creuats o numèricament invàlids. La calibració anterior es conserva fins que s’aplica una captura vàlida. Si hi ha un formulari de zona pendent, es demana abans de descartar-lo.
+5. Comprova al mapa la posició d’una targeta amb funció **Activar zona espacial** i autoritzada. Passa-la pel centre i per les zones; comprova que l’indicador segueixi el desplaçament. Desa el projecte per conservar la calibració.
+
+**REPETIR CAPTURA** torna a la imatge en directe; no esborra la calibració ja aplicada. Una captura absent o de més d’un segon no es pot congelar. Canviar de projecte reinicia la captura; canviar de càmera, reobrir-la o canviar-ne la mida impedeix aplicar una captura antiga. Obrir un projecte recupera i valida els punts desats. Si mous la càmera o canvies la disposició física, torna a calibrar: el programa no pot detectar automàticament aquests moviments.
+
+La captura no envia MIDI ni canvia les autoritzacions o les imatges de les zones. Les fotografies segueixen les regles persistents de la fase 3.
+
+Validació 4.7.2: **93 proves correctes**, incloses 7 proves noves de captura, clics amb franges i redimensionament, correcció de punts, dades invàlides, captura caducada, canvi de context, conservació de dades i desament/obertura. Interfície revisada en pantalla virtual. La comprovació física de càmera, Sonar i projector a Windows continua pendent.
+
+### Prova física proposada
+
+Crea dues zones separades amb fotografies diferents i autoritza la mateixa targeta a totes dues. Comprova primer que el punt del mapa coincideixi amb la zona física. Mantén la targeta unes dècimes de segon a la primera zona: ha d’aparèixer la primera fotografia. Retira-la: la fotografia ha de continuar. Entra a la segona zona: ha de substituir-la per la segona. Una targeta no autoritzada no ha de canviar la fotografia. Si la posició no coincideix, revisa l’ordre dels quatre punts i torna a calibrar abans de retocar el mapa.

@@ -1,6 +1,8 @@
 import os, sys, json, time, math, random, datetime, threading
 from pathlib import Path
 from collections import deque
+from dataclasses import replace
+from spatial_calibration import CalibrationEditor
 from spatial_zones import SpatialMap
 from spatial_projection import ZoneProjection
 from spatial_zone_editor import ZoneEditor, rebase_map_images
@@ -14,7 +16,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.7.1'
+APP_VERSION='4.7.2'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
@@ -110,6 +112,7 @@ class App:
     self.audio_control_vars={}
     for role,defaults in AUDIO_CONTROLS.items():
       self.audio_control_vars[role]={key:(tk.BooleanVar(value=value) if key in ('enabled','inverted') else (tk.StringVar(value=value) if key=='axis' else tk.IntVar(value=value))) for key,value in defaults.items() if key!='label'}
+    self.camera_frame=None;self.camera_frame_stamp=0;self.calibration_editor=None;self.calibration_window=None;self.calibration_generation=0
     self.camera=None; self.midi=None; self.midi_name=''; self.recording=None; self.record_file=None; self.t0=time.monotonic(); self.last_frame=None; self.visual_paused=False; self.visual_paused_at=None; self.monitor_window=None; self.monitor_table=None; self.monitor_ticks=0
     self.aruco_detector=cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
     self.last_visual_update=0.0; self.visual_interval=1/12; self._closing=False
@@ -667,14 +670,35 @@ class App:
       self.zone_window.minsize(920,580)
       self.zone_editor=ZoneEditor(self.zone_window,self.spatial_map,lambda:self.cards,self.zone_project_path,self.apply_spatial_map,default_card)
     else:self.zone_editor.set_default_card(default_card)
+    self.zone_editor.on_calibrate=self.open_calibration_editor
     self.zone_editor.on_release=self.release_zone_scene
     self.show_panel('zones');self.update_spatial_editor_runtime()
+ def calibration_context(self):
+    shape=None if self.camera_frame is None else self.camera_frame.shape[:2]
+    return self.calibration_generation,getattr(self,'camera_generation',0),self.cam_index.get(),shape
+ def open_calibration_editor(self):
+    if self.calibration_window is None or not self.calibration_window.winfo_exists():
+      self.calibration_window=self.make_panel_window('calibration','CALIBRACIÓ DEL TERRA','920x650+90+70')
+      self.calibration_window.minsize(760,560)
+      self.calibration_editor=CalibrationEditor(self.calibration_window,
+        lambda:(self.camera_frame,self.camera_frame_stamp),self.calibration_context,
+        lambda:self.spatial_map.calibration,self.apply_calibration)
+    self.show_panel('calibration');self.calibration_editor.refresh()
+ def apply_calibration(self,calibration):
+    if not self.confirm_zone_discard():return False
+    self.spatial_map=replace(self.spatial_map,calibration=calibration)
+    self.reset_spatial_projection(keep_scene=True);self.refresh_zone_editor()
+    self.status.set('Calibració aplicada. Comprova la posició al mapa i desa el projecte.')
+    return True
  def apply_spatial_map(self,config):
     self.spatial_map=config;self.reset_spatial_projection(keep_scene=True)
     self.status.set('Mapa de zones actualitzat. Desa el projecte. Les activacions requereixen calibració vàlida.')
  def refresh_zone_editor(self):
     if self.zone_editor is not None:self.zone_editor.set_map(self.spatial_map)
  def reset_spatial_projection(self,keep_scene=False):
+    if not keep_scene:
+      self.calibration_generation+=1
+      if self.calibration_editor is not None:self.calibration_editor.restart()
     self.zone_projection.configure(self.spatial_map,self.zone_project_path(),keep_scene=keep_scene)
     self.spatial_warning=None;self.visual_dirty=True;self.preview_dirty=True
     self.update_spatial_editor_runtime()
@@ -1127,6 +1151,8 @@ class App:
     if self.sim_card is not None:self.deactivate(self.sim_card)
     self.sim_card=None;self.sim_xy=None
  def toggle_cam(self):
+    self.camera_generation=getattr(self,'camera_generation',0)+1
+    self.camera_frame=None;self.camera_frame_stamp=0
     if self.camera:
       self.camera.release();self.camera=None
       for i in list(self.active):self.deactivate(i)
@@ -1801,6 +1827,7 @@ class App:
           self.toggle_cam()
           self.status.set('S’ha perdut la imatge de la càmera. Torna-la a obrir.')
         if ok:
+          self.camera_frame=frame.copy();self.camera_frame_stamp=time.monotonic()
           # Detectem sobre la imatge ORIGINAL: els ArUco no admeten el reflex de mirall.
           gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
           corners,ids,_=self.aruco_detector.detectMarkers(gray)
@@ -1827,6 +1854,7 @@ class App:
           self.expire_missing_cards(seen,now)
           # Mostrem la imatge original: els textos i els contorns es llegeixen correctament.
           if self.camera_window.state()=='normal':self.display(self.cam_label,cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),'cam_photo')
+      if self.calibration_editor is not None and self.calibration_window.winfo_exists() and self.calibration_window.state()=='normal':self.calibration_editor.refresh()
       self.sync_mute_controls()
       now_vis=time.monotonic();frame_changed=False
       self.process_spatial_frame(zone_observations,color_observations,now_vis)

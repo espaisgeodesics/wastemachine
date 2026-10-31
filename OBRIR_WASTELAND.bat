@@ -1,6 +1,13 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+for %%F in (wasteland_4_5_15_pas_15_editor_musical_desplegable.py spatial_zones.py spatial_zone_editor.py spatial_projection.py spatial_calibration.py) do (
+  if not exist "%~dp0%%F" (
+    echo Falta el fitxer %%F. Extreu tot el ZIP abans d'obrir Wasteland.
+    pause
+    exit /b 1
+  )
+)
 if exist ".venv\Scripts\python.exe" goto dependencies
 py -3.12 -m venv .venv
 if errorlevel 1 goto python_missing

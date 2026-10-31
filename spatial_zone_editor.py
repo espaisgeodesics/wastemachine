@@ -81,6 +81,7 @@ class ZoneEditor:
         ttk.Label(self.window, textvariable=self.calibration_info, wraplength=1000).pack(fill='x', padx=10, pady=7)
         runtime=ttk.Frame(self.window);runtime.pack(fill='x',padx=10)
         ttk.Label(runtime,textvariable=self.runtime_info,wraplength=800).pack(side='left',fill='x',expand=True)
+        ttk.Button(runtime,text='CALIBRAR TERRA',command=lambda:self.on_calibrate() if hasattr(self,'on_calibrate') else None).pack(side='right',padx=4)
         ttk.Button(runtime,text='TORNAR ALS VISUALS',command=lambda:self.on_release() if hasattr(self,'on_release') else None).pack(side='right')
         body = ttk.Frame(self.window)
         body.pack(fill='both', expand=True, padx=10, pady=3)
