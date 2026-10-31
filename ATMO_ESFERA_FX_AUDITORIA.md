@@ -1,6 +1,8 @@
 # ATMO ESFERA FX — auditoria i proposta d’arquitectura
 
-Data: 31 d’octubre de 2026. Estat: **proposta pendent d’aprovació; cap funció nova implementada en aquesta entrega**.
+Data de l’auditoria: 31 d’octubre de 2026. Estat original: **proposta abans d’aprovació; cap funció nova en l’entrega d’auditoria**.
+
+Actualització posterior: Jordi ha aprovat l’arquitectura i la fase 1A. Vegeu l’[entrega de la fase 1A, versió 4.7.5](ATMO_ESFERA_FX_FASE_1A.md). La resta d’aquest informe conserva la proposta i les observacions de la base 4.7.4.
 
 Document de requisits: [document mestre](ATMO_ESFERA_FX_DOCUMENT_MESTRE.md), especialment l’apartat 25. Aquesta revisió lliura els punts A–G que demana, sense reescriure l’aplicació ni canviar-ne la marca encara.
 

@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-for %%F in (wasteland_4_5_15_pas_15_editor_musical_desplegable.py spatial_zones.py spatial_zone_editor.py spatial_projection.py spatial_calibration.py) do (
+for %%F in (wasteland_4_5_15_pas_15_editor_musical_desplegable.py spatial_zones.py spatial_zone_editor.py spatial_projection.py spatial_calibration.py marker_tracking.py aruco_observations.py) do (
   if not exist "%~dp0%%F" (
     echo Falta el fitxer %%F. Extreu tot el ZIP abans d'obrir Wasteland.
     pause

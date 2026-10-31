@@ -1,6 +1,8 @@
 # Wasteland Machine
 
-**Des de la versió 4.7.0**, el fitxer principal necessita `spatial_zones.py` i `spatial_zone_editor.py` a la mateixa carpeta. Actualitza primer aquests dos mòduls i després el programa principal.
+**Versió actual: 4.7.5.** Extreu tot el paquet: al costat del principal calen `spatial_zones.py`, `spatial_zone_editor.py`, `spatial_projection.py`, `spatial_calibration.py`, `marker_tracking.py` i `aruco_observations.py`. No calen dependències noves.
+
+La [fase 1A d’ATMO ESFERA FX](ATMO_ESFERA_FX_FASE_1A.md) afegeix seguiment passiu de marcadors; les funcions musicals i visuals continuen pel camí actual. El simulador visible de cinc participants encara no està implementat. Les instruccions actuals de zones, calibració i durades són a [MAPA_ZONES.md](MAPA_ZONES.md).
 
 ## Obrir-lo a Windows
 
@@ -19,7 +21,7 @@ Per tornar-hi, fes doble clic al mateix fitxer BAT. No es necessita cap compte n
 - Per enviar MIDI a Cakewalk, crea un port virtual amb loopMIDI, selecciona'l al Wasteland i habilita'l com a entrada MIDI a Cakewalk. Aquests programes es configuren separadament.
 - Desa el treball amb **Projecte → Desar projecte**. Els projectes són fitxers JSON; conserva'ls i fes-ne còpies de seguretat. Els vídeos es desen a GRAVACIONS.
 
-Quan demanis un canvi, indica què has fet, què esperaves i què ha passat. Pots adjuntar una captura o copiar els errors de la consola. Les modificacions locals encara no s'han publicat al repositori de GitHub.
+Quan demanis un canvi, indica què has fet, què esperaves i què ha passat. Pots adjuntar una captura o copiar els errors de la consola.
 
 ## Estat de la revisió
 
@@ -37,18 +39,18 @@ Proves: `python -m unittest discover -s tests -v`.
 
 ## Simulació, silenci i patrons
 
-- A la finestra VISUAL, activa **SIMULAR AMB RATOLÍ**. Tria una targeta a l'editor, configura-la i prem APLICAR. Mantén premut el botó esquerre sobre la imatge i arrossega per simular-ne la posició; un cercle groc indica la targeta. Deixa anar el clic per retirar-la. El control Gir simula la rotació. La càmera i la simulació són alternatives; activar-ne una desactiva l'altra.
+- Els controls de simulació amb ratolí i gir ja no apareixen a la previsualització. Es conserven mètodes interns de prova; el simulador de diversos participants arribarà en una fase pròpia.
 - **SILENCI ABSOLUT** atura les notes, allibera el pedal de sustain i envia All Sound Off i All Notes Off als 16 canals de la sortida MIDI connectada. També bloqueja noves activacions fins a prémer **REPRENDRE MIDI**. No silencia pistes d'àudio o instruments que no rebin aquesta sortida MIDI.
 - En seleccionar **Arpegiador espacial**, el menú s’obre i pots triar Ascendent, Descendent, Pujada i baixada o Aleatori. Es conserven la divisió rítmica, durada, escala i intensitat.
 - La funció **Patró rítmic** ofereix 16 passos repetits. Activa els cops a la configuració musical; la nota i el canal es trien a l'editor de la targeta. La divisió 1/4 temps equival a semicorxeres: 16 passos formen un compàs de 4/4. El patró segueix el rellotge intern i comença a la fase actual de la graella quan detecta la targeta; s'atura en retirar-la. No hi ha sincronització externa amb Cakewalk en aquesta versió.
-- Per a bateria General MIDI, pots assignar targetes diferents a bombo (nota 36), caixa (38) i hi-hat (42), normalment al canal 10; depèn de l'instrument receptor. La simulació amb ratolí activa una targeta cada vegada; la càmera permet diverses targetes.
+- Per a bateria General MIDI, pots assignar targetes diferents a bombo (nota 36), caixa (38) i hi-hat (42), normalment al canal 10; depèn de l'instrument receptor. La càmera permet diverses targetes simultànies.
 - Desa el projecte per conservar les direccions i els patrons. Els projectes anteriors continuen fent servir arpegis ascendents per defecte.
 
 ## Una targeta, una bateria completa
 
 Tria **Ritme de bateria** com a funció d'una targeta: la configuració s'obre automàticament. Pots escollir Rock bàsic, Rock potent, Disco, Funk, Mig temps o Electrònic. Cada preset envia simultàniament les peces corresponents del kit; no cal una targeta per instrument. Configura el canal que rep la pista de MT Power Drum Kit a Sonar, ajusta la intensitat i prem APLICAR. Desa el projecte per conservar-ho.
 
-La detecció de la targeta inicia el compàs des del primer pas i el repeteix mentre es manté present. En retirar-la s'aturen totes les notes que ha generat. El ratolí serveix per provar el ritme complet mantenint premut el clic. SILENCI ABSOLUT també atura aquests ritmes.
+La detecció de la targeta inicia el compàs des del primer pas i el repeteix mentre es manté present. En retirar-la s'aturen totes les notes que ha generat. SILENCI ABSOLUT també atura aquests ritmes.
 
 Utilitza el port loopMIDI d'entrada de la pista de bateria i activa l'escolta d'entrada a Sonar. El canal es pot ajustar a la configuració del ritme (sovint 10 per a bateria GM, o l'entrada Omni de la pista). Les notes proposades són 36, 38, 42, 46 i 49; les pots canviar a la mateixa finestra si el mapa del teu MT Power Drum Kit difereix. No s'ha provat el plugin real al núvol. No activa els grooves interns del plugin: genera les notes MIDI que l'instrument interpreta.
 
@@ -58,7 +60,7 @@ El tempo és el del Wasteland. Cada bucle és un compàs de 4/4 i encara no se s
 
 El botó superior **TARGETES EN FUNCIÓ** obre una finestra independent amb la llista de targetes i les columnes Targeta, Funció i Nom assignat. Escriu el Nom assignat directament a l’editor i prem APLICAR; també pots fer doble clic al nom a la llista. Els noms es desen amb el projecte. La posició i visibilitat d’aquesta finestra es conserven amb la distribució de finestres. Hi apareixen les targetes amb una funció diferent de **Cap acció**, incloses les assignacions inicials del programa. Les targetes actives es destaquen. Per treure'n una de la llista, selecciona Cap acció a l'editor i prem APLICAR; desa el projecte per conservar el canvi.
 
-Clica una fila per seleccionar la mateixa targeta a l'editor i veure el seu mapa sense activar-la: sectors d'harmonia/arpegis, graella de passos del patró o de tota la bateria, cercle cromàtic, visual assignat o paràmetres MIDI. La selecció no envia notes noves. Pots provar la targeta amb la simulació o la càmera quan vulguis. Canviar de selecció retira una simulació que estigués premuda.
+Clica una fila per seleccionar la mateixa targeta a l'editor i veure el seu mapa sense activar-la: sectors d'harmonia/arpegis, graella de passos del patró o de tota la bateria, cercle cromàtic, visual assignat o paràmetres MIDI. La selecció no envia notes noves. Pots provar la targeta amb la càmera.
 
 **SEGUIR DIRECTE** torna a la previsualització automàtica. Els mapes seleccionats són de consulta: no substitueixen el vídeo de gravació ni la sortida de projecció. La distribució de finestres desada es continua recuperant en arrencar.
 
@@ -95,7 +97,7 @@ La finestra que s'obre en seleccionar **Àudio** té dues pestanyes: **Reproducc
 
 Cada control permet escollir moviment horitzontal, vertical, rotació o distància al centre; invertir-ne el sentit; ajustar mínim/màxim entre 0 i 127, i canviar el número CC. Per exemple, volum vertical invertit fa que a dalt soni més fort. Per evitar arribar al silenci, posa el mínim de volum a 30 o 40. Els controls actius han de tenir CC diferents. Tots utilitzen el canal MIDI de la targeta.
 
-Aquests controls **envien missatges MIDI, no afegeixen processament d'àudio al Wasteland**. Una pista d'àudio de Sonar no interpreta automàticament tots aquests CC: assigna'ls a volum, panoràmica o paràmetres de plugin amb MIDI Learn / ACT, o utilitza un sampler que els admeti. Configura l'entrada MIDI i els canals perquè no modifiquin instruments que no vulguis controlar. Per fer l'aprenentatge d'un paràmetre, activa primer només aquell control i mou la targeta o la simulació.
+Aquests controls **envien missatges MIDI, no afegeixen processament d'àudio al Wasteland**. Una pista d'àudio de Sonar no interpreta automàticament tots aquests CC: assigna'ls a volum, panoràmica o paràmetres de plugin amb MIDI Learn / ACT, o utilitza un sampler que els admeti. Configura l'entrada MIDI i els canals perquè no modifiquin instruments que no vulguis controlar. Per fer l'aprenentatge d'un paràmetre, activa primer només aquell control i mou la targeta.
 
 Mentre la targeta és present, els moviments modifiquen els controls sense tornar a iniciar el clip. Retirar-la deixa l'últim valor al receptor i el clip continua; tornar-la a mostrar abans que acabi permet continuar controlant-la sense repetir el dispar. La configuració es desa amb el projecte. Inversió de reproducció, canvi de velocitat o bucles no s'han afegit: requereixen un receptor adequat i una configuració específica a Sonar; aquesta funció conserva la reproducció completa una sola vegada.
 

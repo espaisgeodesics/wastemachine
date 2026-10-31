@@ -2,6 +2,8 @@ import os, sys, json, time, math, random, datetime, threading
 from pathlib import Path
 from collections import deque
 from dataclasses import replace
+from marker_tracking import MarkerTracker, ObservationFrame
+from aruco_observations import observation_frame
 from spatial_calibration import CalibrationEditor
 from spatial_zones import SpatialMap
 from spatial_projection import ZoneProjection
@@ -16,7 +18,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.7.4'
+APP_VERSION='4.7.5'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
@@ -102,6 +104,7 @@ class App:
     self.root=root; root.title('WASTELAND MACHINE · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
     self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
     self.midi_log=deque(maxlen=1000);self.midi_log_lock=threading.Lock();self.midi_log_revision=0;self.diagnostics_window=None;self.diagnostics_seen=-1
+    self.marker_tracker=MarkerTracker();self.tracking_sequence=0;self.tracking_source_id=None;self.camera_source_id=None;self.tracking_errors=deque(maxlen=50);self.tracking_enabled=True
     self.spatial_map=SpatialMap();self.zone_projection=ZoneProjection(self.spatial_map);self.spatial_warning=None;self.zone_editor=None;self.zone_window=None
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
@@ -1162,6 +1165,7 @@ class App:
     if self.simulation.get():
       self.simulation.set(False);self.toggle_simulation()
     backend=cv2.CAP_DSHOW if sys.platform=='win32' else cv2.CAP_ANY
+    self.camera_source_id=f'camera:{self.cam_index.get()}'
     self.camera=cv2.VideoCapture(self.cam_index.get(),backend)
     if not self.camera.isOpened():
       self.camera.release();self.camera=None;messagebox.showwarning('Càmera','No es pot obrir la webcam. Tanca altres programes que la utilitzin.');return
@@ -1810,6 +1814,22 @@ class App:
       cv2.putText(result,'T02: apropa la targeta per veure volum i filtre',
                   (12,H-14),cv2.FONT_HERSHEY_SIMPLEX,.51,(220,220,220),1,cv2.LINE_AA)
     return result
+ def observe_marker_frame(self,corners=None,ids=None,image_size=None,captured_at=None):
+    # Phase 1A is a passive observer: never let its errors interrupt legacy actions.
+    if not self.tracking_enabled:return
+    source=(self.camera_source_id or f'camera:{self.cam_index.get()}') if image_size is not None else (self.tracking_source_id or self.camera_source_id)
+    if source is None:return
+    self.tracking_sequence+=1
+    try:
+      now=time.monotonic() if captured_at is None else captured_at
+      frame=(observation_frame(corners,ids,image_size,source,self.tracking_sequence,now) if image_size is not None
+             else ObservationFrame(source,self.tracking_sequence,now,status='unavailable'))
+      if self.tracking_source_id is not None and self.tracking_source_id!=source:
+        old=self.marker_tracker.sources()[self.tracking_source_id]
+        if now>old.captured_at:self.marker_tracker.update(ObservationFrame(self.tracking_source_id,self.tracking_sequence,now,status='unavailable'))
+      self.marker_tracker.update(frame);self.tracking_source_id=source
+    except Exception as exc:
+      self.tracking_errors.append((self.tracking_sequence,str(exc)))
  def tick(self):
     try:
       if self.audio_error:
@@ -1831,6 +1851,7 @@ class App:
           # Detectem sobre la imatge ORIGINAL: els ArUco no admeten el reflex de mirall.
           gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
           corners,ids,_=self.aruco_detector.detectMarkers(gray)
+          self.observe_marker_frame(corners,ids,(frame.shape[1],frame.shape[0]),self.camera_frame_stamp)
           now=time.monotonic();seen=set()
           if ids is not None:
             for points,raw in zip(corners,ids.flatten()):
@@ -1854,6 +1875,7 @@ class App:
           self.expire_missing_cards(seen,now)
           # Mostrem la imatge original: els textos i els contorns es llegeixen correctament.
           if self.camera_window.state()=='normal':self.display(self.cam_label,cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),'cam_photo')
+      if not self.camera:self.observe_marker_frame()
       if self.calibration_editor is not None and self.calibration_window.winfo_exists() and self.calibration_window.state()=='normal':self.calibration_editor.refresh()
       self.sync_mute_controls()
       now_vis=time.monotonic();frame_changed=False
