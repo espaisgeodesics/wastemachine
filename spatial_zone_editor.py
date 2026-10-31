@@ -71,6 +71,7 @@ class ZoneEditor:
         self.notice = tk.StringVar()
         self.selection_info = tk.StringVar()
         self.calibration_info = tk.StringVar()
+        self.runtime_info = tk.StringVar(value='Última zona activada: cap')
         self._build()
         for var in (self.name, self.image_path, self.enabled, *self.cards):
             var.trace_add('write', self._changed)
@@ -78,6 +79,9 @@ class ZoneEditor:
 
     def _build(self):
         ttk.Label(self.window, textvariable=self.calibration_info, wraplength=1000).pack(fill='x', padx=10, pady=7)
+        runtime=ttk.Frame(self.window);runtime.pack(fill='x',padx=10)
+        ttk.Label(runtime,textvariable=self.runtime_info,wraplength=800).pack(side='left',fill='x',expand=True)
+        ttk.Button(runtime,text='TORNAR ALS VISUALS',command=lambda:self.on_release() if hasattr(self,'on_release') else None).pack(side='right')
         body = ttk.Frame(self.window)
         body.pack(fill='both', expand=True, padx=10, pady=3)
         left = ttk.Frame(body, width=170)
@@ -132,7 +136,7 @@ class ZoneEditor:
         for zone in config.zones:
             self.list.insert('', 'end', iid=zone.id, values=(zone.name + ('' if zone.enabled else ' · desactivada'),))
         calibration = 'Calibració matemàtica vàlida · pendent de prova física' if config.calibration else 'SENSE CALIBRACIÓ: el mapa no està alineat amb el terra real'
-        self.calibration_info.set(calibration + ' · Fase 2: edició; encara no activa imatges al projector.')
+        self.calibration_info.set(calibration + ' · Sense calibració no s’activen zones en directe.')
         self.loading = False
         if selected and any(zone.id == selected for zone in config.zones):
             self._load_zone(selected)

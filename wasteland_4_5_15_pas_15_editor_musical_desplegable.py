@@ -2,6 +2,7 @@ import os, sys, json, time, math, random, datetime, threading
 from pathlib import Path
 from collections import deque
 from spatial_zones import SpatialMap
+from spatial_projection import ZoneProjection
 from spatial_zone_editor import ZoneEditor, rebase_map_images
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
@@ -13,7 +14,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.7.0'
+APP_VERSION='4.7.1'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
@@ -99,7 +100,7 @@ class App:
     self.root=root; root.title('WASTELAND MACHINE · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
     self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
     self.midi_log=deque(maxlen=1000);self.midi_log_lock=threading.Lock();self.midi_log_revision=0;self.diagnostics_window=None;self.diagnostics_seen=-1
-    self.spatial_map=SpatialMap();self.zone_editor=None;self.zone_window=None
+    self.spatial_map=SpatialMap();self.zone_projection=ZoneProjection(self.spatial_map);self.spatial_warning=None;self.zone_editor=None;self.zone_window=None
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -569,12 +570,7 @@ class App:
       return self.harmony_map_preview(chromatic=c.get('visual')==12,card_index=i)
     if kind in ('Patró rítmic','Ritme de bateria'):
       return self.rhythm_map_preview(i)
-    if kind==ZONE_FUNCTION:
-      frame=np.full((H,W,3),(25,20,17),np.uint8)
-      cv2.putText(frame,'MAPA DE ZONES | FASE 2',(24,60),cv2.FONT_HERSHEY_SIMPLEX,.8,(245,228,205),1,cv2.LINE_AA)
-      cv2.putText(frame,'Obre ZONES ESPACIALS per configurar el mapa.',(24,130),cv2.FONT_HERSHEY_SIMPLEX,.6,(245,228,205),1,cv2.LINE_AA)
-      cv2.putText(frame,'Activacio i projeccio: fase 3.',(24,200),cv2.FONT_HERSHEY_SIMPLEX,.6,(245,228,205),1,cv2.LINE_AA)
-      return frame
+    if kind==ZONE_FUNCTION:return self.zone_map_preview()
     if kind==MUTE_FUNCTION:
       frame=np.full((H,W,3),(25,20,17),np.uint8)
       for text,y in [(f'MUTE | TARGETA {i+1:02d}',45),(f'CANAL {c["channel"]} | CC {c["cc"]}',110),(f'VISIBLE: {c.get("mute_audible",0)} | ABSENT: {c.get("mute_silent",127)}',175),('Control de presencia | No envia notes MIDI',240)]:
@@ -671,12 +667,87 @@ class App:
       self.zone_window.minsize(920,580)
       self.zone_editor=ZoneEditor(self.zone_window,self.spatial_map,lambda:self.cards,self.zone_project_path,self.apply_spatial_map,default_card)
     else:self.zone_editor.set_default_card(default_card)
-    self.show_panel('zones')
+    self.zone_editor.on_release=self.release_zone_scene
+    self.show_panel('zones');self.update_spatial_editor_runtime()
  def apply_spatial_map(self,config):
-    self.spatial_map=config
-    self.status.set('Mapa de zones actualitzat. Desa el projecte. Fase 2: encara no activa la projecció.')
+    self.spatial_map=config;self.reset_spatial_projection(keep_scene=True)
+    self.status.set('Mapa de zones actualitzat. Desa el projecte. Les activacions requereixen calibració vàlida.')
  def refresh_zone_editor(self):
     if self.zone_editor is not None:self.zone_editor.set_map(self.spatial_map)
+ def reset_spatial_projection(self,keep_scene=False):
+    self.zone_projection.configure(self.spatial_map,self.zone_project_path(),keep_scene=keep_scene)
+    self.spatial_warning=None;self.visual_dirty=True;self.preview_dirty=True
+    self.update_spatial_editor_runtime()
+ def update_spatial_editor_runtime(self):
+    if self.zone_editor is None:return
+    player=self.zone_projection
+    last=player.zone_name or 'cap'
+    output={'zone':'fotografia persistent','color':'color cromàtic','live':'visuals en directe'}[player.mode]
+    self.zone_editor.runtime_info.set(f'Última zona activada: {last} · Sortida: {output}'+(' · '+player.last_error if player.last_error else ''))
+ def release_zone_scene(self):
+    self.zone_projection.request_live();self.visual_dirty=True;self.preview_dirty=True;self.update_spatial_editor_runtime()
+ def process_spatial_frame(self,zones,colors,now):
+    player=self.zone_projection
+    before=(player.mode,player.image.token if player.image else None,player.scene.zone_id if player.scene else None,player.color_card)
+    if self.spatial_map.zones or colors or player.colors:
+      player.process_camera(zones,colors,now)
+    after=(player.mode,player.image.token if player.image else None,player.scene.zone_id if player.scene else None,player.color_card)
+    if before!=after:self.visual_dirty=True;self.preview_dirty=True
+    if player.last_error and player.last_error!=self.spatial_warning:
+      self.status.set(player.last_error);self.spatial_warning=player.last_error
+    self.update_spatial_editor_runtime()
+ def compose_output_frame(self,t):
+    player=self.zone_projection
+    image=player.image_frame((W,H))
+    if image is not None:return image
+    if player.mode=='color' and player.color_card in self.active:
+      self.color_by_position(None,card_index=player.color_card)
+      return self.projection_color_frame()
+    return self.compose_live_visuals(t)
+ def projector_frame(self):
+    player=self.zone_projection
+    width=max(1,self.proj_label.winfo_width());height=max(1,self.proj_label.winfo_height())
+    image=player.image_frame((width,height))
+    if image is not None:return image
+    if player.mode=='color' and player.color_card in self.active:return np.full((height,width,3),self.last_frame[0,0],np.uint8)
+    return self.last_frame
+ def zone_map_preview(self):
+    frame=np.full((H,W,3),(25,20,17),np.uint8);radius=int(H*.40);left=W/2-radius;top=H/2-radius;diameter=2*radius
+    grid=self.spatial_map.grid;colors=[(80,140,100),(145,100,160),(150,120,70),(65,150,190)]
+    yy,xx=np.ogrid[:H,:W];circle=(xx-W/2)**2+(yy-H/2)**2<=radius**2
+    for index,zone in enumerate(self.spatial_map.zones):
+      if not zone.enabled:continue
+      color=colors[index%len(colors)]
+      if self.zone_projection.scene and zone.id==self.zone_projection.scene.zone_id:color=(75,195,235)
+      for row,column in zone.cells:
+        x0=round(left+column/grid.columns*diameter);x1=round(left+(column+1)/grid.columns*diameter)
+        y0=round(top+row/grid.rows*diameter);y1=round(top+(row+1)/grid.rows*diameter)
+        region=frame[y0:y1,x0:x1];mask=circle[y0:y1,x0:x1];region[mask]=color
+    overlay=frame.copy()
+    for column in range(grid.columns+1):
+      x=round(left+column/grid.columns*diameter);cv2.line(overlay,(x,round(top)),(x,round(top+diameter)),(155,140,120),1)
+    for row in range(grid.rows+1):
+      y=round(top+row/grid.rows*diameter);cv2.line(overlay,(round(left),y),(round(left+diameter),y),(155,140,120),1)
+    frame[circle]=overlay[circle];cv2.circle(frame,(W//2,H//2),radius,(240,215,180),2)
+    calibration=self.spatial_map.calibration
+    if calibration is not None:
+      for i,(x,y,angle) in self.active.items():
+        if self.cards[i]['function']!=ZONE_FUNCTION:continue
+        point=calibration.project((x,y))
+        if point is None or grid.cell_at(point) is None:continue
+        trail=[]
+        for stamp,tx,ty in self.target_trails.get(i,()):
+          if time.monotonic()-stamp>2.5:continue
+          floor_point=calibration.project((tx,ty))
+          if floor_point is not None and grid.cell_at(floor_point) is not None:trail.append((round(left+floor_point[0]*diameter),round(top+floor_point[1]*diameter)))
+        if len(trail)>1:cv2.polylines(frame,[np.array(trail,np.int32)],False,(200,200,200),1,cv2.LINE_AA)
+        px=round(left+point[0]*diameter);py=round(top+point[1]*diameter)
+        cv2.circle(frame,(px,py),8,(255,255,255),2)
+        cv2.putText(frame,f'T{i+1:02d}',(px+10,max(45,py-10)),cv2.FONT_HERSHEY_SIMPLEX,.45,(255,255,255),1,cv2.LINE_AA)
+    title='ZONES ESPACIALS | CALIBRACIO VALIDA' if calibration else 'ZONES | SENSE CALIBRACIO: ACTIVACIO BLOQUEJADA'
+    cv2.putText(frame,title,(8,23),cv2.FONT_HERSHEY_SIMPLEX,.47,(245,225,195),1,cv2.LINE_AA)
+    cv2.putText(frame,'Guies nomes a la previsualitzacio',(12,H-12),cv2.FONT_HERSHEY_SIMPLEX,.5,(245,225,195),1,cv2.LINE_AA)
+    return frame
  def confirm_zone_discard(self):
     return self.zone_editor is None or self.zone_editor.confirm_discard()
  def open_mute_settings(self):
@@ -846,7 +917,7 @@ class App:
  def new_project(self):
     if not self.confirm_zone_discard():return
     self.spatial_map=SpatialMap()
-    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table();self.refresh_zone_editor(); self.status.set('Projecte nou')
+    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table();self.reset_spatial_projection();self.refresh_zone_editor(); self.status.set('Projecte nou')
  def update_bpm(self):
     try:
       with self.arp_lock:
@@ -875,7 +946,7 @@ class App:
       data={'version':4,'master_volume':self.master_volume.get(),'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual}
       data=spatial.into_project(data)
       with open(path,'w',encoding='utf-8') as f:json.dump(data,f,ensure_ascii=False,indent=2)
-      self.project=path;self.spatial_map=spatial;self.refresh_zone_editor()
+      self.project=path;self.spatial_map=spatial;self.reset_spatial_projection(keep_scene=True);self.refresh_zone_editor()
       self.status.set(f'Projecte desat: {Path(self.project).name}')
     except Exception as e:messagebox.showerror('Desar',str(e))
  def open_project(self):
@@ -886,7 +957,7 @@ class App:
       with open(path,encoding='utf-8') as f:d=json.load(f)
       spatial=SpatialMap.from_project(d)
       if len(d['cards'])!=16:raise ValueError('El projecte no conté 16 targetes')
-      self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path;self.spatial_map=spatial;self.refresh_zone_editor(); self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
+      self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path;self.spatial_map=spatial;self.reset_spatial_projection();self.refresh_zone_editor(); self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
     except Exception as e:messagebox.showerror('Obrir',str(e))
  def refresh_midi(self):
      # No amaguem els errors: aixi podem diagnosticar loopMIDI.
@@ -1360,6 +1431,7 @@ class App:
     rr=int(min(H*.425,W*.32))
     return (round(W/2+dx/length*rr),round(H/2+dy/length*rr))
  def live_preview_frame(self):
+    if self.zone_projection.mode!='color' and (self.zone_projection.mode=='zone' or any(self.cards[i]['function']==ZONE_FUNCTION for i in self.active)):return self.zone_map_preview()
     if not self.active:return self.last_frame.copy()
     musical=[i for i in self.active if self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial')]
     chromatic=any(self.cards[i]['function']!=ZONE_FUNCTION and self.cards[i].get('visual')==12 for i in self.active)
@@ -1407,7 +1479,9 @@ class App:
         if i not in self.arp_states:self.arp_states[i]={'pitches':[c['note']],'index':0,'last_step':None,'playing':None,'off_at':0}
     elif c['function']=='Arpegiador espacial':
       self.spatial_arpeggio(i,x,y)
-    elif c['function']=='Canviar visual' and not was:self.select_visual(c['visual'])
+    elif c['function']=='Canviar visual' and not was:
+      if c['visual']!=12:self.zone_projection.request_live()
+      self.select_visual(c['visual'])
     elif c['function']=='Tempo':
       self.bpm=int(60+v*120)
       if self.bpm_var.get()!=self.bpm:self.bpm_var.set(self.bpm)
@@ -1544,8 +1618,9 @@ class App:
     glow=cv2.GaussianBlur(np.maximum(rgb-95,0),(0,0),2)
     rgb=(rgb+glow*.55)*np.clip(1-r[...,None]*.18,.35,1)
     return cv2.resize(np.clip(rgb,0,255).astype(np.uint8),(W,H),interpolation=cv2.INTER_CUBIC)
- def color_by_position(self,frame):
+ def color_by_position(self,frame,card_index=None):
     chromatic_cards=[i for i in self.active if self.cards[i].get('visual')==12]
+    if card_index in chromatic_cards:chromatic_cards=[card_index]
     if chromatic_cards:
       x,y,_=self.active[chromatic_cards[0]]
       self.last_color_xy=(x,y)
@@ -1714,8 +1789,12 @@ class App:
       if self.audio_error:
         self.status.set(self.audio_error);self.audio_error=None
       self.musical_clock_tick()
+      zone_observations={};color_observations={}
       if self.sim_card is not None and self.sim_xy is not None and self.simulation.get():
         self.activate(self.sim_card,*self.sim_xy,self.sim_angle.get()/360)
+        card=self.cards[self.sim_card]
+        if card['function']==ZONE_FUNCTION:zone_observations[self.sim_card]=self.sim_xy
+        elif card['visual']==12 and card['function']!='Cap acció':color_observations[self.sim_card]=self.sim_xy
       if self.camera:
         ok,frame=self.camera.read()
         if not ok:
@@ -1734,6 +1813,8 @@ class App:
               seen.add(i);self.last_seen[i]=now;self.activate(i,cx,cy,angle)
               cv2.polylines(frame,[p.astype(np.int32)],True,(0,230,255),3)
               c=self.cards[i]
+              if c['function']==ZONE_FUNCTION:zone_observations[i]=(cx,cy)
+              elif c['visual']==12 and c['function']!='Cap acció':color_observations[i]=(cx,cy)
               v={'Rotació':angle,'Horitzontal':cx,'Vertical':cy}.get(c['axis'],angle)
               value=round(max(0,min(1,v))*127)
               label=f'T{i+1:02d} / ID {i}  {c["function"]}  {value}'
@@ -1748,9 +1829,10 @@ class App:
           if self.camera_window.state()=='normal':self.display(self.cam_label,cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),'cam_photo')
       self.sync_mute_controls()
       now_vis=time.monotonic();frame_changed=False
+      self.process_spatial_frame(zone_observations,color_observations,now_vis)
       if self.last_frame is None or self.visual_dirty or (not self.visual_paused and now_vis-self.last_visual_update>=self.visual_interval):
         t=now_vis-self.t0
-        self.last_frame=self.compose_live_visuals(t)
+        self.last_frame=self.compose_output_frame(t)
         self.visual_dirty=False
         self.last_visual_update=now_vis;frame_changed=True
       if self.visual_window.state()=='normal' and (self.preview_dirty or frame_changed):
@@ -1763,7 +1845,7 @@ class App:
         self.preview_dirty=False
       vis=self.last_frame
       if getattr(self,'projection',None) and self.projection.winfo_exists():
-        self.display(self.proj_label,cv2.cvtColor(self.last_frame,cv2.COLOR_BGR2RGB),'proj_photo')
+        self.display(self.proj_label,cv2.cvtColor(self.projector_frame(),cv2.COLOR_BGR2RGB),'proj_photo',padding=0)
       if self.recording:self.recording.write(vis)
       self.monitor_ticks+=1
       if self.monitor_ticks%4==0:
@@ -1773,10 +1855,10 @@ class App:
       traceback.print_exc()
       self.status.set('Avís: '+str(e))
     if not self._closing:self.root.after(35,self.tick)
- def display(self,label,rgb,attr):
+ def display(self,label,rgb,attr,padding=8):
     # Escalem sense modificar la mida del widget; els dos monitors queden separats.
-    available_w=max(1,label.winfo_width()-8)
-    available_h=max(1,label.winfo_height()-8)
+    available_w=max(1,label.winfo_width()-padding)
+    available_h=max(1,label.winfo_height()-padding)
     h,w=rgb.shape[:2]
     factor=min(available_w/w,available_h/h)
     size=(max(1,int(w*factor)),max(1,int(h*factor)))

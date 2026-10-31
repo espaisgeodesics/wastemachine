@@ -4,10 +4,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+import numpy as np
 from unittest.mock import Mock, patch
 from PIL import Image
 
-from spatial_zones import SpatialMap, Zone, check_image_asset
+from spatial_zones import SpatialMap, Zone, Calibration, check_image_asset
 from spatial_zone_editor import rebase_map_images
 from test_camera import app_module as m
 
@@ -111,6 +112,33 @@ class ZoneEditorTests(unittest.TestCase):
             self.assertFalse(self.app.spatial_map.zones)
             self.assertIn('SENSE CALIBRACIÓ',self.editor.calibration_info.get())
 
+    def test_calibrated_projection_latches_photo_and_preview_keeps_guides(self):
+        with TemporaryDirectory() as folder:
+            image=Path(folder)/'scene.png';Image.new('RGB',(100,50),'red').save(image)
+            self.app.spatial_map=SpatialMap(zones=(Zone('scene','Bosc',{(3,2)},{4},str(image)),),
+                calibration=Calibration(((.5,0),(1,.5),(.5,1),(0,.5))))
+            self.app.reset_spatial_projection()
+            self.app.cards[4]['function']=m.ZONE_FUNCTION
+            for now in (0,.08,.16):
+                self.app.activate(4,.3,.45,0)
+                self.app.process_spatial_frame({4:(.3,.45)}, {},now)
+            self.app.last_frame=self.app.compose_output_frame(1)
+            self.app.proj_label=Mock()
+            self.app.proj_label.winfo_width.return_value=400
+            self.app.proj_label.winfo_height.return_value=300
+            output=self.app.projector_frame()
+            self.assertEqual(output.shape,(300,400,3))
+            np.testing.assert_array_equal(output[150,200],[0,0,255])
+            np.testing.assert_array_equal(output[0,200],[0,0,0])
+            self.assertFalse(np.array_equal(self.app.live_preview_frame(),self.app.last_frame))
+            self.app.deactivate(4)
+            self.app.process_spatial_frame({}, {},.24);self.app.process_spatial_frame({}, {},.45)
+            np.testing.assert_array_equal(self.app.projector_frame(),output)
+            self.assertIn('Bosc',self.editor.runtime_info.get())
+            self.app.midi.send.assert_not_called()
+            self.app.release_zone_scene()
+            self.assertEqual(self.app.zone_projection.mode,'live')
+
     def test_pending_edits_are_not_silently_saved_or_discarded(self):
         with TemporaryDirectory() as folder:
             self.app.project=str(Path(folder)/'project.json')
@@ -133,7 +161,7 @@ class ZoneEditorTests(unittest.TestCase):
         self.assertFalse(self.app.compose_live_visuals(1).any())
         self.app.midi.send.assert_not_called()
         self.assertEqual(self.app.cards[4]['function'],m.ZONE_FUNCTION)
-        self.assertIn('Fase 2',self.editor.calibration_info.get())
+        self.assertIn('SENSE CALIBRACIÓ',self.editor.calibration_info.get())
 
 
 if __name__=='__main__':unittest.main()

@@ -1,8 +1,8 @@
-# Mapa de zones espacials — fases 1 i 2
+# Mapa de zones espacials — fases 1, 2 i 3
 
 ## Abast real d'aquesta entrega
 
-La fase 1 va afegir el motor independent `spatial_zones.py` i les seves proves. La fase 2, a **Wasteland 4.7.0**, afegeix `spatial_zone_editor.py`, integra la configuració a l'editor de targetes i incorpora el bloc espacial al desament/obertura de projectes. La resta de funcions existents es conserva. La projecció d'imatges de zones encara no s'ha connectat: correspon a la fase 3.
+La fase 1 va afegir el motor independent `spatial_zones.py` i les seves proves. La fase 2, a **Wasteland 4.7.0**, afegeix `spatial_zone_editor.py`, integra la configuració a l'editor de targetes i incorpora el bloc espacial al desament/obertura de projectes. La resta de funcions existents es conserva. La fase 3, a **Wasteland 4.7.1**, connecta el motor en directe amb la projecció persistent mitjançant `spatial_projection.py`.
 
 El motor produeix esdeveniments i sol·licituds d'escena. No obre una càmera, no envia MIDI, no carrega ni dibuixa fotografies i no executa vídeo. L'estat persistent d'una escena aquí és una referència d'imatge; la càrrega, validació real i presentació de la imatge són tasques de la fase de projecció.
 
@@ -54,7 +54,7 @@ No s'emet una entrada per cada fotograma. Una reentrada a la mateixa escena gene
 
 Les entrades de diferents fotogrames segueixen l'ordre de confirmació: l'última és la més recent. Si diverses targetes confirmen entrades amb imatge **al mateix fotograma**, guanya l'ID ArUco més baix, independentment de l'ordre de detecció. Es retornen els esdeveniments de totes les targetes per permetre mostrar-los a l'editor.
 
-La prioritat entre color cromàtic i escena de zona encara no s'implementa: arribarà amb la integració de projecció. Caldrà un àrbitre d'ordres visuals confirmades; un fotograma de color actualitzat contínuament no ha de desfer una ordre de zona només per executar-se després al bucle.
+La fase 3 arbitra les ordres de zones i color confirmades; vegeu les regles de prioritat al final d’aquest document.
 
 ## JSON i imatges
 
@@ -64,7 +64,7 @@ La prioritat entre color cromàtic i escena de zona encara no s'implementa: arri
 
 `image_reference(image_file, project_file)` proposa una ruta relativa si la imatge és dins de la carpeta del projecte; per a imatges externes conserva una ruta absoluta. `check_image_asset(reference, project_file)` distingeix `not_assigned`, `unresolved`, `unsupported`, `missing`, `unreadable` i `exists`, sense carregar imatges. `exists` només comprova l'existència del fitxer, no que el seu contingut es pugui decodificar. Les rutes es resolen amb les regles del sistema operatiu on s'executa el programa.
 
-En la fase de projecció, una imatge absent o corrupta haurà de generar un avís i conservar l'última escena realment carregada. La sol·licitud d'escena del motor no és una confirmació que la imatge s'hagi projectat.
+En la fase 3, una imatge absent o corrupta genera un avís i conserva l’última sortida vàlida. La sol·licitud d'escena del motor no és una confirmació que la imatge s'hagi projectat.
 
 ## Exemple executiu sense càmera
 
@@ -96,18 +96,18 @@ python -m unittest discover -s tests -p test_spatial_zones.py -v
 ## Fases pendents
 
 2. **Completada a la 4.7.0:** editor gràfic i integració JSON. Vegeu les instruccions següents.
-3. Càrrega d'imatges amb memòria cau, proporcions preservades, gestió d'errors i prioritat amb el color; previsualització amb guies i projecció neta.
+3. **Completada a la 4.7.1:** càrrega d’imatges amb memòria cau, proporcions preservades, errors i prioritat amb el color; previsualització amb guies i projecció neta.
 4. Captura dels punts de calibració i proves amb la càmera i el terra físic.
 
 No s'ha afegit vídeo, OSC, múltiples projectors ni cap altra ampliació de la fase 5.
 
-## Resultat de la validació d'aquesta entrega
+## Resultat de la validació de la fase 1
 
 Han passat les 23 proves del motor espacial i les 41 proves existents del projecte: **64 executades, 64 correctes, cap omesa**. Les proves d'interfície antigues s'han executat amb Xvfb. No s'ha modificat el fitxer principal ni les dependències. Aquest resultat no valida una instal·lació física de la cúpula, un editor de zones encara inexistent ni fotografies en un projector real.
 
 ## Fase 2 — ús de l'editor (4.7.0)
 
-Fitxers d'execució necessaris a la mateixa carpeta: el Python principal, `spatial_zones.py` i `spatial_zone_editor.py`. No s'han afegit dependències. L'accés d'arrencada existent continua servint.
+Fitxers d’execució necessaris a la mateixa carpeta: el Python principal, `spatial_zones.py`, `spatial_zone_editor.py` i, des de la 4.7.1, `spatial_projection.py`. No s'han afegit dependències. L'accés d'arrencada existent continua servint.
 
 1. Prem **ZONES ESPACIALS** a dalt, o selecciona **Activar zona espacial** com a funció de la targeta. En aquest segon cas, la targeta actual queda proposada per a una zona nova; no s'afegeix automàticament a una zona existent.
 2. Prem NOVA ZONA. Fes clic o arrossega sobre el cercle per seleccionar caselles; tornar-hi a clicar les treu. Les caselles completament fora del cercle no es poden seleccionar.
@@ -119,6 +119,27 @@ Els canvis de formulari no aplicats no es desen silenciosament: l'aplicació dem
 
 L'avís **SENSE CALIBRACIÓ** continua visible quan no hi ha dades vàlides. Si es carrega un projecte amb una calibració matemàtica vàlida, encara s'indica que queda pendent validar-la físicament. La captura de punts de càmera encara no té interfície en aquesta fase.
 
-La funció nova no envia notes ni controls MIDI i no substitueix la projecció actual. Només prepara l'assignació de la targeta i el mapa. El motor en directe, l'indicador d'última escena activada i la càrrega persistent de fotografies arribaran amb la fase 3.
+La funció de zones no envia notes ni controls MIDI. Des de la fase 3, una entrada autoritzada i confirmada amb calibració vàlida activa la fotografia assignada i actualitza l’indicador de l’editor.
 
 Validació de la fase 2: **72 proves executades i correctes**, incloses les 8 noves de l'editor i de rutes d'imatges. S'han comprovat creació/modificació/eliminació, agrupació, bloqueig de solapaments, miniatures absents/corruptes, projectes antics, rutes relatives, Desar com i conservació de les funcions musicals. La interfície s'ha provat amb pantalla virtual; queden pendents les proves a Windows i la instal·lació real de la cúpula.
+
+
+## Fase 3 — projecció persistent (4.7.1)
+
+Amb un projecte calibrat, assigna **Activar zona espacial** a la targeta i autoritza-la a les zones que hagi d’activar. Una entrada confirmada carrega la fotografia assignada. Quan la targeta surt o desapareix, la fotografia continua fins a una altra ordre visual. **TORNAR ALS VISUALS**, a l’editor de zones, permet deixar aquesta fotografia i recuperar els visuals en directe.
+
+La previsualització mostra el cercle, la quadrícula, les zones, la posició i el recorregut recent de les targetes espacials calibrades. La projecció mostra només la fotografia, sense guies. La imatge conserva les proporcions amb franges negres quan cal, també en projectors amb una relació d’aspecte diferent. Les transparències es componen sobre negre i es respecta l’orientació EXIF. La gravació rep el fotograma net a la mida habitual del programa.
+
+Prioritat:
+
+- L’última entrada de zona confirmada substitueix la sortida anterior. Si coincideixen entrades de zones, guanya l’ID ArUco més baix.
+- Una targeta cromàtica confirma una ordre en aparèixer o després de moure’s almenys 0,025 unitats normalitzades, amb tres deteccions i 0,15 segons. El marge de retorn és 0,0125; una interrupció superior a 0,25 segons reinicia la confirmació. Una targeta quieta no desplaça repetidament una fotografia nova.
+- Si color i zona es confirmen al mateix fotograma, guanya la zona. Entre diversos colors simultanis guanya l’ID més baix.
+- Quan desapareix el color que controla la sortida es recuperen els visuals en directe; no es reactiva automàticament una fotografia antiga. Una reentrada confirmada a una zona pot tornar a activar-la.
+- Una targeta amb **Canviar visual**, amb un visual diferent del cromàtic, també recupera els visuals en directe quan apareix.
+
+Una fotografia absent o malmesa mostra un avís i conserva la sortida anterior. Les imatges vàlides es descodifiquen només quan cal activar-les i es reutilitzen; les memòries cau estan limitades a quatre originals i quatre fotogrames redimensionats. Els originals es redueixen a un màxim de 4096×4096. Modificar el mapa reinicia la detecció i la memòria cau, conservant la fotografia actual; obrir un altre projecte esborra l’escena anterior.
+
+**La captura gràfica de calibració continua pendent de la fase 4.** Sense calibració vàlida les zones no s’activen, i no s’assumeix que càmera i terra tinguin les mateixes coordenades. Les proves automàtiques utilitzen dades sintètiques o una calibració coneguda; no substitueixen la prova a Windows amb càmera i projector físics.
+
+Validació de la fase 3: **86 proves correctes**, amb proves del motor, errors d’imatge, prioritat cromàtica, memòria cau, proporcions, transparència i integració amb la interfície en pantalla virtual. Es mantenen les proves existents de MIDI, àudio i funcions musicals.
