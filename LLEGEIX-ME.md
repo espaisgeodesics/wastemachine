@@ -150,3 +150,9 @@ Aquesta fase configura el mapa però encara no activa fotografies a la projecci�
 Obre **Participants → Registre i seguiment…**, escriu el nom o àlies, tria el color i assigna una font (`camera:0`, etc.) i un ID ArUco 0–15. Prem **APLICAR PARTICIPANT** i desa el projecte. **NOU** permet afegir més persones; seleccionar una fila permet editar-la. El nom del participant és independent del nom i la funció musical de la targeta. ID 0 correspon a targeta 01.
 
 La finestra mostra presència, última posició de càmera i incidències de font. Les pèrdues no eliminen participants. **RETIRAR / RECUPERAR** són ordres de sessió i no aturen les funcions MIDI/visuals de la targeta. **ELIMINAR** suprimeix la vinculació, amb confirmació. Colors i seguiment són només de l’operador; la projecció continua neta. Els projectes antics obren amb el registre buit. Detalls, compatibilitat i proves a [ATMO_ESFERA_FX_FASE_1B.md](ATMO_ESFERA_FX_FASE_1B.md).
+
+## Simulador de cinc participants — ATMO fase 2 (4.7.7)
+
+Obre **Participants → Simulador de cinc participants…**. A **Mapa i moviment**, clica i arrossega cada participant; configura’n el gir o oculta/mostra el marcador. La casella **Font disponible** simula una avaria i la recuperació de la font. A **Participants i esdeveniments** pots canviar noms, colors i IDs, retirar/recuperar persones i veure els successos. **REINICIAR PROVA** torna als cinc participants inicials, amb confirmació.
+
+És una sessió virtual independent, sense càmera ni MIDI, que no modifica el projecte ni la projecció. Les dades virtuals es conserven en reobrir la finestra mentre el programa segueix obert; no es desen al projecte. La quadrícula no és una calibració de terra ni executa encara accions de zona. Instruccions i límits a [ATMO_ESFERA_FX_FASE_2.md](ATMO_ESFERA_FX_FASE_2.md).

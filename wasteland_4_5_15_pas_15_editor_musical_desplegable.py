@@ -7,6 +7,8 @@ from aruco_observations import observation_frame
 from participants import ParticipantRegistry
 from domain_events import CommonEventLog
 from participant_editor import ParticipantEditor
+from participant_simulator import SimulatorSession
+from simulator_window import SimulatorWindow
 from spatial_calibration import CalibrationEditor
 from spatial_zones import SpatialMap
 from spatial_projection import ZoneProjection
@@ -21,7 +23,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.7.6'
+APP_VERSION='4.7.7'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
@@ -109,6 +111,7 @@ class App:
     self.midi_log=deque(maxlen=1000);self.midi_log_lock=threading.Lock();self.midi_log_revision=0;self.diagnostics_window=None;self.diagnostics_seen=-1
     self.marker_tracker=MarkerTracker();self.tracking_sequence=0;self.tracking_source_id=None;self.camera_source_id=None;self.tracking_errors=deque(maxlen=50);self.tracking_enabled=True
     self.participants=ParticipantRegistry();self.common_events=CommonEventLog();self.participant_window=None;self.participant_editor=None
+    self.simulator_session=None;self.simulator_window=None;self.simulator_view=None
     self.spatial_map=SpatialMap();self.zone_projection=ZoneProjection(self.spatial_map);self.spatial_warning=None;self.zone_editor=None;self.zone_window=None
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
@@ -157,6 +160,7 @@ class App:
     menu.add_cascade(label='Projecte',menu=fm)
     participants_menu=tk.Menu(menu,tearoff=False)
     participants_menu.add_command(label='Registre i seguiment…',command=self.open_participants)
+    participants_menu.add_command(label='Simulador de cinc participants…',command=self.open_simulator)
     menu.add_cascade(label='Participants',menu=participants_menu)
     help_menu=tk.Menu(menu,tearoff=False);help_menu.add_command(label='Versió i fitxer que s’està executant',command=self.show_runtime_info)
     menu.add_cascade(label='Ajuda',menu=help_menu);self.root.config(menu=menu)
@@ -948,6 +952,17 @@ class App:
       return True
     except Exception as e:
       messagebox.showerror('Configuració',str(e));return False
+ def open_simulator(self):
+    if self.simulator_window is not None and self.simulator_window.winfo_exists():
+      self.simulator_window.deiconify();self.simulator_window.lift();return
+    if self.simulator_session is None:self.simulator_session=SimulatorSession()
+    window=self.simulator_window=tk.Toplevel(self.root)
+    window.title('WASTELAND · Simulador · Fase 2');window.geometry('960x720');window.minsize(900,660)
+    self.simulator_view=SimulatorWindow(window,self.simulator_session)
+    def close():
+      if self.simulator_view.editor.discard():
+        window.destroy();self.simulator_window=None;self.simulator_view=None
+    window.protocol('WM_DELETE_WINDOW',close)
  def open_participants(self):
     if self.participant_window is not None and self.participant_window.winfo_exists():
       self.participant_window.deiconify();self.participant_window.lift();return

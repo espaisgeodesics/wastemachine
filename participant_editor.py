@@ -21,7 +21,7 @@ EVENT_LABELS = {
 
 
 class ParticipantEditor(ttk.Frame):
-    def __init__(self, parent, registry, markers, sources, events, retire, default_source):
+    def __init__(self, parent, registry, markers, sources, events, retire, default_source, session_only=False):
         super().__init__(parent, padding=10)
         self.registry = registry
         self.markers = markers
@@ -29,6 +29,7 @@ class ParticipantEditor(ttk.Frame):
         self.events = events
         self.retire = retire
         self.default_source = default_source
+        self.session_only = session_only
         self.selected_id = None
         self.dirty = False
         self._loading = False
@@ -40,8 +41,11 @@ class ParticipantEditor(ttk.Frame):
         self.notice = tk.StringVar()
         self.source_status = tk.StringVar()
         self.pack(fill='both', expand=True)
-        ttk.Label(self, text='PARTICIPANTS · registre de sessió', font=('Segoe UI', 12, 'bold')).pack(anchor='w')
-        ttk.Label(self, text='El nom del participant és independent del nom i la funció musical de la targeta.').pack(anchor='w')
+        title = 'PARTICIPANTS VIRTUALS · sessió de proves' if session_only else 'PARTICIPANTS · registre de sessió'
+        description = ('Màxim cinc persones virtuals. Aquestes vinculacions no es desen al projecte.' if session_only else
+                       'El nom del participant és independent del nom i la funció musical de la targeta.')
+        ttk.Label(self, text=title, font=('Segoe UI', 12, 'bold')).pack(anchor='w')
+        ttk.Label(self, text=description).pack(anchor='w')
         columns = ('name', 'color', 'source', 'marker', 'presence', 'position')
         self.table = ttk.Treeview(self, columns=columns, show='headings', height=7, selectmode='browse')
         for key, label, width in zip(columns, ('Nom', 'Color', 'Font', 'ID ArUco', 'Presència', 'Posició de càmera'),
@@ -53,12 +57,14 @@ class ParticipantEditor(ttk.Frame):
         form = ttk.Frame(self)
         form.pack(fill='x')
         for column, (label, variable, width) in enumerate((('Nom / àlies', self.name, 24), ('Color #RRGGBB', self.color, 12),
-                                                           ('Font (càmera)', self.source, 16), ('ID ArUco (0–15)', self.marker, 9))):
+                                                           ('Font virtual' if session_only else 'Font (càmera)', self.source, 16), ('ID ArUco (0–15)', self.marker, 9))):
             ttk.Label(form, text=label).grid(row=0, column=column, sticky='w', padx=3)
             if variable is self.marker:
                 field = ttk.Combobox(form, textvariable=variable, values=list(range(16)), state='readonly', width=width)
             else:
                 field = ttk.Entry(form, textvariable=variable, width=width)
+                if session_only and variable is self.source:
+                    field.state(['readonly'])
             field.grid(row=1, column=column, sticky='ew', padx=3)
             variable.trace_add('write', self.changed)
         self.swatch = tk.Label(form, width=3, bg=self.color.get())
@@ -72,7 +78,9 @@ class ParticipantEditor(ttk.Frame):
             ttk.Button(buttons, text=label, command=command).pack(side='left', padx=2)
         ttk.Label(self, textvariable=self.notice, wraplength=800).pack(anchor='w')
         ttk.Label(self, textvariable=self.source_status, wraplength=800).pack(anchor='w', pady=4)
-        ttk.Label(self, text='Retirar és una ordre de sessió: no atura la funció MIDI/visual de la targeta. Desa el projecte per conservar noms, colors i assignacions.',
+        persistence_note = ('Retirar és una ordre de sessió. Les vinculacions virtuals es conserven només mentre el programa està obert.' if session_only else
+                            'Retirar és una ordre de sessió: no atura la funció MIDI/visual de la targeta. Desa el projecte per conservar noms, colors i assignacions.')
+        ttk.Label(self, text=persistence_note,
                   wraplength=800).pack(anchor='w')
         ttk.Label(self, text='Esdeveniments recents (diagnòstic passiu)').pack(anchor='w', pady=(8, 2))
         self.event_table = ttk.Treeview(self, columns=('sequence', 'event', 'source', 'marker', 'participant'), show='headings', height=5)
@@ -158,7 +166,8 @@ class ParticipantEditor(ttk.Frame):
         self.selected_id = binding.participant_id
         self.dirty = False
         self.swatch.config(bg=binding.color)
-        self.notice.set('Participant aplicat. Desa el projecte per conservar-lo.')
+        self.notice.set('Participant virtual aplicat a la sessió de proves.' if self.session_only else
+                        'Participant aplicat. Desa el projecte per conservar-lo.')
         self.refresh_rows()
         self.table.selection_set(binding.participant_id)
         return True
@@ -176,7 +185,9 @@ class ParticipantEditor(ttk.Frame):
     def remove(self):
         if self.selected_id is None:
             return
-        if messagebox.askyesno('Participants', 'Eliminar aquesta vinculació del registre? La targeta continuarà funcionant.', parent=self):
+        prompt = ('Eliminar aquest participant virtual?' if self.session_only else
+                  'Eliminar aquesta vinculació del registre? La targeta continuarà funcionant.')
+        if messagebox.askyesno('Participants', prompt, parent=self):
             self.registry().remove(self.selected_id)
             self.reset()
             self.refresh_rows()
