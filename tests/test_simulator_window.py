@@ -1,6 +1,8 @@
 import json
 import os
 import time
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -171,6 +173,59 @@ class SimulatorWindowTests(unittest.TestCase):
         self.session.advance(now+1)
         self.view.editor.refresh_rows()
         self.assertEqual(self.view.editor.table.item('virtual-1','values')[6],'Bosc (antiga)')
+
+    def test_kaoss_presets_apply_only_to_simulator_and_keep_real_midi_visuals(self):
+        editor=self.view.kaoss_editor
+        self.app.midi=Mock()
+        cards=json.loads(json.dumps(self.app.cards))
+        before=self.app.compose_output_frame(1).copy()
+        editor.preset_name.set('ÒRBITA');editor.load_preset()
+        self.assertEqual(self.session.kaoss.configs,{})
+        self.assertTrue(editor.apply())
+        self.session.advance(time.monotonic())
+        self.assertTrue(any(c.kind=='cc' for c in self.session.midi_commands))
+        self.assertFalse(any(c.kind=='note_on' for c in self.session.midi_commands))
+        self.app.midi.send.assert_not_called()
+        self.assertEqual(self.app.cards,cards)
+        m.np.testing.assert_array_equal(self.app.compose_output_frame(1),before)
+
+    def test_kaoss_editor_invalid_config_preserves_running_note_and_silence_releases(self):
+        editor=self.view.kaoss_editor
+        self.assertTrue(editor.apply());self.session.advance(time.monotonic())
+        configs=dict(self.session.kaoss.configs)
+        editor.variables['channel'].set('invalid')
+        with patch('kaoss_editor.messagebox.showerror') as error:
+            self.assertFalse(editor.apply())
+        error.assert_called_once()
+        self.assertEqual(self.session.kaoss.configs,configs)
+        self.assertEqual(len(self.session.kaoss.voices),1)
+        editor.silence()
+        self.assertEqual(self.session.kaoss.configs,{})
+        self.assertEqual(self.session.midi_commands[-1].kind,'note_off')
+
+    def test_kaoss_editor_saves_applied_settings_and_loads_atomically(self):
+        editor=self.view.kaoss_editor
+        editor.variables['rotation_enabled'].set(False)
+        self.assertTrue(editor.apply())
+        configs=dict(self.session.kaoss.configs)
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'test.kaoss.json'
+            with patch('kaoss_editor.filedialog.asksaveasfilename',return_value=str(path)):editor.save()
+            self.assertFalse(json.loads(path.read_text())['kaoss_xy']['0']['rotation_enabled'])
+            editor.silence()
+            with patch('kaoss_editor.filedialog.askopenfilename',return_value=str(path)):editor.open()
+            self.assertEqual(self.session.kaoss.configs,configs)
+            path.write_text('{"schema_version": 9}')
+            with patch('kaoss_editor.filedialog.askopenfilename',return_value=str(path)),patch('kaoss_editor.messagebox.showerror') as error:
+                editor.open()
+            error.assert_called_once();self.assertEqual(self.session.kaoss.configs,configs)
+
+    def test_kaoss_close_releases_notes_and_cancels_timer(self):
+        self.assertTrue(self.view.kaoss_editor.apply());self.session.advance(time.monotonic())
+        self.assertEqual(len(self.session.kaoss.voices),1)
+        self.app.simulator_window.destroy();self.app.simulator_window=None;self.app.simulator_view=None
+        self.assertEqual(self.session.kaoss.voices,{})
+        self.assertEqual(self.session.midi_commands[-1].kind,'note_off')
 
 
 if __name__ == '__main__':

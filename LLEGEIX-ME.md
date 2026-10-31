@@ -1,8 +1,8 @@
 # Wasteland Machine
 
-**Versió actual: 4.7.5.** Extreu tot el paquet: al costat del principal calen `spatial_zones.py`, `spatial_zone_editor.py`, `spatial_projection.py`, `spatial_calibration.py`, `marker_tracking.py` i `aruco_observations.py`. No calen dependències noves.
+**Versió actual: 4.8.1.** Mantén junts tots els fitxers del repositori; el principal importa els mòduls de seguiment, participants, zones, regles, àudio i simulació. Les dependències base continuen a `requirements.txt`; l’àudio local és un complement opcional.
 
-La [fase 1A d’ATMO ESFERA FX](ATMO_ESFERA_FX_FASE_1A.md) afegeix seguiment passiu de marcadors; les funcions musicals i visuals continuen pel camí actual. El simulador visible de cinc participants encara no està implementat. Les instruccions actuals de zones, calibració i durades són a [MAPA_ZONES.md](MAPA_ZONES.md).
+ATMO ESFERA FX ja inclou participants amb nom/color/marcador, simulador de cinc persones, zones comunes i regles. La [fase 5A](ATMO_ESFERA_FX_FASE_5.md) aporta BOSC VIU i àudio local de prova; la [fase 6A](ATMO_ESFERA_FX_FASE_6.md) afegeix Kaoss XY al simulador. Les funcions MIDI i visuals existents es conserven. La validació física a Windows continua pendent. Les instruccions de zones i calibració són a [MAPA_ZONES.md](MAPA_ZONES.md).
 
 ## Obrir-lo a Windows
 
@@ -39,7 +39,7 @@ Proves: `python -m unittest discover -s tests -v`.
 
 ## Simulació, silenci i patrons
 
-- Els controls de simulació amb ratolí i gir ja no apareixen a la previsualització. Es conserven mètodes interns de prova; el simulador de diversos participants arribarà en una fase pròpia.
+- Els controls de simulació amb ratolí i gir ja no apareixen a la previsualització. Es conserven mètodes interns de prova; el simulador de cinc participants s’obre des del menú Participants.
 - **SILENCI ABSOLUT** atura les notes, allibera el pedal de sustain i envia All Sound Off i All Notes Off als 16 canals de la sortida MIDI connectada. També bloqueja noves activacions fins a prémer **REPRENDRE MIDI**. No silencia pistes d'àudio o instruments que no rebin aquesta sortida MIDI.
 - En seleccionar **Arpegiador espacial**, el menú s’obre i pots triar Ascendent, Descendent, Pujada i baixada o Aleatori. Es conserven la divisió rítmica, durada, escala i intensitat.
 - La funció **Patró rítmic** ofereix 16 passos repetits. Activa els cops a la configuració musical; la nota i el canal es trien a l'editor de la targeta. La divisió 1/4 temps equival a semicorxeres: 16 passos formen un compàs de 4/4. El patró segueix el rellotge intern i comença a la fase actual de la graella quan detecta la targeta; s'atura en retirar-la. No hi ha sincronització externa amb Cakewalk en aquesta versió.
@@ -178,3 +178,9 @@ El complement real és opcional: **INSTAL_LAR_AUDIO_LOCAL.bat**, després **OBRI
 **ATURAR ÀUDIO LOCAL** només atura el reproductor local. El silenci absolut també el bloqueja; tancar el panell no atura la reproducció. El simulador continua silenciós i mostra les veus a Sortida de prova. No s’activa el dispositiu automàticament ni es desa l’activació al projecte.
 
 Validat al núvol amb SDL `dummy`; **Windows, altaveus i latència acústica encara no estan validats**. Abans d’utilitzar-lo en una instal·lació real, cal completar la prova documentada. Detalls, límits, format de regles 2 i evidència a [ATMO_ESFERA_FX_FASE_5.md](ATMO_ESFERA_FX_FASE_5.md). Les dependències bàsiques MIDI/visuals no han canviat.
+
+## Kaoss XY de prova — ATMO fase 6A (4.8.1)
+
+Al simulador, obre **Kaoss XY de prova**, tria un ID i carrega un dels quatre presets: ATMOSFERA, PULSACIÓ, TRANSFORMACIÓ o ÒRBITA. Ajusta escala, rang de notes, canal, CC, suavització, zona morta i rotació; prem **APLICAR A LA PROVA**. Mou/gira el participant a **Mapa i moviment** i consulta el MIDI simulat a **Sortida de prova**.
+
+**DESAR KAOSS…** conserva les assignacions aplicades en un fitxer `.kaoss.json` independent. **SILENCIAR PROVA** allibera les notes Kaoss i desactiva les assignacions. Encara no hi ha activació des de la càmera ni sortida Kaoss al port MIDI real. Detalls i feina pendent a [ATMO_ESFERA_FX_FASE_6.md](ATMO_ESFERA_FX_FASE_6.md).

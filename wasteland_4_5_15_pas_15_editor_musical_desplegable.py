@@ -31,7 +31,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.8.0'
+APP_VERSION='4.8.1'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)

@@ -5,6 +5,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from participant_editor import ParticipantEditor
+from kaoss_editor import KaossEditor
+from kaoss_xy import validate_assignments
 from participant_simulator import SOURCE_ID, SimulatorSession
 from experience_rules import RulesConfig
 from rule_editor import RuleEditor
@@ -54,6 +56,9 @@ class SimulatorWindow(ttk.Frame):
         registry_tab = ttk.Frame(notebook)
         notebook.add(map_tab, text='Mapa i moviment')
         notebook.add(registry_tab, text='Participants i esdeveniments')
+        kaoss_tab = ttk.Frame(notebook);notebook.add(kaoss_tab, text='Kaoss XY de prova')
+        self.kaoss_editor = KaossEditor(kaoss_tab, session)
+        notebook.bind('<<NotebookTabChanged>>', lambda event:self.kaoss_editor.refresh_markers())
         self.output_tab=ttk.Frame(notebook);notebook.add(self.output_tab,text='Sortida de prova')
         self.output_label=tk.Label(self.output_tab,bg='black');self.output_label.pack(fill='both',expand=True)
         self.output_status=tk.StringVar();ttk.Label(self.output_tab,textvariable=self.output_status).pack(anchor='w')
@@ -121,6 +126,9 @@ class SimulatorWindow(ttk.Frame):
                     messagebox.showerror('Regles de prova','No hi ha una persona virtual amb el marcador de la regla.',parent=self);return
                 participant=virtual.participant_id
             mapped.append(replace(rule,source_id=source,participant_id=participant))
+        try:validate_assignments(self.session.kaoss.configs, self.session.midi_channels(RulesConfig(tuple(mapped))))
+        except ValueError as exc:
+            messagebox.showerror('Regles de prova', str(exc), parent=self);return
         self.session.configure_spatial(self.spatial_config())
         self.session.configure_rules(RulesConfig(tuple(mapped)),self.project_file())
         if self.rules_editor is not None:self.rules_editor.reload()
@@ -295,6 +303,7 @@ class SimulatorWindow(ttk.Frame):
         if event.widget is self:
             self.closed = True
             self.session.rule_outputs.stop_midi(self.session.send_rule_midi)
+            self.session.kaoss.stop(self.session.send_rule_midi)
             self.session.audio.stop_all()
             if self.timer is not None:
                 self.after_cancel(self.timer)

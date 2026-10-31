@@ -14,6 +14,8 @@ La [fase 4, versió 4.7.9](ATMO_ESFERA_FX_FASE_4.md), incorpora regles declarati
 
 La [fase 5A, prototip 4.8.0](ATMO_ESFERA_FX_FASE_5.md), afegeix àudio local opcional i BOSC VIU de prova, validats a Linux amb SDL `dummy`. La validació Windows/dispositiu físic exigida per la fase 5 continua pendent; el backend no es declara definitiu ni obligatori.
 
+La [fase 6A, versió 4.8.1](ATMO_ESFERA_FX_FASE_6.md), incorpora el motor Kaoss XY, quatre presets editables i configuració desable dins del simulador silenciós. La connexió Kaoss a la càmera i al MIDI real queda per a la fase 6B; no es declara la fase 6 completa.
+
 Document de requisits: [document mestre](ATMO_ESFERA_FX_DOCUMENT_MESTRE.md), especialment l’apartat 25. Aquesta revisió lliura els punts A–G que demana, sense reescriure l’aplicació ni canviar-ne la marca encara.
 
 La base inspeccionada és **Wasteland Machine 4.7.4**, commit `bde3ccac6cf25d14e3078b192eb41d26c1cb0ede`, a la branca `codex/wasteland-camera-windows-launcher`. El nom del fitxer principal conserva «4.5.15 pas 15», però `APP_VERSION` és 4.7.4. No s’ha de partir de la còpia pas 14 ni assumir que `main` contingui les últimes entregues.
