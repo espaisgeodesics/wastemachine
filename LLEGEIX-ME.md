@@ -162,3 +162,9 @@ Obre **Participants → Simulador de cinc participants…**. A **Mapa i moviment
 El registre de participants mostra ara la **Zona** confirmada i els esdeveniments d’entrada/sortida de tots els marcadors autoritzats, també si tenen una funció musical. Això no canvia què sona o què es projecta: les fotografies continuen responent a la funció Activar zona espacial, amb les mateixes durades.
 
 Al simulador, **CARREGAR ZONES DEL PROJECTE** copia el mapa a una superfície virtual amb calibració sintètica. Mou els cinc participants i consulta les entrades, sortides i motius a la segona pestanya. No es carreguen fotografies ni es modifica la calibració real. **REINICIAR PROVA** conserva aquesta còpia del mapa. Detalls i compatibilitat a [ATMO_ESFERA_FX_FASE_3.md](ATMO_ESFERA_FX_FASE_3.md).
+
+## Regles i sortides — ATMO fase 4 (4.7.9)
+
+Obre **Regles → Regles i sortides…**. Configura un activador, els filtres opcionals de participant/zona/ID, la prioritat i una o més accions. Afegeix cada acció a la llista i prem **APLICAR REGLA**. Color i imatge persisteixen amb durada 0; les notes tenen durada de 0,05 a 60 segons. Els canals MIDI de regles han de ser diferents dels de les targetes i del mesclador. **EXECUTAR** envia les accions reals; **ALLIBERAR SORTIDA** retorna la propietat visual al camí existent. Aplicar regles reinicia les seves sortides anteriors. Desa el projecte per conservar-les.
+
+Per provar sense dispositius, obre el simulador i prem **CARREGAR ZONES I REGLES DEL PROJECTE**. **REGLES DE PROVA...** edita la còpia virtual; **Sortida de prova** mostra la imatge/color i els missatges MIDI simulats sense tocar la projecció o el port real. Els projectes antics obren sense regles i conserven el seu funcionament. Instruccions, prioritats, grups visuals i límits a [ATMO_ESFERA_FX_FASE_4.md](ATMO_ESFERA_FX_FASE_4.md).

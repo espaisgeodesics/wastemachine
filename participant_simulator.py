@@ -12,6 +12,9 @@ from marker_tracking import MarkerObservation, MarkerTracker, ObservationFrame
 from participants import ParticipantBinding, ParticipantRegistry
 from common_spatial import CommonSpatialObserver
 from spatial_zones import Calibration, SpatialMap
+from collections import deque
+from experience_rules import RulesConfig, RuleEngine
+from rule_outputs import RuleOutputs
 
 
 SOURCE_ID = 'simulator:0'
@@ -46,12 +49,33 @@ class SimulatorSession:
         self.sequence = 0
         self._poses = {}
         self._last_time = None
+        self.rule_engine = RuleEngine()
+        self.rule_outputs = RuleOutputs()
+        self.midi_commands = deque(maxlen=200)
+        self.rule_project = None
 
     def reset(self):
         """Start a new virtual session, preserving no old detections or events."""
         config = self.spatial.config
+        rules, project = self.rule_engine.config, self.rule_project
         self.__init__()
         self.configure_spatial(config)
+        self.configure_rules(rules, project)
+
+    def send_rule_midi(self, command):
+        self.midi_commands.append(command)
+        return True
+
+    def configure_rules(self, config, project_file=None):
+        if not isinstance(config, RulesConfig):
+            raise ValueError('Cal una configuració de regles vàlida')
+        self.rule_outputs.stop_midi(self.send_rule_midi)
+        self.rule_engine = RuleEngine(config)
+        self.rule_outputs = RuleOutputs()
+        self.rule_project = project_file
+
+    def manual_rule(self, rule_id, now):
+        self.rule_outputs.apply(self.rule_engine.manual(rule_id, now), now, self.send_rule_midi, self.rule_project)
 
     def configure_spatial(self, config):
         if not isinstance(config, SpatialMap):
@@ -97,6 +121,9 @@ class SimulatorSession:
         tracked = self.tracker.update(frame)
         batch = self.events.consume(frame, tracked, self.registry)
         batch += self.events.record_zones(frame, self.spatial.update(frame), self.registry, self.spatial.zone_names())
+        requests = self.rule_engine.consume(batch, self.registry)
+        self.rule_outputs.apply(requests, now, self.send_rule_midi, self.rule_project)
+        self.rule_outputs.tick(now, self.send_rule_midi)
         self.sequence = frame.sequence
         self._last_time = now
         return frame, batch

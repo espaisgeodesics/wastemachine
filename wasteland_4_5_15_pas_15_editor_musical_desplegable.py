@@ -1,4 +1,5 @@
 import os, sys, json, time, math, random, datetime, threading
+import tempfile
 from pathlib import Path
 from collections import deque
 from dataclasses import replace
@@ -10,6 +11,9 @@ from participant_editor import ParticipantEditor
 from participant_simulator import SimulatorSession
 from simulator_window import SimulatorWindow
 from common_spatial import CommonSpatialObserver
+from experience_rules import RulesConfig, RuleEngine, rebase_rule_images
+from rule_outputs import RuleOutputs
+from rule_editor import RuleEditor
 from spatial_calibration import CalibrationEditor
 from spatial_zones import SpatialMap
 from spatial_projection import ZoneProjection
@@ -24,7 +28,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.7.8'
+APP_VERSION='4.7.9'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
@@ -82,6 +86,18 @@ AUDIO_AXES=['Horitzontal','Vertical','Rotació','Distància al centre']
 
 ARP_DIRECTIONS=['Ascendent','Descendent','Pujada i baixada','Aleatori']
 
+def write_project_file(path,data):
+    # Keep the existing project intact if validation or writing fails.
+    target=Path(path).resolve();temporary=None
+    try:
+      with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=target.parent,prefix='.'+target.name+'.',suffix='.tmp',delete=False) as output:
+        temporary=Path(output.name)
+        json.dump(data,output,ensure_ascii=False,indent=2,allow_nan=False)
+      if target.exists():os.chmod(temporary,target.stat().st_mode & 0o777)
+      os.replace(temporary,target)
+    finally:
+      if temporary is not None:temporary.unlink(missing_ok=True)
+
 def arpeggio_note(pitches,index,direction):
     notes=sorted(pitches)
     if not notes:return None
@@ -115,6 +131,7 @@ class App:
     self.simulator_session=None;self.simulator_window=None;self.simulator_view=None
     self.spatial_map=SpatialMap();self.zone_projection=ZoneProjection(self.spatial_map);self.spatial_warning=None;self.zone_editor=None;self.zone_window=None
     self.common_spatial=CommonSpatialObserver(self.spatial_map)
+    self.rule_config=RulesConfig();self.rule_engine=RuleEngine();self.rule_outputs=RuleOutputs();self.rule_queue=[];self.rules_window=None;self.rules_editor=None
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -164,6 +181,8 @@ class App:
     participants_menu.add_command(label='Registre i seguiment…',command=self.open_participants)
     participants_menu.add_command(label='Simulador de cinc participants…',command=self.open_simulator)
     menu.add_cascade(label='Participants',menu=participants_menu)
+    rules_menu=tk.Menu(menu,tearoff=False);rules_menu.add_command(label='Regles i sortides…',command=self.open_rules)
+    menu.add_cascade(label='Regles',menu=rules_menu)
     help_menu=tk.Menu(menu,tearoff=False);help_menu.add_command(label='Versió i fitxer que s’està executant',command=self.show_runtime_info)
     menu.add_cascade(label='Ajuda',menu=help_menu);self.root.config(menu=menu)
     banner=tk.Canvas(self.root,bg='#1c120e',height=60,highlightthickness=0)
@@ -455,6 +474,8 @@ class App:
       if other==i or c['function'] not in ('Nota MIDI','Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria','Àudio'):continue
       route=self.mixer_config(other)
       if (route['channel'],route['cc'])==(config['channel'],config['cc']):raise ValueError(f'La ruta coincideix amb la targeta {other+1:02d}. Assigna un altre canal o CC per controlar-les per separat.')
+    prospective=list(self.cards);prospective[i]=dict(self.cards[i],mixer=config)
+    self.rule_config.validate_channels(prospective)
     self.cards[i]['mixer']=config
     return config
  def send_mixer_volume(self,i):
@@ -726,6 +747,7 @@ class App:
     output={'zone':'fotografia persistent','color':'color cromàtic','live':'visuals en directe','black':'negre en repòs'}[player.mode]
     self.zone_editor.runtime_info.set(f'Última zona activada: {last} · Sortida: {output}'+(' · '+player.last_error if player.last_error else ''))
  def release_zone_scene(self):
+    self.rule_outputs.clear_visuals()
     self.zone_projection.request_live();self.visual_dirty=True;self.preview_dirty=True;self.update_spatial_editor_runtime()
  def process_spatial_frame(self,zones,colors,now):
     player=self.zone_projection
@@ -738,6 +760,8 @@ class App:
       self.status.set(player.last_error);self.spatial_warning=player.last_error
     self.update_spatial_editor_runtime()
  def compose_output_frame(self,t):
+    rule_frame=self.rule_outputs.frame((W,H))
+    if rule_frame is not None:return rule_frame
     player=self.zone_projection
     image=player.image_frame((W,H))
     if image is not None:return image
@@ -748,6 +772,8 @@ class App:
  def projector_frame(self):
     player=self.zone_projection
     width=max(1,self.proj_label.winfo_width());height=max(1,self.proj_label.winfo_height())
+    rule_frame=self.rule_outputs.frame((width,height))
+    if rule_frame is not None:return rule_frame
     image=player.image_frame((width,height))
     if image is not None:return image
     if player.mode=='color' and player.color_card in self.active:return np.full((height,width,3),self.last_frame[0,0],np.uint8)
@@ -941,6 +967,8 @@ class App:
         for i,other in enumerate(self.cards):
           if i!=card_index and other['function']==MUTE_FUNCTION and (other['channel'],other['cc'])==(int(self.channel.get()),int(self.cc.get())):raise ValueError(f'La ruta Mute ja és de la targeta {i+1:02d}. Tria un altre canal o CC per a una pista independent.')
       previous=self.cards[card_index]
+      prospective=list(self.cards);prospective[card_index]=dict(previous,function=self.fun.get(),channel=max(1,min(16,int(self.channel.get()))))
+      self.rule_config.validate_channels(prospective)
       same_mute=previous['function']==self.fun.get()==MUTE_FUNCTION
       if same_mute:
         if (previous['channel'],previous['cc'],previous.get('mute_silent',127))!=(int(self.channel.get()),int(self.cc.get()),mute_values[1]):self.send_mute_state(card_index,False)
@@ -955,15 +983,50 @@ class App:
       return True
     except Exception as e:
       messagebox.showerror('Configuració',str(e));return False
+ def open_rules(self):
+    if self.rules_window is not None and self.rules_window.winfo_exists():self.rules_window.lift();return
+    window=self.rules_window=tk.Toplevel(self.root);window.title('WASTELAND · Regles · '+APP_VERSION);window.geometry(f'940x{min(840,max(500,self.root.winfo_screenheight()-100))}')
+    self.rules_editor=RuleEditor(window,lambda:self.rule_config,self.configure_rules,self.manual_rule,self.release_rule_visuals,lambda:self.rule_outputs.log_snapshot(),
+      zones=lambda:self.spatial_map.zones,participants=lambda:self.participants.snapshot().values())
+    def close():
+      if self.rules_editor.discard():window.destroy();self.rules_window=None;self.rules_editor=None
+    window.protocol('WM_DELETE_WINDOW',close)
+ def confirm_rule_discard(self):
+    return self.rules_editor is None or self.rules_editor.discard()
+ def configure_rules(self,config):
+    if not isinstance(config,RulesConfig):raise ValueError('Configuració de regles no vàlida')
+    config.validate_channels(self.cards)
+    self.rule_outputs.stop_midi(self.send_rule_midi)
+    self.rule_config=config;self.rule_engine=RuleEngine(config);self.rule_outputs=RuleOutputs();self.rule_queue.clear()
+    self.visual_dirty=True;self.preview_dirty=True
+ def release_rule_visuals(self):
+    self.rule_outputs.clear_visuals();self.visual_dirty=True;self.preview_dirty=True
+ def manual_rule(self,rule_id):
+    now=time.monotonic()
+    self.rule_outputs.apply(self.rule_engine.manual(rule_id,now),now,self.send_rule_midi,self.zone_project_path(),not self.muted)
+    self.visual_dirty=True;self.preview_dirty=True
+ def send_rule_midi(self,command):
+    if not self.midi or mido is None:return False
+    args={'channel':command.channel-1}
+    if command.kind=='cc':message=mido.Message('control_change',control=command.number,value=command.value,**args)
+    else:message=mido.Message(command.kind,note=command.number,velocity=command.value,**args)
+    self.midi.send(message);return True
+ def process_rule_actions(self,now):
+    before=self.rule_outputs.winner()
+    requests=tuple(self.rule_queue);self.rule_queue.clear()
+    self.rule_outputs.apply(requests,now,self.send_rule_midi,self.zone_project_path(),not self.muted)
+    self.rule_outputs.tick(now,self.send_rule_midi)
+    if requests or before is not self.rule_outputs.winner():self.visual_dirty=True;self.preview_dirty=True
  def open_simulator(self):
     if self.simulator_window is not None and self.simulator_window.winfo_exists():
       self.simulator_window.deiconify();self.simulator_window.lift();return
     if self.simulator_session is None:self.simulator_session=SimulatorSession()
     window=self.simulator_window=tk.Toplevel(self.root)
     window.title('WASTELAND · Simulador · Fase 2');window.geometry('960x720');window.minsize(900,660)
-    self.simulator_view=SimulatorWindow(window,self.simulator_session,lambda:self.spatial_map)
+    self.simulator_view=SimulatorWindow(window,self.simulator_session,lambda:self.spatial_map,
+      lambda:self.rule_config,self.zone_project_path,lambda:self.participants)
     def close():
-      if self.simulator_view.editor.discard():
+      if self.simulator_view.discard():
         window.destroy();self.simulator_window=None;self.simulator_view=None
     window.protocol('WM_DELETE_WINDOW',close)
  def open_participants(self):
@@ -988,8 +1051,11 @@ class App:
     if self.participant_editor is not None:
       self.participant_editor.reset();self.participant_editor.refresh_rows()
  def new_project(self):
+    if not self.confirm_rule_discard():return
     if not self.confirm_participant_discard():return
     if not self.confirm_zone_discard():return
+    self.configure_rules(RulesConfig())
+    if self.rules_editor is not None:self.rules_editor.reload()
     self.replace_participants(ParticipantRegistry())
     self.spatial_map=SpatialMap()
     self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table();self.reset_spatial_projection();self.refresh_zone_editor(); self.status.set('Projecte nou')
@@ -1004,6 +1070,8 @@ class App:
       self.status.set(f'Rellotge musical: {self.bpm} BPM. Acords quantitzats si activats; Cakewalk conserva el seu tempo.')
     except (ValueError,tk.TclError):self.status.set('Tempo no vàlid')
  def save_project(self,as_new=False):
+    if self.rules_editor is not None and self.rules_editor.dirty:
+      messagebox.showwarning('Regles','Aplica els canvis de regles abans de desar.',parent=self.root);return
     if self.participant_editor is not None and self.participant_editor.dirty:
       messagebox.showwarning('Participants','Hi ha canvis sense aplicar. Prem APLICAR PARTICIPANT abans de desar el projecte.',parent=self.root);return
     if self.zone_editor is not None and self.zone_editor.dirty:
@@ -1020,14 +1088,19 @@ class App:
       if not path:return
     try:
       spatial=rebase_map_images(self.spatial_map,old_project,path)
+      rules=rebase_rule_images(self.rule_config,old_project,path)
       data={'version':4,'master_volume':self.master_volume.get(),'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual}
       data=spatial.into_project(data)
       data['participants']=self.participants.to_dict()
-      with open(path,'w',encoding='utf-8') as f:json.dump(data,f,ensure_ascii=False,indent=2)
+      data['experience_rules']=rules.to_dict()
+      write_project_file(path,data)
       self.project=path;self.spatial_map=spatial;self.reset_spatial_projection(keep_scene=True);self.refresh_zone_editor()
+      self.rule_config=rules;self.rule_engine.config=rules
+      if self.rules_editor is not None:self.rules_editor.reload()
       self.status.set(f'Projecte desat: {Path(self.project).name}')
     except Exception as e:messagebox.showerror('Desar',str(e))
  def open_project(self):
+    if not self.confirm_rule_discard():return
     if not self.confirm_participant_discard():return
     if not self.confirm_zone_discard():return
     path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte Wasteland','*.json')]);
@@ -1036,9 +1109,12 @@ class App:
       with open(path,encoding='utf-8') as f:d=json.load(f)
       spatial=SpatialMap.from_project(d)
       participants=ParticipantRegistry.from_project(d)
+      rules=RulesConfig.from_project(d);rules.validate_channels(d['cards'])
       if len(d['cards'])!=16:raise ValueError('El projecte no conté 16 targetes')
       self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path;self.spatial_map=spatial;self.reset_spatial_projection();self.refresh_zone_editor(); self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
       self.replace_participants(participants)
+      self.configure_rules(rules)
+      if self.rules_editor is not None:self.rules_editor.reload()
     except Exception as e:messagebox.showerror('Obrir',str(e))
  def refresh_midi(self):
      # No amaguem els errors: aixi podem diagnosticar loopMIDI.
@@ -1254,6 +1330,8 @@ class App:
     if not wr.isOpened():messagebox.showerror('Gravació','No es pot crear el vídeo AVI');return
     self.recording=wr;self.record_file=path;self.rec_label.config(text='● GRAVANT',foreground='red');self.status.set('Gravant visuals a '+str(path))
  def all_notes_off(self):
+    if hasattr(self,'rule_outputs'):
+      self.rule_outputs.stop_midi(self.send_rule_midi);self.rule_queue.clear()
     self.sync_mute_controls(silence=True)
     with self.arp_lock:
       for state in self.audio_states.values():self.release_audio_trigger(state)
@@ -1279,6 +1357,7 @@ class App:
       with self.arp_lock:
         if self._closing:break
         now=time.monotonic();self.audio_tick(now)
+        self.rule_outputs.tick(now,self.send_rule_midi,visuals=False)
         if not self.muted:self.sequencer_tick(now)
  def sequencer_tick(self,now):
     if self.muted:return
@@ -1886,8 +1965,11 @@ class App:
       self.tracking_errors.append((self.tracking_sequence,str(exc)))
  def update_common_tracking(self,frame):
     states=self.marker_tracker.update(frame)
-    self.common_events.consume(frame,states,self.participants)
-    self.common_events.record_zones(frame,self.common_spatial.update(frame),self.participants,self.common_spatial.zone_names())
+    events=self.common_events.consume(frame,states,self.participants)
+    events+=self.common_events.record_zones(frame,self.common_spatial.update(frame),self.participants,self.common_spatial.zone_names())
+    requests=self.rule_engine.consume(events,self.participants)
+    if len(self.rule_queue)+len(requests)>4096:raise ValueError('Cua d’accions plena')
+    self.rule_queue.extend(requests)
  def tick(self):
     try:
       if self.audio_error:
@@ -1938,6 +2020,7 @@ class App:
       self.sync_mute_controls()
       now_vis=time.monotonic();frame_changed=False
       self.process_spatial_frame(zone_observations,color_observations,now_vis)
+      self.process_rule_actions(now_vis)
       if self.last_frame is None or self.visual_dirty or (not self.visual_paused and now_vis-self.last_visual_update>=self.visual_interval):
         t=now_vis-self.t0
         self.last_frame=self.compose_output_frame(t)
@@ -1974,6 +2057,7 @@ class App:
     photo=ImageTk.PhotoImage(Image.fromarray(rgb))
     setattr(self,attr,photo);label.config(image=photo,text='')
  def close(self):
+    if not self.confirm_rule_discard():return
     if not self.confirm_zone_discard():return
     self._closing=True
     self.arp_stop.set()

@@ -6,13 +6,23 @@ from tkinter import ttk, messagebox
 
 from participant_editor import ParticipantEditor
 from participant_simulator import SOURCE_ID, SimulatorSession
+from experience_rules import RulesConfig
+from rule_editor import RuleEditor
+from dataclasses import replace
+from PIL import Image, ImageTk
 
 
 class SimulatorWindow(ttk.Frame):
-    def __init__(self, parent, session, spatial_config=None):
+    def __init__(self, parent, session, spatial_config=None, rules_config=None, project_file=None, participants=None):
         super().__init__(parent, padding=8)
         self.session = session
         self.spatial_config = spatial_config
+        self.rules_config = rules_config
+        self.project_file = project_file or (lambda:None)
+        self.participants = participants
+        self.rules_window = None
+        self.rules_editor = None
+        self.preview_token = None
         self.timer = None
         self.closed = False
         self.dragging = None
@@ -34,7 +44,8 @@ class SimulatorWindow(ttk.Frame):
             ttk.Button(controls, text=label, command=command).pack(side='left', padx=3)
         zone_controls = ttk.Frame(self)
         zone_controls.pack(fill='x', pady=(0, 4))
-        ttk.Button(zone_controls, text='CARREGAR ZONES DEL PROJECTE', command=self.load_zones).pack(side='left')
+        ttk.Button(zone_controls, text='CARREGAR ZONES I REGLES DEL PROJECTE', command=self.load_zones).pack(side='left')
+        ttk.Button(zone_controls, text='REGLES DE PROVA...', command=self.open_rules).pack(side='left', padx=4)
         ttk.Label(zone_controls, textvariable=self.zone_summary).pack(side='left', padx=8)
         notebook = ttk.Notebook(self)
         notebook.pack(fill='both', expand=True)
@@ -42,6 +53,13 @@ class SimulatorWindow(ttk.Frame):
         registry_tab = ttk.Frame(notebook)
         notebook.add(map_tab, text='Mapa i moviment')
         notebook.add(registry_tab, text='Participants i esdeveniments')
+        self.output_tab=ttk.Frame(notebook);notebook.add(self.output_tab,text='Sortida de prova')
+        self.output_label=tk.Label(self.output_tab,bg='black');self.output_label.pack(fill='both',expand=True)
+        self.output_status=tk.StringVar();ttk.Label(self.output_tab,textvariable=self.output_status).pack(anchor='w')
+        self.output_midi=ttk.Treeview(self.output_tab,columns=('kind','channel','number','value'),show='headings',height=4)
+        for key,label in (('kind','MIDI simulat'),('channel','Canal'),('number','Nota / CC'),('value','Valor')):
+            self.output_midi.heading(key,text=label);self.output_midi.column(key,width=100)
+        self.output_midi.pack(fill='x');self.midi_preview=()
         self.canvas = tk.Canvas(map_tab, width=700, height=420, background='#171B24', highlightthickness=0)
         self.canvas.pack(fill='both', expand=True)
         self.canvas.bind('<Button-1>', self.pick)
@@ -77,18 +95,51 @@ class SimulatorWindow(ttk.Frame):
         self.draw()
 
     def load_zones(self):
+        if self.rules_editor is not None and not self.rules_editor.discard():return
         if self.spatial_config is None:
             self.status.set('No hi ha cap projecte disponible per copiar-ne les zones.')
             return
+        rules = self.rules_config() if self.rules_config else RulesConfig()
+        real = self.participants().snapshot() if self.participants else {}
+        mapped=[]
+        for rule in rules.rules:
+            source=rule.source_id
+            if source and source != SOURCE_ID:
+                if not source.startswith('camera:'):
+                    messagebox.showerror('Regles de prova',f'Font no disponible al simulador: {source}',parent=self);return
+                source=SOURCE_ID
+            participant=rule.participant_id
+            if participant:
+                person=real.get(participant)
+                virtual=self.session.registry.participant_for(SOURCE_ID,person.marker_id) if person else None
+                if virtual is None:
+                    messagebox.showerror('Regles de prova','No hi ha una persona virtual amb el marcador de la regla.',parent=self);return
+                participant=virtual.participant_id
+            mapped.append(replace(rule,source_id=source,participant_id=participant))
         self.session.configure_spatial(self.spatial_config())
+        self.session.configure_rules(RulesConfig(tuple(mapped)),self.project_file())
+        if self.rules_editor is not None:self.rules_editor.reload()
         self.zone_summary.set(f'Zones de prova: {len(self.session.spatial.config.zones)} · calibració virtual')
-        self.status.set('Còpia de zones carregada. No modifica la calibració ni les fotografies del projecte real.')
+        self.status.set('Còpia de zones i regles carregada. Només executa sortides de prova.')
         self.editor.refresh_rows()
         self.draw()
+
+    def open_rules(self):
+        if self.rules_window is not None and self.rules_window.winfo_exists():self.rules_window.lift();return
+        window=self.rules_window=tk.Toplevel(self);window.title('REGLES DE PROVA · sessió virtual');window.geometry(f'940x{min(840,max(500,self.winfo_screenheight()-100))}')
+        self.rules_editor=RuleEditor(window,lambda:self.session.rule_engine.config,
+          lambda config:self.session.configure_rules(config,self.session.rule_project),
+          lambda rid:self.session.manual_rule(rid,time.monotonic()),lambda:self.session.rule_outputs.clear_visuals(),
+          lambda:self.session.rule_outputs.log_snapshot(),session_only=True,
+          zones=lambda:self.session.spatial.config.zones,participants=lambda:self.session.registry.snapshot().values())
+        def close():
+            if self.rules_editor.discard():window.destroy();self.rules_window=None;self.rules_editor=None
+        window.protocol('WM_DELETE_WINDOW',close)
 
     def reset(self):
         if not self.editor.discard():
             return
+        if self.rules_editor is not None and not self.rules_editor.discard():return
         if not messagebox.askyesno('Simulador', 'Reiniciar la prova amb cinc participants nous i buidar el registre virtual?', parent=self):
             return
         self.session.reset()
@@ -97,6 +148,7 @@ class SimulatorWindow(ttk.Frame):
         self.dragging = None
         self.editor.reset()
         self.editor.refresh_rows()
+        if self.rules_editor is not None:self.rules_editor.reload()
         self.status.set('Nova sessió virtual preparada. El projecte real es conserva.')
         self.draw()
 
@@ -202,13 +254,32 @@ class SimulatorWindow(ttk.Frame):
         try:
             self.session.advance(time.monotonic())
             self.draw()
+            winner=self.session.rule_outputs.winner()
+            if winner is not self.preview_token:
+                frame=self.session.rule_outputs.frame((640,360))
+                image=Image.new('RGB',(640,360),'black') if frame is None else Image.fromarray(frame[:,:,::-1])
+                self.output_photo=ImageTk.PhotoImage(image,master=self.output_label)
+                self.output_label.config(image=self.output_photo)
+                self.preview_token=winner
+            self.output_status.set(('Propietari: '+winner.request.rule.name if winner else 'Sense ordre visual de prova')+
+                                  f' · MIDI simulat: {len(self.session.midi_commands)} missatges')
+            commands=tuple(self.session.midi_commands)[-12:]
+            if commands!=self.midi_preview:
+                for iid in self.output_midi.get_children():self.output_midi.delete(iid)
+                for i,command in enumerate(commands):self.output_midi.insert('','end',iid=str(i),values=(command.kind,command.channel,command.number,command.value))
+                if commands:self.output_midi.see(str(len(commands)-1))
+                self.midi_preview=commands
         except ValueError as exc:
             self.status.set(str(exc))
         self.timer = self.after(100, self.pulse)
 
+    def discard(self):
+        return self.editor.discard() and (self.rules_editor is None or self.rules_editor.discard())
+
     def destroyed(self, event):
         if event.widget is self:
             self.closed = True
+            self.session.rule_outputs.stop_midi(self.session.send_rule_midi)
             if self.timer is not None:
                 self.after_cancel(self.timer)
                 self.timer = None

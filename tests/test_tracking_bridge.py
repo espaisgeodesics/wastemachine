@@ -8,6 +8,7 @@ from marker_tracking import MarkerTracker
 from participants import ParticipantBinding, ParticipantRegistry
 from domain_events import CommonEventLog
 from common_spatial import CommonSpatialObserver
+from experience_rules import RuleEngine
 from test_camera import app_module as m
 
 
@@ -17,6 +18,7 @@ class ObserverBridgeTests(unittest.TestCase):
         app.marker_tracker=MarkerTracker();app.tracking_sequence=0;app.tracking_source_id=None
         app.participants=ParticipantRegistry();app.common_events=CommonEventLog()
         app.common_spatial=CommonSpatialObserver()
+        app.rule_engine=RuleEngine();app.rule_queue=[]
         app.camera_source_id='camera:0';app.tracking_enabled=True;app.tracking_errors=deque(maxlen=50)
         app.cam_index=Mock();app.cam_index.get.return_value=0
         return app
