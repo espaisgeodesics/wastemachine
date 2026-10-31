@@ -44,6 +44,8 @@ class ParticipantState:
     binding: ParticipantBinding
     presence: str
     marker_state: MarkerState | None = None
+    zone_id: str | None = None
+    zone_observed: bool = False
 
     @property
     def observed(self):
@@ -93,12 +95,15 @@ class ParticipantRegistry:
     def participant_for(self, source_id, marker_id):
         return next((p for p in self._bindings.values() if p.marker_key == (source_id, marker_id)), None)
 
-    def states(self, markers):
+    def states(self, markers, zones=None):
         states = {}
         for pid, binding in self._bindings.items():
             marker = markers.get(binding.marker_key)
             presence = 'retired' if pid in self._retired else (marker.presence if marker else 'not_seen')
-            states[pid] = ParticipantState(binding, presence, marker)
+            zone = (zones or {}).get(binding.marker_key)
+            states[pid] = ParticipantState(binding, presence, marker,
+                                           zone.zone_id if zone is not None and presence != 'retired' else None,
+                                           bool(zone is not None and zone.observed and zone.source_available and presence != 'retired'))
         return MappingProxyType(states)
 
     def to_dict(self):

@@ -3,13 +3,15 @@
 The session is deliberately isolated from real camera bindings and outputs.
 Virtual positions use camera_normalized coordinates, never calibrated floor data.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import isfinite
 from numbers import Real
 
 from domain_events import CommonEventLog
 from marker_tracking import MarkerObservation, MarkerTracker, ObservationFrame
 from participants import ParticipantBinding, ParticipantRegistry
+from common_spatial import CommonSpatialObserver
+from spatial_zones import Calibration, SpatialMap
 
 
 SOURCE_ID = 'simulator:0'
@@ -39,6 +41,7 @@ class SimulatorSession:
                                                             COLORS[i], SOURCE_ID, i) for i in range(5))
         self.tracker = MarkerTracker()
         self.events = CommonEventLog()
+        self.spatial = CommonSpatialObserver(SpatialMap(calibration=Calibration(((.5, 0), (1, .5), (.5, 1), (0, .5)))))
         self.available = True
         self.sequence = 0
         self._poses = {}
@@ -46,7 +49,16 @@ class SimulatorSession:
 
     def reset(self):
         """Start a new virtual session, preserving no old detections or events."""
+        config = self.spatial.config
         self.__init__()
+        self.configure_spatial(config)
+
+    def configure_spatial(self, config):
+        if not isinstance(config, SpatialMap):
+            raise ValueError('Cal un mapa espacial vàlid')
+        # Synthetic identity calibration belongs only to this virtual source.
+        virtual = replace(config, calibration=Calibration(((.5, 0), (1, .5), (.5, 1), (0, .5))))
+        self.spatial.configure(virtual, reset=True)
 
     def poses(self):
         bindings = self.registry.snapshot()
@@ -84,6 +96,7 @@ class SimulatorSession:
                                  'ok' if self.available else 'unavailable')
         tracked = self.tracker.update(frame)
         batch = self.events.consume(frame, tracked, self.registry)
+        batch += self.events.record_zones(frame, self.spatial.update(frame), self.registry, self.spatial.zone_names())
         self.sequence = frame.sequence
         self._last_time = now
         return frame, batch

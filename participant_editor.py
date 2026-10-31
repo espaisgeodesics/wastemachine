@@ -17,11 +17,12 @@ EVENT_LABELS = {
     'marker_temporarily_lost': 'Pèrdua temporal', 'marker_absent': 'Absència confirmada',
     'marker_retired': 'Marcador retirat', 'participant_retired': 'Participant retirat',
     'participant_restored': 'Participant recuperat',
+    'zone_entered': 'Entrada de zona', 'zone_exited': 'Sortida de zona',
 }
 
 
 class ParticipantEditor(ttk.Frame):
-    def __init__(self, parent, registry, markers, sources, events, retire, default_source, session_only=False):
+    def __init__(self, parent, registry, markers, sources, events, retire, default_source, session_only=False, zones=None):
         super().__init__(parent, padding=10)
         self.registry = registry
         self.markers = markers
@@ -30,10 +31,12 @@ class ParticipantEditor(ttk.Frame):
         self.retire = retire
         self.default_source = default_source
         self.session_only = session_only
+        self.zones = zones or (lambda:{})
         self.selected_id = None
         self.dirty = False
         self._loading = False
         self._timer = None
+        self._last_event_sequence = None
         self.name = tk.StringVar()
         self.color = tk.StringVar(value='#48B8E8')
         self.source = tk.StringVar(value=default_source())
@@ -46,10 +49,10 @@ class ParticipantEditor(ttk.Frame):
                        'El nom del participant és independent del nom i la funció musical de la targeta.')
         ttk.Label(self, text=title, font=('Segoe UI', 12, 'bold')).pack(anchor='w')
         ttk.Label(self, text=description).pack(anchor='w')
-        columns = ('name', 'color', 'source', 'marker', 'presence', 'position')
+        columns = ('name', 'color', 'source', 'marker', 'presence', 'position', 'zone')
         self.table = ttk.Treeview(self, columns=columns, show='headings', height=7, selectmode='browse')
-        for key, label, width in zip(columns, ('Nom', 'Color', 'Font', 'ID ArUco', 'Presència', 'Posició de càmera'),
-                                     (130, 80, 100, 65, 150, 190)):
+        for key, label, width in zip(columns, ('Nom', 'Color', 'Font', 'ID ArUco', 'Presència', 'Posició de càmera', 'Zona'),
+                                     (110, 65, 80, 60, 130, 150, 130)):
             self.table.heading(key, text=label)
             self.table.column(key, width=width, minwidth=50)
         self.table.pack(fill='both', expand=True, pady=8)
@@ -83,10 +86,10 @@ class ParticipantEditor(ttk.Frame):
         ttk.Label(self, text=persistence_note,
                   wraplength=800).pack(anchor='w')
         ttk.Label(self, text='Esdeveniments recents (diagnòstic passiu)').pack(anchor='w', pady=(8, 2))
-        self.event_table = ttk.Treeview(self, columns=('sequence', 'event', 'source', 'marker', 'participant'), show='headings', height=5)
-        for key, label in (('sequence', '#'), ('event', 'Esdeveniment'), ('source', 'Font'), ('marker', 'ID'), ('participant', 'ID participant')):
+        self.event_table = ttk.Treeview(self, columns=('sequence', 'event', 'source', 'marker', 'participant', 'zone', 'reason'), show='headings', height=5)
+        for key, label in (('sequence', '#'), ('event', 'Esdeveniment'), ('source', 'Font'), ('marker', 'ID'), ('participant', 'ID participant'), ('zone', 'Zona'), ('reason', 'Motiu')):
             self.event_table.heading(key, text=label)
-            self.event_table.column(key, width=70 if key in ('sequence', 'marker') else 180)
+            self.event_table.column(key, width=50 if key in ('sequence', 'marker') else 130)
         self.event_table.pack(fill='both', expand=True)
         self.bind('<Destroy>', self.destroyed, add='+')
         self.reset()
@@ -193,7 +196,8 @@ class ParticipantEditor(ttk.Frame):
             self.refresh_rows()
 
     def refresh_rows(self):
-        states = self.registry().states(self.markers())
+        zones = self.zones()
+        states = self.registry().states(self.markers(), zones)
         for iid in self.table.get_children():
             if iid not in states:
                 self.table.delete(iid)
@@ -203,7 +207,15 @@ class ParticipantEditor(ttk.Frame):
             if marker is not None:
                 x, y = marker.last_observation.position
                 position = f'{x:.3f}, {y:.3f}' + ('' if state.observed else ' (antiga)')
-            values = (p.name or '(sense nom)', p.color, p.source_id, p.marker_id, PRESENCE_LABELS[state.presence], position)
+            zone_state = zones.get(p.marker_key)
+            zone_label = state.zone_id or '—'
+            if state.zone_id and zone_state is not None and zone_state.zone_name:
+                zone_label = zone_state.zone_name
+            if state.zone_id and not state.zone_observed:
+                zone_label += ' (antiga)'
+            if zone_state is not None and not zone_state.calibrated and state.presence != 'retired':
+                zone_label = 'Sense calibració'
+            values = (p.name or '(sense nom)', p.color, p.source_id, p.marker_id, PRESENCE_LABELS[state.presence], position, zone_label)
             tag = 'p:' + pid
             self.table.tag_configure(tag, foreground=p.color)
             if self.table.exists(pid):
@@ -221,11 +233,16 @@ class ParticipantEditor(ttk.Frame):
         for event in events:
             iid = str(event.sequence)
             values = (event.sequence, EVENT_LABELS.get(event.kind, event.kind), event.source_id,
-                      event.marker_id if event.marker_id is not None else '—', event.participant_id or '—')
+                      event.marker_id if event.marker_id is not None else '—', event.participant_id or '—', event.zone_name or event.zone_id or '—',
+                      {'movement':'Moviment', 'missing':'Pèrdua', 'detection_gap':'Revalidació'}.get(event.reason, '—'))
             if self.event_table.exists(iid):
                 self.event_table.item(iid, values=values)
             else:
                 self.event_table.insert('', 'end', iid=iid, values=values)
+        latest = events[-1].sequence if events else None
+        if latest is not None and latest != self._last_event_sequence:
+            self.event_table.see(str(latest))
+        self._last_event_sequence = latest
 
     def refresh(self):
         self.refresh_rows()

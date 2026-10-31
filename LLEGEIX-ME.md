@@ -156,3 +156,9 @@ La finestra mostra presència, última posició de càmera i incidències de fon
 Obre **Participants → Simulador de cinc participants…**. A **Mapa i moviment**, clica i arrossega cada participant; configura’n el gir o oculta/mostra el marcador. La casella **Font disponible** simula una avaria i la recuperació de la font. A **Participants i esdeveniments** pots canviar noms, colors i IDs, retirar/recuperar persones i veure els successos. **REINICIAR PROVA** torna als cinc participants inicials, amb confirmació.
 
 És una sessió virtual independent, sense càmera ni MIDI, que no modifica el projecte ni la projecció. Les dades virtuals es conserven en reobrir la finestra mentre el programa segueix obert; no es desen al projecte. La quadrícula no és una calibració de terra ni executa encara accions de zona. Instruccions i límits a [ATMO_ESFERA_FX_FASE_2.md](ATMO_ESFERA_FX_FASE_2.md).
+
+## Zones al flux comú — ATMO fase 3 (4.7.8)
+
+El registre de participants mostra ara la **Zona** confirmada i els esdeveniments d’entrada/sortida de tots els marcadors autoritzats, també si tenen una funció musical. Això no canvia què sona o què es projecta: les fotografies continuen responent a la funció Activar zona espacial, amb les mateixes durades.
+
+Al simulador, **CARREGAR ZONES DEL PROJECTE** copia el mapa a una superfície virtual amb calibració sintètica. Mou els cinc participants i consulta les entrades, sortides i motius a la segona pestanya. No es carreguen fotografies ni es modifica la calibració real. **REINICIAR PROVA** conserva aquesta còpia del mapa. Detalls i compatibilitat a [ATMO_ESFERA_FX_FASE_3.md](ATMO_ESFERA_FX_FASE_3.md).

@@ -149,6 +149,29 @@ class SimulatorWindowTests(unittest.TestCase):
         self.assertFalse(self.session.events.snapshot())
         self.assertEqual(self.app.participants.to_dict(), before)
 
+    def test_loading_project_zones_isolated_and_events_and_current_zone_are_visible(self):
+        from spatial_zones import SpatialMap, Zone
+        self.app.spatial_map=SpatialMap(zones=(Zone('forest','Bosc',{(2,2)},{0},'not-loaded.png'),))
+        original=self.app.spatial_map
+        self.view.load_zones()
+        self.assertIs(self.app.spatial_map,original)
+        self.assertIsNone(original.calibration)
+        self.assertIsNotNone(self.session.spatial.config.calibration)
+        self.session.set_pose('virtual-1',position=(.3,.3))
+        now=time.monotonic()
+        for offset in (.01,.09,.17):self.session.advance(now+offset)
+        self.view.editor.refresh_rows()
+        self.assertEqual(self.view.editor.table.item('virtual-1','values')[6],'Bosc')
+        events=[e for e in self.session.events.snapshot() if e.kind=='zone_entered']
+        self.assertEqual([(e.participant_id,e.zone_id) for e in events],[('virtual-1','forest')])
+        self.assertEqual(events[0].zone_name,'Bosc')
+        self.assertIsNone(self.app.zone_projection.image)
+        self.assertFalse(self.app.common_spatial.snapshot())
+        self.session.available=False
+        self.session.advance(now+1)
+        self.view.editor.refresh_rows()
+        self.assertEqual(self.view.editor.table.item('virtual-1','values')[6],'Bosc (antiga)')
+
 
 if __name__ == '__main__':
     unittest.main()

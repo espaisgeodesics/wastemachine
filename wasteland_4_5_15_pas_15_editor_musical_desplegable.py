@@ -9,6 +9,7 @@ from domain_events import CommonEventLog
 from participant_editor import ParticipantEditor
 from participant_simulator import SimulatorSession
 from simulator_window import SimulatorWindow
+from common_spatial import CommonSpatialObserver
 from spatial_calibration import CalibrationEditor
 from spatial_zones import SpatialMap
 from spatial_projection import ZoneProjection
@@ -23,7 +24,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.7.7'
+APP_VERSION='4.7.8'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
@@ -113,6 +114,7 @@ class App:
     self.participants=ParticipantRegistry();self.common_events=CommonEventLog();self.participant_window=None;self.participant_editor=None
     self.simulator_session=None;self.simulator_window=None;self.simulator_view=None
     self.spatial_map=SpatialMap();self.zone_projection=ZoneProjection(self.spatial_map);self.spatial_warning=None;self.zone_editor=None;self.zone_window=None
+    self.common_spatial=CommonSpatialObserver(self.spatial_map)
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -714,6 +716,7 @@ class App:
       self.calibration_generation+=1
       if self.calibration_editor is not None:self.calibration_editor.restart()
     self.zone_projection.configure(self.spatial_map,self.zone_project_path(),keep_scene=keep_scene)
+    self.common_spatial.configure(self.spatial_map,reset=not keep_scene)
     self.spatial_warning=None;self.visual_dirty=True;self.preview_dirty=True
     self.update_spatial_editor_runtime()
  def update_spatial_editor_runtime(self):
@@ -958,7 +961,7 @@ class App:
     if self.simulator_session is None:self.simulator_session=SimulatorSession()
     window=self.simulator_window=tk.Toplevel(self.root)
     window.title('WASTELAND · Simulador · Fase 2');window.geometry('960x720');window.minsize(900,660)
-    self.simulator_view=SimulatorWindow(window,self.simulator_session)
+    self.simulator_view=SimulatorWindow(window,self.simulator_session,lambda:self.spatial_map)
     def close():
       if self.simulator_view.editor.discard():
         window.destroy();self.simulator_window=None;self.simulator_view=None
@@ -970,7 +973,7 @@ class App:
     window.title('WASTELAND · Participants · Fase 1B');window.geometry('930x650');window.minsize(860,580)
     self.participant_editor=ParticipantEditor(window,lambda:self.participants,self.marker_tracker.snapshot,
       self.marker_tracker.sources,lambda:self.common_events.snapshot(),self.set_participant_retired,
-      lambda:f'camera:{self.cam_index.get()}')
+      lambda:f'camera:{self.cam_index.get()}',zones=lambda:self.common_spatial.snapshot())
     def close():
       if self.participant_editor.discard():
         window.destroy();self.participant_window=None;self.participant_editor=None
@@ -1884,6 +1887,7 @@ class App:
  def update_common_tracking(self,frame):
     states=self.marker_tracker.update(frame)
     self.common_events.consume(frame,states,self.participants)
+    self.common_events.record_zones(frame,self.common_spatial.update(frame),self.participants,self.common_spatial.zone_names())
  def tick(self):
     try:
       if self.audio_error:

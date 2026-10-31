@@ -9,15 +9,17 @@ from participant_simulator import SOURCE_ID, SimulatorSession
 
 
 class SimulatorWindow(ttk.Frame):
-    def __init__(self, parent, session):
+    def __init__(self, parent, session, spatial_config=None):
         super().__init__(parent, padding=8)
         self.session = session
+        self.spatial_config = spatial_config
         self.timer = None
         self.closed = False
         self.dragging = None
         self.angle = tk.DoubleVar(value=0)
         self.available = tk.BooleanVar(value=session.available)
         self.status = tk.StringVar(value='Tria una persona a la taula o al mapa; arrossega-la per moure-la.')
+        self.zone_summary = tk.StringVar(value=f'Zones de prova: {len(session.spatial.config.zones)} · calibració virtual')
         self.pack(fill='both', expand=True)
         ttk.Label(self, text='SIMULADOR · cinc participants · sessió de proves independent',
                   font=('Segoe UI', 12, 'bold')).pack(anchor='w')
@@ -30,6 +32,10 @@ class SimulatorWindow(ttk.Frame):
         for label, command in (('APLICAR GIR', self.rotate), ('OCULTAR', lambda:self.visibility(False)),
                                ('MOSTRAR', lambda:self.visibility(True)), ('REINICIAR PROVA', self.reset)):
             ttk.Button(controls, text=label, command=command).pack(side='left', padx=3)
+        zone_controls = ttk.Frame(self)
+        zone_controls.pack(fill='x', pady=(0, 4))
+        ttk.Button(zone_controls, text='CARREGAR ZONES DEL PROJECTE', command=self.load_zones).pack(side='left')
+        ttk.Label(zone_controls, textvariable=self.zone_summary).pack(side='left', padx=8)
         notebook = ttk.Notebook(self)
         notebook.pack(fill='both', expand=True)
         map_tab = ttk.Frame(notebook)
@@ -46,7 +52,8 @@ class SimulatorWindow(ttk.Frame):
         # Existing editor, contracts and event view; only the isolated session is supplied.
         self.editor = ParticipantEditor(registry_tab, lambda:self.session.registry, lambda:self.session.tracker.snapshot(),
                                         lambda:self.session.tracker.sources(), lambda:self.session.events.snapshot(),
-                                        self.retire, lambda:SOURCE_ID, session_only=True)
+                                        self.retire, lambda:SOURCE_ID, session_only=True,
+                                        zones=lambda:self.session.spatial.snapshot())
         self.editor.table.bind('<<TreeviewSelect>>', self.selection_changed, add='+')
         self.bind('<Destroy>', self.destroyed, add='+')
         self.pulse()
@@ -67,6 +74,16 @@ class SimulatorWindow(ttk.Frame):
     def change_source(self):
         self.session.available = self.available.get()
         self.status.set('Font virtual disponible.' if self.session.available else 'Avaria virtual: cap persona no s’elimina.')
+        self.draw()
+
+    def load_zones(self):
+        if self.spatial_config is None:
+            self.status.set('No hi ha cap projecte disponible per copiar-ne les zones.')
+            return
+        self.session.configure_spatial(self.spatial_config())
+        self.zone_summary.set(f'Zones de prova: {len(self.session.spatial.config.zones)} · calibració virtual')
+        self.status.set('Còpia de zones carregada. No modifica la calibració ni les fotografies del projecte real.')
+        self.editor.refresh_rows()
         self.draw()
 
     def reset(self):
@@ -110,7 +127,9 @@ class SimulatorWindow(ttk.Frame):
         self.draw()
 
     def bounds(self):
-        return 25., 20., max(1., self.canvas.winfo_width()-50.), max(1., self.canvas.winfo_height()-40.)
+        width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
+        side = max(1., min(width-50., height-40.))
+        return (width-side)/2, (height-side)/2, side, side
 
     def pick(self, event):
         self.dragging = None
@@ -150,7 +169,19 @@ class SimulatorWindow(ttk.Frame):
         for i in range(1, 8):
             self.canvas.create_line(x+width*i/8, y, x+width*i/8, y+height, fill='#293443')
             self.canvas.create_line(x, y+height*i/8, x+width, y+height*i/8, fill='#293443')
-        self.canvas.create_text(x+4, y+4, anchor='nw', text='SUPERFÍCIE VIRTUAL · no calibrada', fill='#AABBCD')
+        config = self.session.spatial.config
+        for zone in config.zones:
+            if not zone.enabled:
+                continue
+            for row, column in sorted(zone.cells):
+                self.canvas.create_rectangle(x+width*column/config.grid.columns, y+height*row/config.grid.rows,
+                                             x+width*(column+1)/config.grid.columns, y+height*(row+1)/config.grid.rows,
+                                             fill='#263D50', outline='#5C839A')
+            row, column = min(zone.cells)
+            self.canvas.create_text(x+width*(column+.5)/config.grid.columns, y+height*(row+.5)/config.grid.rows,
+                                    text=zone.name, fill='#CDDCEA')
+        self.canvas.create_oval(x, y, x+width, y+height, outline='#AABBCD')
+        self.canvas.create_text(x, y-10, anchor='w', text='SUPERFÍCIE VIRTUAL · calibració sintètica', fill='#AABBCD')
         states = self.session.registry.states(self.session.tracker.snapshot())
         for pid, pose in self.session.poses().items():
             binding = states[pid].binding

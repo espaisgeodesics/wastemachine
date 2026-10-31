@@ -7,6 +7,7 @@ import numpy as np
 from marker_tracking import MarkerTracker
 from participants import ParticipantBinding, ParticipantRegistry
 from domain_events import CommonEventLog
+from common_spatial import CommonSpatialObserver
 from test_camera import app_module as m
 
 
@@ -15,6 +16,7 @@ class ObserverBridgeTests(unittest.TestCase):
         app=m.App.__new__(m.App)
         app.marker_tracker=MarkerTracker();app.tracking_sequence=0;app.tracking_source_id=None
         app.participants=ParticipantRegistry();app.common_events=CommonEventLog()
+        app.common_spatial=CommonSpatialObserver()
         app.camera_source_id='camera:0';app.tracking_enabled=True;app.tracking_errors=deque(maxlen=50)
         app.cam_index=Mock();app.cam_index.get.return_value=0
         return app
@@ -59,7 +61,7 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
         for i in range(5):frame[80:180,20+i*175:120+i*175]=m.cv2.aruco.generateImageMarker(dictionary,i,100)
         return m.cv2.cvtColor(frame,m.cv2.COLOR_GRAY2BGR)
 
-    def run_camera(self,enabled,observer_failure=False,event_failure=False):
+    def run_camera(self,enabled,observer_failure=False,event_failure=False,spatial_failure=False):
         root=m.tk.Tk()
         with patch.object(m.mido,'get_output_names',return_value=[]):app=m.App(root)
         app.arp_stop.set();app.arp_thread.join(timeout=1)
@@ -73,7 +75,8 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
         failure=patch.object(app.marker_tracker,'update',side_effect=RuntimeError('observer failed')) if observer_failure else patch.object(app,'tracking_enabled',enabled)
         try:
             event_context=patch.object(app.common_events,'consume',side_effect=RuntimeError('event observer failed')) if event_failure else nullcontext()
-            with failure,event_context:
+            spatial_context=patch.object(app.common_spatial,'update',side_effect=RuntimeError('spatial observer failed')) if spatial_failure else nullcontext()
+            with failure,event_context,spatial_context:
                 for now in (10,10.1,10.4,10.5):
                     with patch.object(m.time,'monotonic',return_value=now):app.tick()
                     outputs.append(app.last_frame.copy());snapshots.append(app.marker_tracker.snapshot())
@@ -82,7 +85,7 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
                 with patch.object(m.time,'monotonic',return_value=11):app.tick()
                 outputs.append(app.last_frame.copy());snapshots.append(app.marker_tracker.snapshot())
             errors=tuple(app.tracking_errors)
-            if enabled and not observer_failure and not event_failure:
+            if enabled and not observer_failure and not event_failure and not spatial_failure:
                 self.assertEqual(len(app.participants.snapshot()),5)
                 self.assertEqual(app.participants.states(app.marker_tracker.snapshot())['p4'].presence,'retired')
                 self.assertEqual({e.participant_id for e in app.common_events.snapshot() if e.kind=='marker_appeared'},
@@ -121,5 +124,79 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
         messages,actual,_,errors=self.run_camera(True,event_failure=True)
         self.assertEqual(messages,legacy);self.assertTrue(errors)
         for a,b in zip(actual,expected):np.testing.assert_array_equal(a,b)
+
+    def test_spatial_observer_exception_does_not_change_legacy_outputs(self):
+        legacy,expected,_,_=self.run_camera(False)
+        messages,actual,_,errors=self.run_camera(True,spatial_failure=True)
+        self.assertEqual(messages,legacy);self.assertTrue(errors)
+        for a,b in zip(actual,expected):np.testing.assert_array_equal(a,b)
+
+    def test_common_zones_observe_all_five_musical_markers_without_projecting_photographs(self):
+        from spatial_zones import Calibration, SpatialMap, Zone
+        root=m.tk.Tk()
+        with patch.object(m.mido,'get_output_names',return_value=[]):app=m.App(root)
+        app.arp_stop.set();app.arp_thread.join(timeout=1)
+        app.participants=ParticipantRegistry(ParticipantBinding(f'p{i}',f'Persona {i+1}','#12ABCD','camera:0',i) for i in range(5))
+        cells={(r,c) for r in range(8) for c in range(8) if app.spatial_map.grid.eligible((r,c))}
+        app.spatial_map=SpatialMap(zones=(Zone('all','Tot el cercle',cells,set(range(5)),'not-loaded.png'),),
+                                  calibration=Calibration(((.5,0),(1,.5),(.5,1),(0,.5))))
+        app.reset_spatial_projection()
+        for i in range(5):app.cards[i].update(function='Nota MIDI',note=60+i,visual=0)
+        port=Mock();app.midi=port
+        app.t0=0;app.clock_start=0
+        image=self.frame();app.camera=Mock();app.camera.read.side_effect=lambda:(True,image.copy());app.display=Mock()
+        try:
+            for now in (10,10.08,10.16):
+                with patch.object(m.time,'monotonic',return_value=now):app.tick()
+            events=[e for e in app.common_events.snapshot() if e.kind=='zone_entered']
+            self.assertEqual({e.participant_id for e in events},{f'p{i}' for i in range(5)})
+            self.assertEqual({e.zone_id for e in events},{'all'})
+            self.assertEqual([call.args[0].type for call in port.send.call_args_list],['note_on']*5)
+            self.assertIsNone(app.zone_projection.image)
+            self.assertEqual(app.zone_projection.mode,'live')
+        finally:
+            for timer in root.tk.call('after','info'):root.after_cancel(timer)
+            app.close()
+
+    def test_common_zone_observer_preserves_exact_public_photographs_and_all_duration_modes(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from PIL import Image
+        from spatial_zones import Calibration, SpatialMap, Zone
+        def run(enabled,mode,image_path):
+            root=m.tk.Tk()
+            with patch.object(m.mido,'get_output_names',return_value=[]):app=m.App(root)
+            app.arp_stop.set();app.arp_thread.join(timeout=1)
+            app.tracking_enabled=enabled;app.t0=0;app.clock_start=0
+            cells={(r,c) for r in range(8) for c in range(8) if app.spatial_map.grid.eligible((r,c))}
+            app.spatial_map=SpatialMap(zones=(Zone('photo','Foto',cells,set(range(5)),str(image_path),
+                                                       display_mode=mode,duration_s=.4),),
+                                      calibration=Calibration(((.5,0),(1,.5),(.5,1),(0,.5))))
+            app.reset_spatial_projection()
+            for i in range(5):app.cards[i].update(function=m.ZONE_FUNCTION,visual=0)
+            marker_image=self.frame();empty=np.full_like(marker_image,255)
+            app.camera=Mock();app.display=Mock();port=Mock();app.midi=port
+            outputs=[];modes=[]
+            try:
+                for index,now in enumerate((0,.08,.16,.24,.45,.6,1.1,1.5,2,2.08,2.16,2.24)):
+                    image=marker_image if index<3 or index>=9 else empty
+                    app.camera.read.return_value=(True,image.copy())
+                    with patch.object(m.time,'monotonic',return_value=now):app.tick()
+                    outputs.append(app.last_frame.copy());modes.append(app.zone_projection.mode)
+                return outputs,modes,[call.args[0] for call in port.send.call_args_list]
+            finally:
+                for timer in root.tk.call('after','info'):root.after_cancel(timer)
+                app.close()
+        with TemporaryDirectory() as folder:
+            path=Path(folder)/'red.png';Image.new('RGB',(40,30),'red').save(path)
+            for mode in ('persistent','presence','after_exit'):
+                with self.subTest(mode=mode):
+                    expected,expected_modes,expected_midi=run(False,mode,path)
+                    actual,actual_modes,actual_midi=run(True,mode,path)
+                    self.assertEqual(actual_modes,expected_modes)
+                    self.assertEqual(actual_midi,expected_midi)
+                    self.assertEqual(actual_modes[2],'zone')
+                    self.assertEqual(actual_modes[-1],'zone')
+                    for a,b in zip(actual,expected):np.testing.assert_array_equal(a,b)
 
 if __name__=='__main__':unittest.main()

@@ -14,6 +14,9 @@ class DomainEvent:
     frame_sequence: int | None = None
     marker_id: int | None = None
     participant_id: str | None = None
+    zone_id: str | None = None
+    reason: str | None = None
+    zone_name: str | None = None
 
 
 class CommonEventLog:
@@ -24,13 +27,14 @@ class CommonEventLog:
         self._sequence = 0
         self._sources = {}
         self._markers = {}
+        self._zone_frames = {}
 
     def snapshot(self):
         return tuple(self._events)
 
-    def _record(self, now, kind, source, frame_sequence=None, marker_id=None, participant_id=None):
+    def _record(self, now, kind, source, frame_sequence=None, marker_id=None, participant_id=None, zone_id=None, reason=None, zone_name=None):
         self._sequence += 1
-        event = DomainEvent(self._sequence, now, kind, source, frame_sequence, marker_id, participant_id)
+        event = DomainEvent(self._sequence, now, kind, source, frame_sequence, marker_id, participant_id, zone_id, reason, zone_name)
         self._events.append(event)
         return event
 
@@ -65,6 +69,20 @@ class CommonEventLog:
             self._markers[key] = state.presence
         self._sources[frame.source_id] = (frame.sequence, frame.status)
         return tuple(emitted)
+
+    def record_zones(self, frame, events, registry, zone_names=None):
+        """Append the complete spatial batch, including every simultaneous marker."""
+        if frame.sequence <= self._zone_frames.get(frame.source_id, -1):
+            return ()
+        batch = []
+        for event in events:
+            participant = registry.participant_for(frame.source_id, event.card_id)
+            batch.append(self._record(frame.captured_at, 'zone_entered' if event.kind == 'enter' else 'zone_exited',
+                                      frame.source_id, frame.sequence, event.card_id,
+                                      participant.participant_id if participant else None, event.zone_id, event.reason,
+                                      (zone_names or {}).get(event.zone_id)))
+        self._zone_frames[frame.source_id] = frame.sequence
+        return tuple(batch)
 
     def participant_retirement(self, registry, participant_id, retired, now):
         if isinstance(now, bool) or not isinstance(now, Real) or not isfinite(now) or now < 0:

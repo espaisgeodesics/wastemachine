@@ -8,6 +8,8 @@ Continuació: la [fase 1B, versió 4.7.6](ATMO_ESFERA_FX_FASE_1B.md), afegeix el
 
 La [fase 2, versió 4.7.7](ATMO_ESFERA_FX_FASE_2.md), incorpora el simulador separat de cinc participants amb una sessió virtual independent, el mateix contracte d’observacions i cap canvi de sortides reals.
 
+La [fase 3, versió 4.7.8](ATMO_ESFERA_FX_FASE_3.md), adapta el motor de zones al flux comú per a tots els marcadors, amb esdeveniments i zones consultables per participant i proves sobre una còpia virtual del mapa. Les sortides existents es mantenen pel camí de compatibilitat.
+
 Document de requisits: [document mestre](ATMO_ESFERA_FX_DOCUMENT_MESTRE.md), especialment l’apartat 25. Aquesta revisió lliura els punts A–G que demana, sense reescriure l’aplicació ni canviar-ne la marca encara.
 
 La base inspeccionada és **Wasteland Machine 4.7.4**, commit `bde3ccac6cf25d14e3078b192eb41d26c1cb0ede`, a la branca `codex/wasteland-camera-windows-launcher`. El nom del fitxer principal conserva «4.5.15 pas 15», però `APP_VERSION` és 4.7.4. No s’ha de partir de la còpia pas 14 ni assumir que `main` contingui les últimes entregues.
