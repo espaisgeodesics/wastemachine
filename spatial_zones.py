@@ -81,6 +81,8 @@ class Zone:
     authorized_cards: frozenset[int]
     image_path: str | None = None
     enabled: bool = True
+    display_mode: str = 'persistent'
+    duration_s: float = 3.0
 
     def __post_init__(self):
         for key in ('id', 'name'):
@@ -100,6 +102,12 @@ class Zone:
         for card in cards:
             _integer(card, 'ArUco ID', 0, 15)
         object.__setattr__(self, 'authorized_cards', cards)
+        if self.display_mode not in ('persistent', 'presence', 'after_exit'):
+            raise ValueError('Mode de durada de la imatge no vàlid.')
+        duration = _number(self.duration_s, 'duration_s')
+        if not .1 <= duration <= 86400:
+            raise ValueError('La durada ha de ser entre 0,1 i 86400 segons.')
+        object.__setattr__(self, 'duration_s', duration)
         if type(self.enabled) is not bool:
             raise ValueError('enabled must be a boolean')
         if self.image_path is not None:
@@ -240,7 +248,7 @@ class SpatialMap:
                 'grid': {'rows': self.grid.rows, 'columns': self.grid.columns},
                 'zones': [{'id': z.id, 'name': z.name, 'cells': [list(c) for c in sorted(z.cells)],
                            'authorized_cards': sorted(z.authorized_cards), 'image_path': z.image_path,
-                           'enabled': z.enabled} for z in self.zones],
+                           'enabled': z.enabled, 'display_mode': z.display_mode, 'duration_s': z.duration_s} for z in self.zones],
                 'calibration': calibration,
                 'stabilization': {key: getattr(self.stabilization, key) for key in
                                   ('enter_delay_s', 'exit_delay_s', 'min_detections', 'hysteresis', 'max_detection_gap_s')}}

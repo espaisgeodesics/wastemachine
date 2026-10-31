@@ -139,6 +139,35 @@ class ZoneEditorTests(unittest.TestCase):
             self.app.release_zone_scene()
             self.assertEqual(self.app.zone_projection.mode,'live')
 
+    def test_presence_expiry_reaches_real_projector_as_black(self):
+        with TemporaryDirectory() as folder:
+            image=Path(folder)/'photo.png';Image.new('RGB',(50,50),'red').save(image)
+            self.app.spatial_map=SpatialMap(zones=(Zone('a','Bosc',{(3,2)},{4},str(image),display_mode='presence'),),
+                calibration=Calibration(((.5,0),(1,.5),(.5,1),(0,.5))))
+            self.app.reset_spatial_projection()
+            for now in (0,.08,.16):self.app.process_spatial_frame({4:(.3,.45)}, {},now)
+            self.assertTrue(self.app.compose_output_frame(1).any())
+            self.app.process_spatial_frame({}, {},.24);self.app.process_spatial_frame({}, {},.45)
+            self.app.last_frame=self.app.compose_output_frame(2)
+            self.app.proj_label=Mock();self.app.proj_label.winfo_width.return_value=400;self.app.proj_label.winfo_height.return_value=300
+            self.assertFalse(self.app.last_frame.any());self.assertFalse(self.app.projector_frame().any())
+            self.assertIn('negre en repòs',self.editor.runtime_info.get())
+            self.app.midi.send.assert_not_called()
+
+    def test_image_duration_editor_defaults_validation_and_reload(self):
+        self.assertEqual(self.editor.display_mode.get(),'Mentre la targeta sigui a la zona')
+        self.assertEqual(str(self.editor.duration_entry.cget('state')),'disabled')
+        self.editor.display_mode.set('Segons després de retirar-la');self.editor.update_duration_state()
+        self.assertEqual(str(self.editor.duration_entry.cget('state')),'normal')
+        self.editor.duration_s.set('2,5');self.create_zone()
+        zone=self.app.spatial_map.zones[0]
+        self.assertEqual(zone.display_mode,'after_exit');self.assertEqual(zone.duration_s,2.5)
+        self.editor.duration_s.set('-3')
+        with patch.object(m.messagebox,'showerror') as error:
+            self.assertFalse(self.editor.save_zone());error.assert_called_once()
+        self.assertEqual(self.app.spatial_map.zones[0],zone)
+        self.editor._load_zone(zone.id);self.assertEqual(self.editor.duration_s.get(),'2.5')
+
     def test_pending_edits_are_not_silently_saved_or_discarded(self):
         with TemporaryDirectory() as folder:
             self.app.project=str(Path(folder)/'project.json')

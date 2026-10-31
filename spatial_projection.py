@@ -82,17 +82,20 @@ class ZoneProjection:
         self.zone_name = None
         self.last_error = None
         self.colors = {}
+        self.display_mode='persistent';self.duration_s=3.;self.deadline=None;self.absent_since=None
         self.configure(config or SpatialMap(),project_file,keep_scene=False)
 
     def configure(self, config, project_file, keep_scene=True):
-        self.engine = SpatialEngine(config)
+        unchanged=hasattr(self,'engine') and self.engine.map==config and keep_scene
+        if not unchanged:self.engine = SpatialEngine(config)
         self.project_file = project_file
         self.store.clear();self.colors.clear();self.last_error = None
         if not keep_scene:
+            self.deadline=None
             self.mode='live';self.image=None;self.scene=None;self.zone_name=None;self.color_card=None
 
     def request_live(self):
-        self.mode='live';self.color_card=None
+        self.mode='live';self.color_card=None;self.deadline=None
 
     def _color_events(self, observations, now):
         events=[]
@@ -144,13 +147,34 @@ class ZoneProjection:
                 self.last_error=f'No s’ha carregat la imatge de la zona {scene.zone_id}: {exc}'
             else:
                 self.image=loaded;self.scene=scene
-                self.zone_name=next(z.name for z in self.engine.map.zones if z.id==scene.zone_id)
+                zone=next(z for z in self.engine.map.zones if z.id==scene.zone_id)
+                self.zone_name=zone.name;self.display_mode=zone.display_mode;self.duration_s=zone.duration_s;self.deadline=None;self.absent_since=None
                 self.mode='zone';self.color_card=None;self.last_error=None
                 return result
         if color_events:
-            self.mode='color';self.color_card=min(color_events)
+            self.mode='color';self.color_card=min(color_events);self.deadline=None
+        if self.mode=='zone' and self.scene is not None:
+            source=next((z for z in self.engine.map.zones if z.id==self.scene.zone_id),None)
+            point=zones.get(self.scene.card_id)
+            if point is not None and not normalized:
+                point=self.engine.map.calibration.project(point) if self.engine.map.calibration else None
+            inside=(source is not None and source.enabled and self.scene.card_id in source.authorized_cards
+                    and point is not None and self.engine.map.grid.cell_at(point) is not None
+                    and any(self.engine.map.grid.expanded_contains(cell,point,self.engine.map.stabilization.hysteresis) for cell in source.cells))
+            if source is not None:
+                self.display_mode=source.display_mode;self.duration_s=source.duration_s
+            if self.display_mode!='after_exit':self.deadline=None
+            if inside:self.absent_since=None;self.deadline=None
+            else:
+                if self.absent_since is None:self.absent_since=now
+                if now-self.absent_since+1e-12>=self.engine.map.stabilization.exit_delay_s:
+                    if self.display_mode=='presence':self.mode='black'
+                    elif self.display_mode=='after_exit' and self.deadline is None:self.deadline=now+self.duration_s
+            if self.deadline is not None and now>=self.deadline:
+                self.mode='black';self.deadline=None
         return result
 
     def image_frame(self,size):
+        if self.mode=='black':return np.zeros((size[1],size[0],3),np.uint8)
         if self.mode!='zone' or self.image is None:return None
         return self.store.fit(self.image,size)

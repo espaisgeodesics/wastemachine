@@ -16,7 +16,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.7.3'
+APP_VERSION='4.7.4'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
@@ -706,7 +706,7 @@ class App:
     if self.zone_editor is None:return
     player=self.zone_projection
     last=player.zone_name or 'cap'
-    output={'zone':'fotografia persistent','color':'color cromàtic','live':'visuals en directe'}[player.mode]
+    output={'zone':'fotografia persistent','color':'color cromàtic','live':'visuals en directe','black':'negre en repòs'}[player.mode]
     self.zone_editor.runtime_info.set(f'Última zona activada: {last} · Sortida: {output}'+(' · '+player.last_error if player.last_error else ''))
  def release_zone_scene(self):
     self.zone_projection.request_live();self.visual_dirty=True;self.preview_dirty=True;self.update_spatial_editor_runtime()

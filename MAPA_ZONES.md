@@ -175,3 +175,18 @@ A **CALIBRAR TERRA**, el desplegable **Contorn de referència** permet triar **C
 Cada zona té una fotografia. Per assignar una fotografia diferent a cada casella, crea una zona independent per casella: NOVA ZONA, selecciona una sola casella, dona-li nom, autoritza la targeta, tria la imatge i desa la zona. Repeteix-ho amb cada casella i desa el projecte. Pots autoritzar la mateixa targeta a diverses zones. Si selecciones quatre caselles en una mateixa zona, les quatre comparteixen la fotografia. Els efectes visuals per zona encara no estan implementats; les zones actuals activen fotografies JPG/PNG.
 
 Validació 4.7.3: **95 proves correctes**, incloent el retorn de coordenades amb perspectiva i el canvi de contorn sense modificar els punts de calibració. Revisió visual del contorn circular en pantalla virtual.
+
+
+## Durada de les fotografies (4.7.4)
+
+A l’editor de zones, cada zona té un desplegable **Durada de la imatge**:
+
+- **Mentre la targeta sigui a la zona**: en retirar la targeta que ha activat la fotografia, o en sortir de la zona, la projecció queda negra. S’aplica la tolerància de sortida configurada (0,20 s per defecte) per evitar parpelleigs per una detecció perduda.
+- **Segons després de retirar-la**: la fotografia continua mentre la targeta és a la zona. Després de confirmar-ne la sortida comença el compte enrere dels segons indicats. La durada admet decimals amb coma o punt, de 0,1 a 86400 segons. Tornar a la zona cancel·la el compte enrere; una nova retirada el torna a iniciar. En acabar queda negre, sense recuperar automàticament una altra fotografia o visual antic.
+- **Mantenir la imatge**: conserva el comportament persistent anterior, fins a una altra ordre visual o TORNA ALS VISUALS.
+
+Les zones noves proposen el primer mode. Les zones dels projectes antics es carreguen com **Mantenir la imatge**, perquè no canviïn silenciosament: selecciona cada zona, tria el comportament desitjat, prem **DESAR ZONA AL MAPA** i desa el projecte. La calibració i les autoritzacions es conserven.
+
+El seguiment correspon a la targeta que ha activat l’última fotografia. Una nova ordre de zona o color substitueix la sortida i cancel·la el temporitzador anterior; aquest no pot apagar una imatge nova. Canviar la mida del projector, fer una pausa visual o desar el projecte no reinicia el compte enrere. La previsualització pot continuar mostrant el mapa mentre la sortida del projector és negra.
+
+Validació 4.7.4: **103 proves correctes**, amb proves noves de desaparició, tolerància de detecció, retorn abans del final, absència de caducitat mentre la targeta és visible, cancel·lació per una altra ordre, compatibilitat amb projectes anteriors, validació de segons i arribada del negre a la sortida de projecció. Revisió del formulari en pantalla virtual; queda pendent comprovar el comportament al projector físic.

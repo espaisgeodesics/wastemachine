@@ -49,6 +49,9 @@ def _cell_polygon(row, column, grid):
     return tuple(points)
 
 
+DISPLAY_MODES = {'Mantenir la imatge': 'persistent', 'Mentre la targeta sigui a la zona': 'presence', 'Segons després de retirar-la': 'after_exit'}
+
+
 class ZoneEditor:
     def __init__(self, window, config, get_cards, get_project, on_change, default_card=None):
         self.window = window
@@ -67,13 +70,15 @@ class ZoneEditor:
         self.name = tk.StringVar()
         self.image_path = tk.StringVar()
         self.enabled = tk.BooleanVar(value=True)
+        self.display_mode = tk.StringVar(value='Mentre la targeta sigui a la zona')
+        self.duration_s = tk.StringVar(value='3')
         self.cards = [tk.BooleanVar(value=False) for _ in range(16)]
         self.notice = tk.StringVar()
         self.selection_info = tk.StringVar()
         self.calibration_info = tk.StringVar()
         self.runtime_info = tk.StringVar(value='Última zona activada: cap')
         self._build()
-        for var in (self.name, self.image_path, self.enabled, *self.cards):
+        for var in (self.name, self.image_path, self.enabled, self.display_mode, self.duration_s, *self.cards):
             var.trace_add('write', self._changed)
         self.set_map(config)
 
@@ -108,9 +113,16 @@ class ZoneEditor:
         image_buttons = ttk.Frame(right);image_buttons.pack(fill='x', pady=4)
         ttk.Button(image_buttons, text='TRIAR IMATGE…', command=self.choose_image).pack(side='left')
         ttk.Button(image_buttons, text='SENSE IMATGE', command=self.remove_image).pack(side='left', padx=3)
+        ttk.Label(right,text='Durada de la imatge').pack(anchor='w',pady=(5,2))
+        mode=ttk.Combobox(right,textvariable=self.display_mode,values=tuple(DISPLAY_MODES),state='readonly',width=32)
+        mode.pack(fill='x');mode.bind('<<ComboboxSelected>>',lambda event:self.update_duration_state())
+        seconds=ttk.Frame(right);seconds.pack(fill='x',pady=3)
+        ttk.Label(seconds,text='Segons després de retirar-la:').pack(side='left')
+        self.duration_entry=ttk.Spinbox(seconds,textvariable=self.duration_s,from_=.1,to=86400,increment=.5,width=7)
+        self.duration_entry.pack(side='right');self.update_duration_state()
         self.image_preview = tk.Label(right, bg='#171411', fg='#e6d0b5', width=32, height=8, wraplength=265)
         self.image_preview.pack(fill='both', expand=True, pady=5)
-        ttk.Button(right, text='DESAR ZONA AL MAPA', command=self.save_zone).pack(fill='x', pady=6)
+        ttk.Button(right, text='DESAR ZONA AL MAPA', command=self.save_zone).pack(side='bottom',before=self.image_preview,fill='x', pady=6)
         center = ttk.Frame(body);center.pack(fill='both', expand=True)
         self.canvas = tk.Canvas(center, bg='#171411', highlightthickness=0, width=440, height=440)
         self.canvas.pack(fill='both', expand=True)
@@ -118,7 +130,7 @@ class ZoneEditor:
         self.canvas.bind('<ButtonPress-1>', self.press)
         self.canvas.bind('<B1-Motion>', self.drag)
         ttk.Label(center, textvariable=self.selection_info).pack(fill='x', pady=5)
-        ttk.Label(self.window, textvariable=self.notice, wraplength=1000).pack(fill='x', padx=10, pady=(4, 8))
+        ttk.Label(self.window, textvariable=self.notice, wraplength=1000).pack(side='bottom',before=body,fill='x', padx=10, pady=(4, 8))
 
     def _changed(self, *args):
         if not self.loading:
@@ -148,6 +160,7 @@ class ZoneEditor:
         self.loading = True
         self.current_id = None;self.cells = set()
         self.name.set('');self.image_path.set('');self.enabled.set(True)
+        self.display_mode.set('Mentre la targeta sigui a la zona');self.duration_s.set('3');self.update_duration_state()
         for i, var in enumerate(self.cards):var.set(i == self.default_card)
         for item in self.list.selection():self.list.selection_remove(item)
         self.loading = False;self.dirty = False
@@ -169,6 +182,8 @@ class ZoneEditor:
         self.loading = True
         self.current_id = id;self.cells = set(zone.cells)
         self.name.set(zone.name);self.image_path.set(zone.image_path or '');self.enabled.set(zone.enabled)
+        self.display_mode.set(next(label for label,value in DISPLAY_MODES.items() if value==zone.display_mode))
+        self.duration_s.set(str(zone.duration_s));self.update_duration_state()
         for i, var in enumerate(self.cards):var.set(i in zone.authorized_cards)
         self.list.selection_set(id);self.list.see(id)
         self.loading = False;self.dirty = False
@@ -255,13 +270,17 @@ class ZoneEditor:
         except (OSError, ValueError, Image.DecompressionBombError) as exc:
             self.image_preview.configure(image='', text='Imatge no vàlida: '+str(exc), width=32, height=8)
 
+    def update_duration_state(self):
+        self.duration_entry.configure(state='normal' if DISPLAY_MODES.get(self.display_mode.get())=='after_exit' else 'disabled')
+
     def save_zone(self):
         try:
             if not self.name.get().strip():raise ValueError('Escriu un nom per a la zona.')
             if not self.cells:raise ValueError('Selecciona una o diverses caselles dins del cercle.')
             if self.enabled.get() and any(zone.enabled and zone.id!=self.current_id and zone.cells.intersection(self.cells) for zone in self.config.zones):raise ValueError('Hi ha caselles que ja pertanyen a una altra zona habilitada.')
             zone = Zone(self.current_id or uuid4().hex, self.name.get(), self.cells,
-                        {i for i, var in enumerate(self.cards) if var.get()}, self.image_path.get() or None, self.enabled.get())
+                        {i for i, var in enumerate(self.cards) if var.get()}, self.image_path.get() or None, self.enabled.get(),
+                        DISPLAY_MODES[self.display_mode.get()],float(self.duration_s.get().replace(',', '.')))
             zones = [zone if existing.id == zone.id else existing for existing in self.config.zones]
             if not any(existing.id == zone.id for existing in self.config.zones):zones.append(zone)
             config = replace(self.config, zones=tuple(zones))

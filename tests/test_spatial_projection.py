@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -91,6 +92,62 @@ class ProjectionTests(unittest.TestCase):
         np.testing.assert_array_equal(frame[0,50],[0,0,0])
         np.testing.assert_array_equal(frame[50,50],[0,0,255])
         self.assertIs(frame,self.player.image_frame((100,100)))
+
+    def set_duration(self,mode,seconds=1):
+        self.config=replace(self.config,zones=tuple(replace(z,display_mode=mode,duration_s=seconds) for z in self.config.zones))
+        self.player.configure(self.config,self.root/'project.json',False)
+
+    def test_presence_hides_on_confirmed_loss_and_reentry_reactivates(self):
+        self.set_duration('presence');self.confirm((.3,.45))
+        self.player.process_normalized({}, {},.24);self.assertEqual(self.player.mode,'zone')
+        self.player.process_normalized({}, {},.45);self.assertEqual(self.player.mode,'black')
+        self.assertFalse(self.player.image_frame((640,360)).any())
+        self.confirm((.3,.45),.53);self.assertEqual(self.player.mode,'zone')
+
+    def test_timer_starts_after_exit_and_stops_on_return(self):
+        self.set_duration('after_exit');self.confirm((.3,.45))
+        for now in (.24,.4,.56):self.player.process_normalized({4:(.3,.45)}, {},now)
+        self.assertIsNone(self.player.deadline)
+        self.player.process_normalized({}, {},.64);self.player.process_normalized({}, {},.85)
+        self.assertAlmostEqual(self.player.deadline,1.85)
+        self.player.process_normalized({}, {},1.05);self.assertAlmostEqual(self.player.deadline,1.85)
+        self.confirm((.3,.45),1.13);self.assertIsNone(self.player.deadline)
+        self.player.process_normalized({}, {},1.37);self.player.process_normalized({}, {},1.58)
+        self.player.process_normalized({}, {},2.59);self.assertEqual(self.player.mode,'black')
+
+    def test_timer_never_expires_while_marker_is_visible(self):
+        self.set_duration('after_exit',.1);self.confirm((.3,.45))
+        for now in np.arange(.24,2,.08):self.player.process_normalized({4:(.3,.45)}, {},float(now))
+        self.assertEqual(self.player.mode,'zone');self.assertIsNone(self.player.deadline)
+
+    def test_other_visual_command_cancels_old_image_timer(self):
+        self.set_duration('after_exit');self.confirm((.3,.45))
+        self.player.process_normalized({}, {},.24);self.player.process_normalized({}, {},.45)
+        for now in (.53,.61,.69):self.player.process_normalized({}, {0:(.5,.5)},now)
+        self.assertEqual(self.player.mode,'color');self.assertIsNone(self.player.deadline)
+        for now in np.arange(.77,2,.08):self.player.process_normalized({}, {0:(.5,.5)},float(now))
+        self.assertEqual(self.player.mode,'color')
+
+    def test_save_and_map_edit_do_not_leave_presence_image_stuck(self):
+        self.set_duration('presence');self.confirm((.3,.45))
+        self.player.configure(self.config,self.root/'project.json',True)
+        self.player.process_normalized({}, {},.24);self.player.process_normalized({}, {},.45)
+        self.assertEqual(self.player.mode,'black')
+        self.confirm((.3,.45),.53)
+        changed=replace(self.config,zones=(replace(self.config.zones[0],name='Bosc nou'),self.config.zones[1]))
+        self.player.configure(changed,self.root/'project.json',True)
+        self.player.process_normalized({}, {},.77);self.player.process_normalized({}, {},.98)
+        self.assertEqual(self.player.mode,'black')
+
+    def test_duration_roundtrip_legacy_defaults_and_invalid_values(self):
+        self.set_duration('after_exit',2.5)
+        loaded=SpatialMap.from_dict(self.config.to_dict());self.assertEqual(loaded,self.config)
+        data=self.config.to_dict()
+        for zone in data['zones']:zone.pop('display_mode');zone.pop('duration_s')
+        self.assertEqual(SpatialMap.from_dict(data).zones[0].display_mode,'persistent')
+        for value in (0,-1,float('nan'),True,86401):
+            with self.assertRaises(ValueError):replace(self.config.zones[0],duration_s=value)
+        with self.assertRaises(ValueError):replace(self.config.zones[0],display_mode='invalid')
 
     def test_transparency_is_composited_on_black(self):
         path=self.root/'alpha.png';Image.new('RGBA',(10,10),(255,0,0,128)).save(path)
