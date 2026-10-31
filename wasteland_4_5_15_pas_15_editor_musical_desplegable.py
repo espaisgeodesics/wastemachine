@@ -4,6 +4,9 @@ from collections import deque
 from dataclasses import replace
 from marker_tracking import MarkerTracker, ObservationFrame
 from aruco_observations import observation_frame
+from participants import ParticipantRegistry
+from domain_events import CommonEventLog
+from participant_editor import ParticipantEditor
 from spatial_calibration import CalibrationEditor
 from spatial_zones import SpatialMap
 from spatial_projection import ZoneProjection
@@ -18,7 +21,7 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.7.5'
+APP_VERSION='4.7.6'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
@@ -105,6 +108,7 @@ class App:
     self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
     self.midi_log=deque(maxlen=1000);self.midi_log_lock=threading.Lock();self.midi_log_revision=0;self.diagnostics_window=None;self.diagnostics_seen=-1
     self.marker_tracker=MarkerTracker();self.tracking_sequence=0;self.tracking_source_id=None;self.camera_source_id=None;self.tracking_errors=deque(maxlen=50);self.tracking_enabled=True
+    self.participants=ParticipantRegistry();self.common_events=CommonEventLog();self.participant_window=None;self.participant_editor=None
     self.spatial_map=SpatialMap();self.zone_projection=ZoneProjection(self.spatial_map);self.spatial_warning=None;self.zone_editor=None;self.zone_window=None
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
@@ -151,6 +155,9 @@ class App:
     fm.add_command(label='Restablir distribució inicial',command=self.default_window_layout)
     fm.add_separator();fm.add_command(label='Sortir',command=self.close)
     menu.add_cascade(label='Projecte',menu=fm)
+    participants_menu=tk.Menu(menu,tearoff=False)
+    participants_menu.add_command(label='Registre i seguiment…',command=self.open_participants)
+    menu.add_cascade(label='Participants',menu=participants_menu)
     help_menu=tk.Menu(menu,tearoff=False);help_menu.add_command(label='Versió i fitxer que s’està executant',command=self.show_runtime_info)
     menu.add_cascade(label='Ajuda',menu=help_menu);self.root.config(menu=menu)
     banner=tk.Canvas(self.root,bg='#1c120e',height=60,highlightthickness=0)
@@ -941,8 +948,31 @@ class App:
       return True
     except Exception as e:
       messagebox.showerror('Configuració',str(e));return False
+ def open_participants(self):
+    if self.participant_window is not None and self.participant_window.winfo_exists():
+      self.participant_window.deiconify();self.participant_window.lift();return
+    window=self.participant_window=tk.Toplevel(self.root)
+    window.title('WASTELAND · Participants · Fase 1B');window.geometry('930x650');window.minsize(860,580)
+    self.participant_editor=ParticipantEditor(window,lambda:self.participants,self.marker_tracker.snapshot,
+      self.marker_tracker.sources,lambda:self.common_events.snapshot(),self.set_participant_retired,
+      lambda:f'camera:{self.cam_index.get()}')
+    def close():
+      if self.participant_editor.discard():
+        window.destroy();self.participant_window=None;self.participant_editor=None
+    window.protocol('WM_DELETE_WINDOW',close)
+ def set_participant_retired(self,participant_id,retired):
+    # Session metadata only: do not retire the physical marker or send actions.
+    self.common_events.participant_retirement(self.participants,participant_id,retired,time.monotonic())
+ def confirm_participant_discard(self):
+    return self.participant_editor is None or self.participant_editor.discard()
+ def replace_participants(self,registry):
+    self.participants=registry;self.common_events=CommonEventLog()
+    if self.participant_editor is not None:
+      self.participant_editor.reset();self.participant_editor.refresh_rows()
  def new_project(self):
+    if not self.confirm_participant_discard():return
     if not self.confirm_zone_discard():return
+    self.replace_participants(ParticipantRegistry())
     self.spatial_map=SpatialMap()
     self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table();self.reset_spatial_projection();self.refresh_zone_editor(); self.status.set('Projecte nou')
  def update_bpm(self):
@@ -956,6 +986,8 @@ class App:
       self.status.set(f'Rellotge musical: {self.bpm} BPM. Acords quantitzats si activats; Cakewalk conserva el seu tempo.')
     except (ValueError,tk.TclError):self.status.set('Tempo no vàlid')
  def save_project(self,as_new=False):
+    if self.participant_editor is not None and self.participant_editor.dirty:
+      messagebox.showwarning('Participants','Hi ha canvis sense aplicar. Prem APLICAR PARTICIPANT abans de desar el projecte.',parent=self.root);return
     if self.zone_editor is not None and self.zone_editor.dirty:
       messagebox.showwarning('Zones espacials','Hi ha canvis de zona sense aplicar. Obre ZONES ESPACIALS i prem DESAR ZONA AL MAPA abans de desar el projecte.',parent=self.root);return
     if not self.apply_card():return
@@ -972,19 +1004,23 @@ class App:
       spatial=rebase_map_images(self.spatial_map,old_project,path)
       data={'version':4,'master_volume':self.master_volume.get(),'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual}
       data=spatial.into_project(data)
+      data['participants']=self.participants.to_dict()
       with open(path,'w',encoding='utf-8') as f:json.dump(data,f,ensure_ascii=False,indent=2)
       self.project=path;self.spatial_map=spatial;self.reset_spatial_projection(keep_scene=True);self.refresh_zone_editor()
       self.status.set(f'Projecte desat: {Path(self.project).name}')
     except Exception as e:messagebox.showerror('Desar',str(e))
  def open_project(self):
+    if not self.confirm_participant_discard():return
     if not self.confirm_zone_discard():return
     path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte Wasteland','*.json')]);
     if not path:return
     try:
       with open(path,encoding='utf-8') as f:d=json.load(f)
       spatial=SpatialMap.from_project(d)
+      participants=ParticipantRegistry.from_project(d)
       if len(d['cards'])!=16:raise ValueError('El projecte no conté 16 targetes')
       self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path;self.spatial_map=spatial;self.reset_spatial_projection();self.refresh_zone_editor(); self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
+      self.replace_participants(participants)
     except Exception as e:messagebox.showerror('Obrir',str(e))
  def refresh_midi(self):
      # No amaguem els errors: aixi podem diagnosticar loopMIDI.
@@ -1815,7 +1851,7 @@ class App:
                   (12,H-14),cv2.FONT_HERSHEY_SIMPLEX,.51,(220,220,220),1,cv2.LINE_AA)
     return result
  def observe_marker_frame(self,corners=None,ids=None,image_size=None,captured_at=None):
-    # Phase 1A is a passive observer: never let its errors interrupt legacy actions.
+    # Common tracking and phase 1B events remain passive observers.
     if not self.tracking_enabled:return
     source=(self.camera_source_id or f'camera:{self.cam_index.get()}') if image_size is not None else (self.tracking_source_id or self.camera_source_id)
     if source is None:return
@@ -1826,10 +1862,13 @@ class App:
              else ObservationFrame(source,self.tracking_sequence,now,status='unavailable'))
       if self.tracking_source_id is not None and self.tracking_source_id!=source:
         old=self.marker_tracker.sources()[self.tracking_source_id]
-        if now>old.captured_at:self.marker_tracker.update(ObservationFrame(self.tracking_source_id,self.tracking_sequence,now,status='unavailable'))
-      self.marker_tracker.update(frame);self.tracking_source_id=source
+        if now>old.captured_at:self.update_common_tracking(ObservationFrame(self.tracking_source_id,self.tracking_sequence,now,status='unavailable'))
+      self.update_common_tracking(frame);self.tracking_source_id=source
     except Exception as exc:
       self.tracking_errors.append((self.tracking_sequence,str(exc)))
+ def update_common_tracking(self,frame):
+    states=self.marker_tracker.update(frame)
+    self.common_events.consume(frame,states,self.participants)
  def tick(self):
     try:
       if self.audio_error:

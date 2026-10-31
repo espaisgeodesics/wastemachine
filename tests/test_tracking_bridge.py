@@ -1,9 +1,12 @@
 from collections import deque
+from contextlib import nullcontext
 import os
 import unittest
 from unittest.mock import Mock, patch
 import numpy as np
 from marker_tracking import MarkerTracker
+from participants import ParticipantBinding, ParticipantRegistry
+from domain_events import CommonEventLog
 from test_camera import app_module as m
 
 
@@ -11,6 +14,7 @@ class ObserverBridgeTests(unittest.TestCase):
     def app(self):
         app=m.App.__new__(m.App)
         app.marker_tracker=MarkerTracker();app.tracking_sequence=0;app.tracking_source_id=None
+        app.participants=ParticipantRegistry();app.common_events=CommonEventLog()
         app.camera_source_id='camera:0';app.tracking_enabled=True;app.tracking_errors=deque(maxlen=50)
         app.cam_index=Mock();app.cam_index.get.return_value=0
         return app
@@ -55,18 +59,21 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
         for i in range(5):frame[80:180,20+i*175:120+i*175]=m.cv2.aruco.generateImageMarker(dictionary,i,100)
         return m.cv2.cvtColor(frame,m.cv2.COLOR_GRAY2BGR)
 
-    def run_camera(self,enabled,observer_failure=False):
+    def run_camera(self,enabled,observer_failure=False,event_failure=False):
         root=m.tk.Tk()
         with patch.object(m.mido,'get_output_names',return_value=[]):app=m.App(root)
         app.arp_stop.set();app.arp_thread.join(timeout=1)
         port=Mock();app.midi=port;app.tracking_enabled=enabled;app.t0=0;app.clock_start=0
+        app.participants=ParticipantRegistry(ParticipantBinding(f'p{i}',f'Persona {i+1}','#12ABCD','camera:0',i) for i in range(5))
+        app.set_participant_retired('p4',True)
         for i in range(5):app.cards[i].update(function='Nota MIDI',note=60+i,visual=0)
         frame=self.frame();empty=np.full_like(frame,255);outputs=[];snapshots=[]
         app.display=Mock();app.camera=Mock()
         app.camera.read.side_effect=[(True,frame.copy()),(True,frame.copy()),(True,empty.copy()),(False,None)]
         failure=patch.object(app.marker_tracker,'update',side_effect=RuntimeError('observer failed')) if observer_failure else patch.object(app,'tracking_enabled',enabled)
         try:
-            with failure:
+            event_context=patch.object(app.common_events,'consume',side_effect=RuntimeError('event observer failed')) if event_failure else nullcontext()
+            with failure,event_context:
                 for now in (10,10.1,10.4,10.5):
                     with patch.object(m.time,'monotonic',return_value=now):app.tick()
                     outputs.append(app.last_frame.copy());snapshots.append(app.marker_tracker.snapshot())
@@ -75,6 +82,11 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
                 with patch.object(m.time,'monotonic',return_value=11):app.tick()
                 outputs.append(app.last_frame.copy());snapshots.append(app.marker_tracker.snapshot())
             errors=tuple(app.tracking_errors)
+            if enabled and not observer_failure and not event_failure:
+                self.assertEqual(len(app.participants.snapshot()),5)
+                self.assertEqual(app.participants.states(app.marker_tracker.snapshot())['p4'].presence,'retired')
+                self.assertEqual({e.participant_id for e in app.common_events.snapshot() if e.kind=='marker_appeared'},
+                                 {f'p{i}' for i in range(5)})
             for timer in root.tk.call('after','info'):root.after_cancel(timer)
             app.close()
             return [call.args[0] for call in port.send.call_args_list],outputs,snapshots,errors
@@ -101,6 +113,12 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
     def test_observer_exception_does_not_change_legacy_outputs(self):
         legacy,expected,_,_=self.run_camera(False)
         messages,actual,_,errors=self.run_camera(True,observer_failure=True)
+        self.assertEqual(messages,legacy);self.assertTrue(errors)
+        for a,b in zip(actual,expected):np.testing.assert_array_equal(a,b)
+
+    def test_event_observer_exception_does_not_change_legacy_outputs(self):
+        legacy,expected,_,_=self.run_camera(False)
+        messages,actual,_,errors=self.run_camera(True,event_failure=True)
         self.assertEqual(messages,legacy);self.assertTrue(errors)
         for a,b in zip(actual,expected):np.testing.assert_array_equal(a,b)
 

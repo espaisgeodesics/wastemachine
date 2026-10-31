@@ -144,3 +144,9 @@ Cada pista independent necessita una ruta canal+CC pròpia. El monitor mostra l'
 El botó superior ZONES ESPACIALS obre un editor independent de la quadrícula circular 8×8. Pots seleccionar i agrupar caselles, posar nom a cada zona, autoritzar targetes, triar una imatge i veure'n la miniatura. La funció Activar zona espacial de l'editor de targetes també obre aquesta configuració. Prem DESAR ZONA AL MAPA i després desa el projecte per conservar-la. Els projectes antics continuen obrint-se; les zones i les rutes d'imatges també es conserven en fer Desar com.
 
 Aquesta fase configura el mapa però encara no activa fotografies a la projecció. No envia MIDI i no interpreta les coordenades de càmera com si estiguessin calibrades. La fase següent integrarà la projecció persistent. Documentació completa a MAPA_ZONES.md.
+
+## Participants — ATMO fase 1B (4.7.6)
+
+Obre **Participants → Registre i seguiment…**, escriu el nom o àlies, tria el color i assigna una font (`camera:0`, etc.) i un ID ArUco 0–15. Prem **APLICAR PARTICIPANT** i desa el projecte. **NOU** permet afegir més persones; seleccionar una fila permet editar-la. El nom del participant és independent del nom i la funció musical de la targeta. ID 0 correspon a targeta 01.
+
+La finestra mostra presència, última posició de càmera i incidències de font. Les pèrdues no eliminen participants. **RETIRAR / RECUPERAR** són ordres de sessió i no aturen les funcions MIDI/visuals de la targeta. **ELIMINAR** suprimeix la vinculació, amb confirmació. Colors i seguiment són només de l’operador; la projecció continua neta. Els projectes antics obren amb el registre buit. Detalls, compatibilitat i proves a [ATMO_ESFERA_FX_FASE_1B.md](ATMO_ESFERA_FX_FASE_1B.md).

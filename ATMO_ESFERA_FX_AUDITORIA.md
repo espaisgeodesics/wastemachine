@@ -4,6 +4,8 @@ Data de l’auditoria: 31 d’octubre de 2026. Estat original: **proposta abans 
 
 Actualització posterior: Jordi ha aprovat l’arquitectura i la fase 1A. Vegeu l’[entrega de la fase 1A, versió 4.7.5](ATMO_ESFERA_FX_FASE_1A.md). La resta d’aquest informe conserva la proposta i les observacions de la base 4.7.4.
 
+Continuació: la [fase 1B, versió 4.7.6](ATMO_ESFERA_FX_FASE_1B.md), afegeix el registre de participants, els estats consultables i els esdeveniments passius. MIDI i visuals continuen pel camí existent.
+
 Document de requisits: [document mestre](ATMO_ESFERA_FX_DOCUMENT_MESTRE.md), especialment l’apartat 25. Aquesta revisió lliura els punts A–G que demana, sense reescriure l’aplicació ni canviar-ne la marca encara.
 
 La base inspeccionada és **Wasteland Machine 4.7.4**, commit `bde3ccac6cf25d14e3078b192eb41d26c1cb0ede`, a la branca `codex/wasteland-camera-windows-launcher`. El nom del fitxer principal conserva «4.5.15 pas 15», però `APP_VERSION` és 4.7.4. No s’ha de partir de la còpia pas 14 ni assumir que `main` contingui les últimes entregues.
