@@ -11,14 +11,15 @@ try:
 except ImportError:
     mido = None
 
-APP_VERSION='4.6.2'
+APP_VERSION='4.6.3'
 CARD_LOST_TIMEOUT=.25
 ROOT=Path(__file__).resolve().parent
 (ROOT/'PROJECTES').mkdir(exist_ok=True)
 (ROOT/'GRAVACIONS').mkdir(exist_ok=True)
 W,H=640,360
 NAMES=['Motor de ferro','Tempesta de pols','Vapor tòxic','Reactor elèctric','Túnel mecànic','Forja de foc','Fantasma digital','Ones mecàniques','Ferralla orbital','Nucli radioactiu','Ull de la màquina','Sol terminal','Cercle cromàtic 360°']
-FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Ritme de bateria','Àudio','Cap acció']
+MUTE_FUNCTION='Control d’àudio / Mute'
+FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Ritme de bateria','Àudio',MUTE_FUNCTION,'Cap acció']
 DEFAULTS=[]
 for i in range(16):
     DEFAULTS.append({'name':f'Targeta {i+1:02d}','function':'Nota MIDI' if i<4 else ('Control MIDI CC' if i<12 else 'Canviar visual'), 'channel':1,'note':36+i,'cc':20+i,'visual':i%12,'axis':'Rotació','min':0,'max':127,'harmony_key':'La menor','harmony_root':9,'harmony_scale':'Menor natural (eòlica)','harmony_velocity':85,'arp_division':'1/2 temps','arp_gate':60})
@@ -99,6 +100,7 @@ class App:
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
     self.show_only_assigned=tk.BooleanVar(value=True); self.visual_dirty=True; self.preview_card=None; self.preview_dirty=True; self.preview_caption=tk.StringVar(value='Previsualització en directe'); self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
+    self.mute_audible=tk.IntVar(value=0);self.mute_silent=tk.IntVar(value=127);self.mute_sent={};self.mute_retry_after={}
     self.audio_states={}; self.audio_error=None; self.audio_duration=tk.DoubleVar(value=0);self.audio_cc_values={}
     self.audio_control_vars={}
     for role,defaults in AUDIO_CONTROLS.items():
@@ -500,7 +502,11 @@ class App:
       position=self.active.get(i)
       x,y,angle=position if position is not None else (None,None,None)
       value={'Rotació':angle,'Horitzontal':x,'Vertical':y}.get(c.get('axis'),angle)
-      values=(f'{i+1:02d}',c['function'],c.get('name',f'Targeta {i+1:02d}'),i,'ACTIU' if position is not None else 'Inactiu',c['channel'],c['note'],c['cc'],c['axis'],round(max(0,min(1,value))*127) if value is not None else '--',f'{x*100:.1f}' if x is not None else '--',f'{y*100:.1f}' if y is not None else '--',f'{angle*360:.1f}' if angle is not None else '--',NAMES[c['visual']],self.audio_status(i))
+      reported=round(max(0,min(1,value))*127) if value is not None else '--'
+      if c['function']==MUTE_FUNCTION:
+        sent=self.mute_sent.get(i)
+        reported=sent[2] if sent and sent[:2]==(c['channel']-1,c['cc']) else '--'
+      values=(f'{i+1:02d}',c['function'],c.get('name',f'Targeta {i+1:02d}'),i,'ACTIU' if position is not None else 'Inactiu',c['channel'],c['note'],c['cc'],c['axis'],reported,f'{x*100:.1f}' if x is not None else '--',f'{y*100:.1f}' if y is not None else '--',f'{angle*360:.1f}' if angle is not None else '--',NAMES[c['visual']],self.audio_status(i))
       tags=('active',) if i in self.active else ()
       if tree.exists(str(i)):tree.item(str(i),values=values,tags=tags)
       else:tree.insert('','end',iid=str(i),values=values,tags=tags)
@@ -558,6 +564,11 @@ class App:
       return self.harmony_map_preview(chromatic=c.get('visual')==12,card_index=i)
     if kind in ('Patró rítmic','Ritme de bateria'):
       return self.rhythm_map_preview(i)
+    if kind==MUTE_FUNCTION:
+      frame=np.full((H,W,3),(25,20,17),np.uint8)
+      for text,y in [(f'MUTE | TARGETA {i+1:02d}',45),(f'CANAL {c["channel"]} | CC {c["cc"]}',110),(f'VISIBLE: {c.get("mute_audible",0)} | ABSENT: {c.get("mute_silent",127)}',175),('Control de presencia | No envia notes MIDI',240)]:
+        cv2.putText(frame,text,(24,y),cv2.FONT_HERSHEY_SIMPLEX,.65,(245,228,205),1,cv2.LINE_AA)
+      return frame
     if kind=='Àudio':
       frame=np.full((H,W,3),(25,20,17),np.uint8)
       for text,y in [(f'AUDIO | TARGETA {i+1:02d}',45),(f'SONAR: CANAL {c["channel"]} | NOTA {c["note"]}',110),(f'UNA VEGADA | {c.get("audio_duration",0):g} segons',170),('Retirar la targeta no atura el clip.',240)]:
@@ -636,9 +647,27 @@ class App:
  def on_function_selected(self,event=None):
     self.open_function_settings()
  def open_function_settings(self):
-    if self.fun.get()=='Àudio':self.open_audio_settings()
+    if self.fun.get()==MUTE_FUNCTION:self.open_mute_settings()
+    elif self.fun.get()=='Àudio':self.open_audio_settings()
     elif self.fun.get()=='Control MIDI CC':self.open_cc_settings()
     elif self.fun.get() in ('Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria'):self.open_music_settings()
+ def open_mute_settings(self):
+    old=getattr(self,'mute_settings_window',None)
+    if old is not None and old.winfo_exists():old.destroy()
+    if self.cards[int(self.card_id.get())-1]['function']!=MUTE_FUNCTION:
+      self.cc.set(119);self.mute_audible.set(0);self.mute_silent.set(127)
+    win=tk.Toplevel(self.root);self.mute_settings_window=win
+    win.title('CONTROL D’ÀUDIO / MUTE · TARGETA '+self.card_id.get());win.geometry('460x480');win.transient(self.root);win.configure(bg='#151210')
+    pane=ttk.Frame(win);pane.pack(fill='both',expand=True,padx=16,pady=12)
+    ttk.Label(pane,text='PRESÈNCIA DE TARGETA → MUTE',font=('Segoe UI',11,'bold')).pack(anchor='w',pady=8)
+    for title,var,minimum,maximum in [('Canal MIDI',self.channel,1,16),('Controlador CC',self.cc,0,119),('Visible → pista audible',self.mute_audible,0,127),('Absent → pista silenciada',self.mute_silent,0,127)]:
+      ttk.Label(pane,text=title).pack(anchor='w',pady=(8,2))
+      tk.Spinbox(pane,textvariable=var,from_=minimum,to=maximum,width=8).pack(anchor='w')
+    ttk.Label(pane,text='Verificat a Sonar: canal 1, CC119, audible 0 i Mute 127. Assigna aquest mateix controlador al Mute de la pista amb Remote Control. No envia notes ni toca Play.',wraplength=420).pack(anchor='w',pady=12)
+    ttk.Label(pane,text='En retirar la targeta s’envia Mute després de 250 ms. En aplicar o connectar, se sincronitza l’estat actual. Cada pista ha de tenir un canal + CC diferent.',wraplength=420).pack(anchor='w',pady=4)
+    def apply():
+      if self.apply_card():win.destroy()
+    ttk.Button(pane,text='APLICAR A LA TARGETA I TANCAR',command=apply).pack(fill='x',pady=12)
  def open_audio_settings(self):
     old=getattr(self,'audio_settings_window',None)
     if old is not None and old.winfo_exists():old.destroy()
@@ -747,6 +776,7 @@ class App:
  def load_card(self):
     c=self.cards[int(self.card_id.get())-1]; self.fun.set(c['function']); self.axis.set(c['axis']); self.note.set(c['note']); self.cc.set(c['cc']); self.channel.set(c['channel']); self.visual.set(NAMES[c['visual']]); self.harmony_key.set(c.get('harmony_key','La menor')); self.harmony_root.set(NOTE_NAMES[int(c.get('harmony_root',9))%12]); self.harmony_scale.set(c.get('harmony_scale','Menor natural (eòlica)')); self.harmony_velocity.set(c.get('harmony_velocity',85)); self.arp_division.set(c.get('arp_division','1/2 temps')); self.arp_gate.set(c.get('arp_gate',60)); self.arp_direction.set(c.get('arp_direction','Ascendent'))
     self.card_name.set(c.get('name',f'Targeta {int(self.card_id.get()):02d}'))
+    self.mute_audible.set(c.get('mute_audible',0));self.mute_silent.set(c.get('mute_silent',127))
     self.audio_duration.set(c.get('audio_duration',0))
     for role,variables in self.audio_control_vars.items():
       for key,var in variables.items():var.set(c.get('audio_controls',{}).get(role,{}).get(key,AUDIO_CONTROLS[role][key]))
@@ -765,16 +795,28 @@ class App:
         if config['axis'] not in AUDIO_AXES or not 0<=config['cc']<=127 or not 0<=config['min']<=config['max']<=127:raise ValueError('Revisa els CC i els límits dels controls d’àudio (0–127, mínim ≤ màxim).')
         if config['enabled']:used.append(config['cc'])
       if len(set(used))!=len(used):raise ValueError('Cada control d’àudio actiu ha de tenir un número CC diferent.')
-      self.deactivate(card_index)
-      c=self.cards[card_index]; c.update(name=self.card_name.get().strip(),audio_controls=control_configs,audio_duration=duration,drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
+      mute_values=(int(self.mute_audible.get()),int(self.mute_silent.get()))
+      if self.fun.get()==MUTE_FUNCTION:
+        if not 1<=int(self.channel.get())<=16 or not 0<=int(self.cc.get())<=119 or not all(0<=value<=127 for value in mute_values) or mute_values[0]==mute_values[1]:raise ValueError('Mute: canal 1–16, CC 0–119 i dos valors diferents entre 0 i 127.')
+        for i,other in enumerate(self.cards):
+          if i!=card_index and other['function']==MUTE_FUNCTION and (other['channel'],other['cc'])==(int(self.channel.get()),int(self.cc.get())):raise ValueError(f'La ruta Mute ja és de la targeta {i+1:02d}. Tria un altre canal o CC per a una pista independent.')
+      previous=self.cards[card_index]
+      same_mute=previous['function']==self.fun.get()==MUTE_FUNCTION
+      if same_mute:
+        if (previous['channel'],previous['cc'],previous.get('mute_silent',127))!=(int(self.channel.get()),int(self.cc.get()),mute_values[1]):self.send_mute_state(card_index,False)
+      else:
+        self.deactivate(card_index)
+        self.mute_sent.pop(card_index,None);self.mute_retry_after.pop(card_index,None)
+      c=self.cards[card_index]; c.update(mute_audible=mute_values[0],mute_silent=mute_values[1],name=self.card_name.get().strip(),audio_controls=control_configs,audio_duration=duration,drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
       if c['visual']==12 and int(self.card_id.get())-1 in self.active:self.select_visual(12)
       self.select_card_preview(card_index)
+      self.sync_mute_controls()
       self.status.set(f'Targeta {self.card_id.get()} configurada. Desa el projecte per conservar els canvis.');self.update_cards_table()
       return True
     except Exception as e:
       messagebox.showerror('Configuració',str(e));return False
  def new_project(self):
-    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table(); self.status.set('Projecte nou')
+    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table(); self.status.set('Projecte nou')
  def update_bpm(self):
     try:
       with self.arp_lock:
@@ -805,7 +847,7 @@ class App:
     try:
       with open(path,encoding='utf-8') as f:d=json.load(f)
       if len(d['cards'])!=16:raise ValueError('El projecte no conté 16 targetes')
-      self.all_notes_off(); self.cards=d['cards'];self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path; self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
+      self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path; self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
     except Exception as e:messagebox.showerror('Obrir',str(e))
  def refresh_midi(self):
      # No amaguem els errors: aixi podem diagnosticar loopMIDI.
@@ -908,7 +950,7 @@ class App:
     if self.midi:
       try:self.midi.close()
       except Exception:pass
-    self.midi=None; self.card2_cc_values.clear(); name=self.midi_choice.get()
+    self.midi=None;self.mute_sent.clear();self.mute_retry_after.clear(); self.card2_cc_values.clear(); name=self.midi_choice.get()
     if name=='Sense MIDI':
       self.status.set('MIDI desconnectat');self.midi_indicator.config(text='Estat: desconnectat');return
     try:
@@ -917,6 +959,7 @@ class App:
       self.log_midi_event('CONNEXIÓ LOCAL: '+name)
       self.status.set('MIDI connectat a '+name)
       self.midi_indicator.config(text='CONNECTAT: '+name)
+      self.sync_mute_controls()
     except Exception as e:
       self.log_midi_event('ERROR DE CONNEXIÓ LOCAL: '+str(e))
       self.midi_indicator.config(text='ERROR DE CONNEXIÓ');messagebox.showerror('MIDI',str(e))
@@ -1017,6 +1060,7 @@ class App:
     if not wr.isOpened():messagebox.showerror('Gravació','No es pot crear el vídeo AVI');return
     self.recording=wr;self.record_file=path;self.rec_label.config(text='● GRAVANT',foreground='red');self.status.set('Gravant visuals a '+str(path))
  def all_notes_off(self):
+    self.sync_mute_controls(silence=True)
     with self.arp_lock:
       for state in self.audio_states.values():self.release_audio_trigger(state)
     if self.midi:
@@ -1240,6 +1284,29 @@ class App:
     for i,state in list(self.audio_states.items()):
       if now>=state['release_at']:self.release_audio_trigger(state)
       if now>=state['ends_at']:self.audio_states.pop(i,None)
+ def send_mute_state(self,i,audible):
+    c=self.cards[i]
+    if c['function']!=MUTE_FUNCTION or not self.midi:return False
+    audible=bool(audible and not self.muted and not getattr(self,'_closing',False))
+    state=(int(c['channel'])-1,int(c['cc']),int(c.get('mute_audible',0) if audible else c.get('mute_silent',127)))
+    if self.mute_sent.get(i)==state:return True
+    now=time.monotonic()
+    if now<self.mute_retry_after.get(i,0):return False
+    try:self.midi.send(mido.Message('control_change',channel=state[0],control=state[1],value=state[2]))
+    except Exception as exc:
+      self.mute_retry_after[i]=now+.5
+      self.status.set('Error enviant Mute; es tornarà a provar: '+str(exc));return False
+    self.mute_sent[i]=state;self.mute_retry_after.pop(i,None)
+    return True
+ def sync_mute_controls(self,silence=False):
+    for i,c in enumerate(self.cards):
+      if c['function']==MUTE_FUNCTION:self.send_mute_state(i,not silence and i in self.active)
+ def reset_mute_controls(self):
+    self.mute_sent.clear();self.mute_retry_after.clear()
+    # Un projecte nou comença absent fins al següent fotograma de detecció.
+    for i,c in enumerate(self.cards):
+      if c['function']==MUTE_FUNCTION:self.active.pop(i,None);self.target_trails.pop(i,None)
+    self.sync_mute_controls()
  def record_target_position(self,i,x,y):
     now=time.monotonic();trail=self.target_trails.setdefault(i,deque(maxlen=90))
     if not trail or math.hypot(x-trail[-1][1],y-trail[-1][2])>.002 or now-trail[-1][0]>.08:trail.append((now,x,y))
@@ -1288,7 +1355,9 @@ class App:
     if i==1 and c.get('function')=='Control MIDI CC' and c.get('cc')==7:
       self.activate_card2(x,y,angle)
       return
-    if c['function']=='Àudio':
+    if c['function']==MUTE_FUNCTION:
+      self.send_mute_state(i,True)
+    elif c['function']=='Àudio':
       self.send_audio_controls(i,x,y,angle,force=not was)
       if not was:self.trigger_audio(i)
     elif c['function']=='Harmonia espacial':
@@ -1330,6 +1399,7 @@ class App:
             self.card2_cc_values[key]=value
           except Exception as exc:self.status.set('Error MIDI T02: '+str(exc))
  def deactivate(self,i):
+    if self.cards[i]['function']==MUTE_FUNCTION:self.send_mute_state(i,False)
     if i in self.active:self.log_midi_event(f'RETIRADA T{i+1:02d} ID={i}')
     self.stop_arpeggio(i)
     self.stop_harmony(i)
@@ -1636,6 +1706,7 @@ class App:
           self.expire_missing_cards(seen,now)
           # Mostrem la imatge original: els textos i els contorns es llegeixen correctament.
           if self.camera_window.state()=='normal':self.display(self.cam_label,cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),'cam_photo')
+      self.sync_mute_controls()
       now_vis=time.monotonic();frame_changed=False
       if self.last_frame is None or self.visual_dirty or (not self.visual_paused and now_vis-self.last_visual_update>=self.visual_interval):
         t=now_vis-self.t0

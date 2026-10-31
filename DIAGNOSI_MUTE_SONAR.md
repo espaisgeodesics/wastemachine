@@ -54,8 +54,20 @@ La funció Control MIDI CC existent és contínua: envia valors de moviment ment
 
 Si es verifica l'assignació absoluta, la modificació següent serà una funció dedicada **Control d'àudio / Mute**, amb canal, CC, valor audible i valor silenciat configurables. En entrar enviarà el valor audible; en sortir, després del llindar ArUco, el silenciat. Caldrà definir i provar també l'estat absent en connectar MIDI, aplicar la configuració, perdre la càmera i tancar el programa. No enviarà notes ni ordres de transport de Sonar.
 
-Aquest disseny de dos estats és preferible a alternar el Mute amb pulsos: repetir una ordre explícita no hauria de desincronitzar el botó. Però només és vàlid si el receptor admet aquests estats absoluts. La funció nova no s'ha implementat encara per evitar donar per certa aquesta compatibilitat sense prova.
+Aquest disseny de dos estats és preferible a alternar el Mute amb pulsos: repetir una ordre explícita no hauria de desincronitzar el botó. Però només és vàlid si el receptor admet aquests estats absoluts. A la revisió de diagnosi 4.6.2 encara no s'havia implementat. Després de la verificació de Jordi que es detalla a continuació, la 4.6.3 ja la incorpora.
 
 ## Validació
 
 Les 35 proves han passat, incloses el detector ArUco amb fotogrames sintètics, l'alliberament i reaparició, el registre d'un error deliberat de Note Off, la traça del port, l'exportació del registre i la prova CC sense notes. Les comprovacions amb Windows 10, la càmera, loopMIDI i el Mute del Sonar real queden pendents. Per continuar, cal el registre de la prova 1 i els quatre estats observats a la prova 2.
+
+## Resultat comunicat per Jordi i solució 4.6.3
+
+Jordi ha verificat a Sonar, al canal 1 i CC119: primer 0 desactiva el Mute, segon 0 el manté desactivat, primer 127 activa el Mute i segon 127 el manté activat. Això confirma l'assignació absoluta del receptor utilitzada en aquest projecte. No cal continuar enviant pulsos de nota per alternar el botó.
+
+La funció **Control d’àudio / Mute** envia 0 mentre la targeta és present i 127 quan desapareix més de 250 ms. El canal, CC i els dos valors són configurables i es desen al projecte. Només envia Control Change: no hi ha Note On, Note Off ni ordres de Play/Stop per aquesta funció.
+
+L'aplicació sincronitza l'estat en connectar/reconnectar MIDI, aplicar i carregar el projecte. Tancar la càmera, tancar el programa o utilitzar el silenci d'emergència intenta enviar l'estat silenciat de les pistes configurades. Els valors repetits es dedupliquen; si l'API d'enviament falla, la interfície ho indica i el bucle principal torna a provar l'estat pendent amb una espera de 500 ms. No es tracta d'una confirmació del receptor. Rutes canal+CC duplicades entre dues targetes Mute es rebutgen per evitar que una targeta absent contradigui una de visible sobre la mateixa pista.
+
+No es migren automàticament targetes de Nota MIDI o Àudio: selecciona la targeta, tria la funció nova, deixa canal 1, CC119, visible 0 i absent 127 i prem Aplicar. Mantén a Sonar l'assignació Controller/CC119, canal 1, que acabes de verificar. Per a pistes addicionals, tria altres CC lliures i assigna cadascun al Mute corresponent. Els CC120–127 no s'ofereixen en aquesta funció perquè són missatges de mode de canal.
+
+Les 41 proves automàtiques passen, incloent el cicle repetit 127→0→127, el llindar de retirada, cap nota ni transport, estats en perdre/tancar càmera i reconnectar, configuració/desat, rutes duplicades i reintent d'un error de port. El resultat dels botons CC a Sonar ja ha estat verificat per Jordi; queda confirmar el cicle automàtic amb la targeta física i aquesta nova funció.

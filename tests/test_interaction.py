@@ -371,4 +371,44 @@ class InteractionTests(unittest.TestCase):
             try:root.destroy()
             except m.tk.TclError:pass
 
+    def test_presence_mute_configuration_persistence_reconnect_and_camera_close(self):
+        root=m.tk.Tk()
+        try:
+            with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
+            a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
+            port=Mock();a.midi_choice.set('wasteland MIDI 1')
+            with patch.object(m.mido,'open_output',return_value=port):a.connect_midi()
+            a.card_id.set('01');a.load_card();a.fun.set(m.MUTE_FUNCTION);a.on_function_selected()
+            self.assertTrue(a.mute_settings_window.winfo_exists())
+            self.assertEqual((a.channel.get(),a.cc.get(),a.mute_audible.get(),a.mute_silent.get()),(1,119,0,127))
+            self.assertTrue(a.apply_card());a.mute_settings_window.destroy()
+            self.assertEqual(port.send.call_args.args[0].value,127)
+            a.activate(0,.5,.5,0);a.update_assigned_cards()
+            self.assertEqual(port.send.call_args.args[0].value,0)
+            self.assertEqual(a.assigned_cards.item('0','values')[9],'0')
+            calls=port.send.call_count
+            self.assertTrue(a.apply_card())
+            self.assertEqual(port.send.call_count,calls)
+            a.camera=Mock();a.toggle_cam()
+            self.assertEqual(port.send.call_args.args[0].value,127)
+            a.card_id.set('02');a.load_card();a.fun.set(m.MUTE_FUNCTION);a.cc.set(119)
+            with patch.object(m.messagebox,'showerror') as error:
+                self.assertFalse(a.apply_card());error.assert_called_once()
+            self.assertNotEqual(a.cards[1]['function'],m.MUTE_FUNCTION)
+            a.card_id.set('01');a.load_card()
+            with tempfile.TemporaryDirectory() as folder:
+                a.project=str(Path(folder)/'project.json');a.save_project()
+                port.reset_mock()
+                with patch.object(m.filedialog,'askopenfilename',return_value=a.project):a.open_project()
+                self.assertEqual(a.fun.get(),m.MUTE_FUNCTION)
+                self.assertEqual(port.send.call_args.args[0].value,127)
+            next_port=Mock()
+            with patch.object(m.mido,'open_output',return_value=next_port):a.connect_midi()
+            self.assertEqual(next_port.send.call_args.args[0].value,127)
+            self.assertTrue(all(c.args[0].type=='control_change' for c in next_port.send.call_args_list))
+            close_test_app(a)
+        finally:
+            try:root.destroy()
+            except m.tk.TclError:pass
+
 if __name__=='__main__':unittest.main()
