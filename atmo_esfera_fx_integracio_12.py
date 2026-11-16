@@ -155,6 +155,7 @@ class AtmoZoneEditor(ZoneEditor):
                                           from_=.1, to=86400, increment=.5, width=8)
         self.duration_entry.pack(anchor="w", pady=4)
         self.update_duration_state()
+        self.build_audio_controls(form)
         self.image_preview = tk.Label(form, bg=PANEL, fg=TEXT, width=32,
                                       height=8, wraplength=240)
         self.image_preview.pack(fill="x", pady=5)
@@ -180,6 +181,9 @@ class AtmoZoneEditor(ZoneEditor):
             for cell in zone.cells:
                 if zone.enabled or cell not in owners:
                     owners[cell] = palette[i % len(palette)] if zone.enabled else SURFACE
+        colors={zone.id:palette[i % len(palette)] if zone.enabled else SURFACE for i,zone in enumerate(self.config.zones)}
+        owners={cell:colors[zone.id] for cell,zone in self.config._owners.items() if zone.id!=self.current_id}
+        audio_cells={cell for zone in self.config.zones if zone.enabled and zone.audio_path for cell in zone.cells}
         for row in range(grid.rows):
             for col in range(grid.columns):
                 cell = row, col
@@ -189,6 +193,9 @@ class AtmoZoneEditor(ZoneEditor):
                                    ox+(col+1)*size/grid.columns, oy+(row+1)*size/grid.rows,
                                    fill=fill, outline=TEXT if selected else "#3c5674",
                                    width=2 if selected else 1)
+                if cell in audio_cells:
+                    c.create_text(ox+(col+.75)*size/grid.columns,oy+(row+.25)*size/grid.rows,
+                                  text='♪',fill=TEXT,font=('Segoe UI',9,'bold'))
         c.create_oval(ox, oy, ox+size, oy+size, outline=CYAN, width=2)
         c.create_text(width/2, 10, text=f"{grid.rows} × {grid.columns} · {len(self.config.zones)} zones",
                       fill=MUTED, font=("Segoe UI", 9))

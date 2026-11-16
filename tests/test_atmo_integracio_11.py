@@ -32,6 +32,8 @@ class EditingTests(unittest.TestCase):
         editor.display_mode=Value('Mentre la targeta sigui a la zona')
         editor.duration_s=Value('3')
         editor.cards=[Value(i==4) for i in range(16)]
+        for key,value in dict(audio_path='',audio_gain='0.8',audio_fade_in_s='0.5',audio_fade_out_s='1',audio_loop=True,audio_mode='Mentre hi hagi una targeta',audio_duration_s='3',allow_overlap=False,priority='10').items():
+            setattr(editor,key,Value(value))
         editor.notice=Value()
         editor.window=None
         editor.draw=Mock()

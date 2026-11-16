@@ -3,6 +3,7 @@ import functools
 import sys
 import tkinter as tk
 from tkinter import ttk
+from atmo_windows import dark_titlebar
 
 BG = '#0b1224'
 PANEL = '#16243d'
@@ -23,7 +24,7 @@ def configure_theme(root):
     style.configure('.', background=BG, foreground=TEXT, font=('Segoe UI', 10))
     for name in ('TFrame', 'TLabel', 'TCheckbutton', 'TRadiobutton', 'TLabelFrame'):
         style.configure(name, background=BG, foreground=TEXT)
-    style.configure('TLabelFrame', bordercolor=SURFACE, relief='flat')
+    style.configure('TLabelFrame', bordercolor=SURFACE, relief='flat', borderwidth=0)
     style.configure('TLabelFrame.Label', background=BG, foreground=CYAN, font=('Segoe UI', 10, 'bold'))
     for name in ('TButton', 'Accent.TButton'):
         style.configure(name, background=SURFACE if name == 'TButton' else CYAN,
@@ -56,6 +57,10 @@ def theme_widgets(widget):
         kind = widget.winfo_class()
         if kind in ('Tk', 'Toplevel'):
             widget.title(title_atmo(widget.title()))
+            dark_titlebar(widget)
+            if sys.platform == 'win32' and not getattr(widget,'_atmo_caption_bound',False):
+                widget.bind('<Map>',lambda event,w=widget:dark_titlebar(w) if event.widget is w else None,add='+')
+                widget._atmo_caption_bound=True
         if kind.startswith('T') and kind not in ('Tk', 'Toplevel') and 'foreground' in options:
             if str(widget.cget('foreground')) not in ('', BG, TEXT, MUTED, CYAN, PURPLE, 'red', 'green', '#7de0ac'):
                 widget.configure(foreground=TEXT)
@@ -71,6 +76,8 @@ def theme_widgets(widget):
                 old = str(widget.cget('foreground')).lower()
                 if old not in (BG, PANEL, SURFACE, TEXT, MUTED, CYAN, PURPLE, 'red', 'green', '#42c990', '#a52626'):
                     config['foreground'] = TEXT
+            if 'highlightbackground' in options:config['highlightbackground']=SURFACE
+            if 'highlightcolor' in options:config['highlightcolor']=CYAN
             for key in ('insertbackground', 'activeforeground'):
                 if key in options: config[key] = TEXT
             if 'activebackground' in options: config['activebackground'] = SURFACE

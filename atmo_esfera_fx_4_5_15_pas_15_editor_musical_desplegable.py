@@ -4,6 +4,7 @@ from pathlib import Path
 from collections import deque
 from dataclasses import replace
 from marker_tracking import MarkerTracker, ObservationFrame
+from zone_audio import ZoneAudioPlayer
 from atmo_card_functions import CHAOS_FUNCTION, LiveKaoss, CardKaossEditor, default_config
 from kaoss_xy import KaossConfig
 from dataclasses import replace as config_replace
@@ -139,7 +140,7 @@ class App:
     self.spatial_map=SpatialMap();self.zone_projection=ZoneProjection(self.spatial_map);self.spatial_warning=None;self.zone_editor=None;self.zone_window=None
     self.common_spatial=CommonSpatialObserver(self.spatial_map)
     self.rule_config=RulesConfig();self.rule_engine=RuleEngine();self.rule_outputs=RuleOutputs();self.rule_queue=[];self.rules_window=None;self.rules_editor=None
-    self.local_audio=AudioController();self.audio_window=None;self.audio_view=None
+    self.local_audio=AudioController();self.zone_audio=ZoneAudioPlayer(self.local_audio);self.zone_audio_warning=None;self.audio_window=None;self.audio_view=None
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -189,9 +190,9 @@ class App:
     participants_menu=tk.Menu(menu,tearoff=False)
     participants_menu.add_command(label='Registre i seguiment…',command=self.open_participants)
     participants_menu.add_command(label='Simulador de cinc participants…',command=self.open_simulator)
-    menu.add_cascade(label='Participants',menu=participants_menu)
+    if getattr(self,'atmo_experience_mode','Joc')=='Joc':menu.add_cascade(label='Participants',menu=participants_menu)
     rules_menu=tk.Menu(menu,tearoff=False);rules_menu.add_command(label='Regles i sortides…',command=self.open_rules)
-    menu.add_cascade(label='Regles',menu=rules_menu)
+    if getattr(self,'atmo_experience_mode','Joc')=='Joc':menu.add_cascade(label='Regles',menu=rules_menu)
     audio_menu=tk.Menu(menu,tearoff=False);audio_menu.add_command(label='Àudio local opcional...',command=self.open_local_audio)
     menu.add_cascade(label='Àudio',menu=audio_menu)
     help_menu=tk.Menu(menu,tearoff=False);help_menu.add_command(label='Versió i fitxer que s’està executant',command=self.show_runtime_info)
@@ -274,7 +275,7 @@ class App:
     def wheel(event):sidebar.yview_scroll(-1 if event.delta>0 else 1,'units')
     sidebar.bind('<MouseWheel>',wheel);right.bind('<MouseWheel>',wheel)
     frame=self.sidebar_panel(right,'EDITOR DE TARGETES',pady=3)
-    control_strip=tk.Frame(self.root,bg='#1e1712',highlightbackground='#6e452e',highlightthickness=1)
+    control_strip=tk.Frame(self.root,bg='#1e1712',highlightbackground='#203452',highlightthickness=1)
     control_strip.pack(fill='x',padx=8,pady=(2,4))
     ttk.Button(control_strip,text='CÀMERA',command=lambda:self.toggle_panel('camera')).pack(side='left',padx=3,pady=3)
     ttk.Button(control_strip,text='VISUAL',command=lambda:self.toggle_panel('visual')).pack(side='left',padx=3)
@@ -313,7 +314,7 @@ class App:
     ttk.Label(frame,text='Visual assignat').pack(anchor='w',padx=8,pady=(5,0))
     ttk.Combobox(frame,textvariable=self.visual,values=NAMES,state='readonly',width=25).pack(fill='x',padx=8)
     ttk.Button(frame,text='APLICAR / CREAR TARGETA',command=self.apply_card,style='Accent.TButton').pack(fill='x',padx=8,pady=9)
-    statusbar=tk.Frame(self.root,bg='#1a1714',highlightbackground='#6f472f',highlightthickness=1)
+    statusbar=tk.Frame(self.root,bg='#1a1714',highlightbackground='#203452',highlightthickness=1)
     statusbar.pack(fill='x',padx=8,pady=(1,4))
     tk.Label(statusbar,text='●',bg='#1a1714',fg='#42c990').pack(side='left',padx=(6,2))
     ttk.Label(statusbar,textvariable=self.status,foreground='#e8b47d').pack(side='left',padx=4)
@@ -514,25 +515,16 @@ class App:
       self.status.set('Taula de volums: '+str(exc));return
     for i in self.mixer_rows:self.send_mixer_volume(i)
  def sidebar_panel(self,parent,title,pady=3):
-    # Marc de ferro rovellat, capçalera de coure i reblons decoratius.
-    outer=tk.Frame(parent,bg='#241711',highlightbackground='#b77943',highlightthickness=2,bd=2,relief='ridge')
+    outer=tk.Frame(parent,bg='#0b1224',bd=0,highlightthickness=0)
     outer.pack(fill='x',pady=pady,padx=2)
-    header=tk.Frame(outer,bg='#493020',height=29)
-    header.pack(fill='x');header.pack_propagate(False)
-    tk.Label(header,text='●',bg='#493020',fg='#e3a36b',font=('Segoe UI',9,'bold')).pack(side='left',padx=(5,4))
-    tk.Label(header,text=title,bg='#493020',fg='#ffcf92',font=('Segoe UI',9,'bold')).pack(side='left')
-    tk.Label(header,text='●',bg='#493020',fg='#e3a36b',font=('Segoe UI',9,'bold')).pack(side='right',padx=5)
-    body=tk.Frame(outer,bg='#2c2019',padx=3,pady=5)
+    tk.Label(outer,text=title,bg='#0b1224',fg='#45d4d2',font=('Segoe UI',10,'bold')).pack(anchor='w',padx=8,pady=8)
+    body=tk.Frame(outer,bg='#0b1224',padx=3,pady=5)
     body.pack(fill='both',expand=True,padx=3,pady=(0,3))
     return body
  def industrial_panel(self,parent,title,row,col,padx):
-    shell=tk.Frame(parent,bg='#3b281c',highlightbackground='#b67a45',highlightthickness=2)
+    shell=tk.Frame(parent,bg='#0b1224',bd=0,highlightthickness=0)
     shell.grid(row=row,column=col,sticky='nsew',padx=padx)
-    header=tk.Frame(shell,bg='#39251b',height=29)
-    header.pack(fill='x');header.pack_propagate(False)
-    tk.Label(header,text='◉',bg='#39251b',fg='#c38a52',font=('Segoe UI',10,'bold')).pack(side='left',padx=(4,3))
-    tk.Label(header,text=title,bg='#39251b',fg='#f3c28b',font=('Segoe UI',10,'bold')).pack(side='left')
-    tk.Label(header,text='◉',bg='#39251b',fg='#c38a52',font=('Segoe UI',10,'bold')).pack(side='right',padx=5)
+    tk.Label(shell,text=title,bg='#0b1224',fg='#45d4d2',font=('Segoe UI',10,'bold')).pack(anchor='w',padx=8,pady=8)
     return shell
  def choose_card_from_table(self,event=None):
     sel=self.cards_table.selection()
@@ -747,6 +739,7 @@ class App:
       self.zone_window.minsize(920,580)
       self.zone_editor=ZoneEditor(self.zone_window,self.spatial_map,lambda:self.cards,self.zone_project_path,self.apply_spatial_map,default_card)
     else:self.zone_editor.set_default_card(default_card)
+    self.zone_editor.on_enable_audio=self.local_audio.enable
     self.zone_editor.on_calibrate=self.open_calibration_editor
     self.zone_editor.on_release=self.release_zone_scene
     self.show_panel('zones');self.update_spatial_editor_runtime()
@@ -777,6 +770,7 @@ class App:
       self.calibration_generation+=1
       if self.calibration_editor is not None:self.calibration_editor.restart()
     self.zone_projection.configure(self.spatial_map,self.zone_project_path(),keep_scene=keep_scene)
+    if hasattr(self,'zone_audio'):self.zone_audio.configure(self.spatial_map,self.zone_project_path())
     self.common_spatial.configure(self.spatial_map,reset=not keep_scene)
     self.spatial_warning=None;self.visual_dirty=True;self.preview_dirty=True
     self.update_spatial_editor_runtime()
@@ -790,6 +784,12 @@ class App:
     self.rule_outputs.clear_visuals()
     self.zone_projection.request_live();self.visual_dirty=True;self.preview_dirty=True;self.update_spatial_editor_runtime()
  def process_spatial_frame(self,zones,colors,now):
+    if hasattr(self,'zone_audio'):
+      if self.muted:self.zone_audio.stop()
+      else:self.zone_audio.update(zones,now)
+      warning=self.zone_audio.last_error
+      if warning and warning!=self.zone_audio_warning:self.status.set(warning)
+      self.zone_audio_warning=warning
     player=self.zone_projection
     before=(player.mode,player.image.token if player.image else None,player.scene.zone_id if player.scene else None,player.color_card)
     if self.spatial_map.zones or colors or player.colors:
@@ -1050,6 +1050,7 @@ class App:
     def close():window.destroy();self.audio_window=None;self.audio_view=None
     window.protocol('WM_DELETE_WINDOW',close)
  def stop_local_audio(self):
+    if hasattr(self,'zone_audio'):self.zone_audio.stop()
     if hasattr(self,'local_audio'):self.local_audio.stop_all()
  def confirm_rule_discard(self):
     return self.rules_editor is None or self.rules_editor.discard()

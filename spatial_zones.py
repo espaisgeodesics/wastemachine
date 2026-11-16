@@ -15,7 +15,7 @@ import numpy as np
 
 Point = tuple[float, float]
 Cell = tuple[int, int]  # row, column
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 PROJECT_KEY = 'spatial_zones'
 
 
@@ -83,6 +83,15 @@ class Zone:
     enabled: bool = True
     display_mode: str = 'persistent'
     duration_s: float = 3.0
+    audio_path: str | None = None
+    audio_gain: float = .8
+    audio_fade_in_s: float = .5
+    audio_fade_out_s: float = 1.
+    audio_loop: bool = True
+    audio_mode: str = 'presence'
+    audio_duration_s: float = 3.
+    allow_overlap: bool = False
+    priority: int = 10
 
     def __post_init__(self):
         for key in ('id', 'name'):
@@ -117,6 +126,30 @@ class Zone:
             if path and Path(path).suffix.lower() not in ('.jpg', '.jpeg', '.png'):
                 raise ValueError('Only JPG and PNG images are supported')
             object.__setattr__(self, 'image_path', path)
+
+
+        if self.audio_path is not None:
+            if not isinstance(self.audio_path, str):raise ValueError('La ruta de so ha de ser text o nul·la')
+            path = self.audio_path.strip() or None
+            if path and Path(path).suffix.lower() not in ('.wav', '.ogg'):
+                raise ValueError('Els sons de zona han de ser WAV PCM o OGG')
+            object.__setattr__(self, 'audio_path', path)
+        for key, low, high in (('audio_gain', 0, 1), ('audio_fade_in_s', 0, 10),
+                               ('audio_fade_out_s', 0, 10), ('audio_duration_s', .1, 86400)):
+            value = _number(getattr(self, key), key)
+            if not low <= value <= high:raise ValueError(f'{key}: valor entre {low} i {high}')
+            object.__setattr__(self, key, value)
+        if type(self.audio_loop) is not bool or type(self.allow_overlap) is not bool:
+            raise ValueError('Bucle i solapament han de ser booleans')
+        if self.audio_mode not in ('presence', 'once', 'after_exit'):
+            raise ValueError('Mode de so no vàlid')
+        _integer(self.priority, 'Prioritat', 1, 1000)
+
+
+def zone_order(zone):
+    # A sound-only layer never masks an image. Higher priority wins; ID breaks ties.
+    visual = 2 if zone.image_path else (0 if zone.audio_path else 1)
+    return (-int(visual), -zone.priority, zone.id)
 
 
 @dataclass(frozen=True)
@@ -225,7 +258,7 @@ class SpatialMap:
         if self.stabilization.hysteresis >= .5 * min(1 / self.grid.rows, 1 / self.grid.columns):
             raise ValueError('Hysteresis must be smaller than half a cell')
         zones = tuple(self.zones)
-        ids, owners = set(), {}
+        ids, owners, layers = set(), {}, {}
         for zone in zones:
             if not isinstance(zone, Zone) or zone.id in ids:
                 raise ValueError('Zone IDs must be unique')
@@ -234,9 +267,11 @@ class SpatialMap:
                 if not self.grid.eligible(cell):
                     raise ValueError(f'Cell {cell} lies outside the circular floor')
                 if zone.enabled:
-                    if cell in owners:
-                        raise ValueError(f'Active zones overlap at {cell}')
-                    owners[cell] = zone
+                    previous = layers.setdefault(cell, [])
+                    if any(not (zone.allow_overlap or old.allow_overlap) for old in previous):
+                        raise ValueError(f'Active zones overlap at {cell}; activa el solapament multimèdia')
+                    previous.append(zone)
+                    owners[cell] = min(previous, key=zone_order)
         object.__setattr__(self, 'zones', zones)
         object.__setattr__(self, '_owners', MappingProxyType(owners))
 
@@ -248,14 +283,18 @@ class SpatialMap:
                 'grid': {'rows': self.grid.rows, 'columns': self.grid.columns},
                 'zones': [{'id': z.id, 'name': z.name, 'cells': [list(c) for c in sorted(z.cells)],
                            'authorized_cards': sorted(z.authorized_cards), 'image_path': z.image_path,
-                           'enabled': z.enabled, 'display_mode': z.display_mode, 'duration_s': z.duration_s} for z in self.zones],
+                           'enabled': z.enabled, 'display_mode': z.display_mode, 'duration_s': z.duration_s,
+                           'audio_path': z.audio_path, 'audio_gain': z.audio_gain,
+                           'audio_fade_in_s': z.audio_fade_in_s, 'audio_fade_out_s': z.audio_fade_out_s,
+                           'audio_loop': z.audio_loop, 'audio_mode': z.audio_mode,
+                           'audio_duration_s': z.audio_duration_s, 'allow_overlap': z.allow_overlap, 'priority': z.priority} for z in self.zones],
                 'calibration': calibration,
                 'stabilization': {key: getattr(self.stabilization, key) for key in
                                   ('enter_delay_s', 'exit_delay_s', 'min_detections', 'hysteresis', 'max_detection_gap_s')}}
 
     @classmethod
     def from_dict(cls, data: dict) -> SpatialMap:
-        if not isinstance(data, dict) or type(data.get('schema_version')) is not int or data['schema_version'] != SCHEMA_VERSION:
+        if not isinstance(data, dict) or type(data.get('schema_version')) is not int or data['schema_version'] not in (1, SCHEMA_VERSION):
             raise ValueError('Unsupported spatial map schema')
         try:
             zones = tuple(Zone(**zone) for zone in data.get('zones', []))
@@ -390,16 +429,19 @@ class SpatialEngine:
         return result
 
     def _candidate(self, card, point, confirmed):
-        if point is None or self.map.grid.cell_at(point) is None:
-            return None
+        if point is None:return None
+        cell = self.map.grid.cell_at(point)
+        if cell is None:return None
+        candidates = [zone for zone in self.map.zones if zone.enabled and
+                      card in zone.authorized_cards and cell in zone.cells]
+        zone = min(candidates, key=zone_order) if candidates else None
         if confirmed is not None:
             previous = self._zones[confirmed]
             if previous.enabled and card in previous.authorized_cards and any(
                     self.map.grid.expanded_contains(cell, point, self.map.stabilization.hysteresis)
                     for cell in previous.cells):
-                return confirmed
-        zone = self.map._owners.get(self.map.grid.cell_at(point))
-        return zone.id if zone is not None and card in zone.authorized_cards else None
+                if zone is None or zone_order(previous) <= zone_order(zone):return confirmed
+        return zone.id if zone is not None else None
 
     def _update(self, observations, now):
         self._last_frame = now

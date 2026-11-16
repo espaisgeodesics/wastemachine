@@ -21,12 +21,13 @@ def show_owned(window, root):
     window.focus_set()
 
 
-def primary_engine(module):
+def primary_engine(module, mode='Joc'):
     adapted = adapt_engine(module)
 
     class PrimaryApp(adapted):
         def __init__(self, root):
             self.atmo_starting = True
+            self.atmo_experience_mode = mode
             super().__init__(root)
             self.hide_startup_tools()
 

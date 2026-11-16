@@ -13,15 +13,18 @@ from spatial_zones import SpatialMap, Zone, check_image_asset, image_reference
 def rebase_map_images(config, old_project, new_project):
     zones = []
     for zone in config.zones:
-        reference = zone.image_path
-        if reference:
-            path = Path(reference)
-            if not path.is_absolute():
-                if old_project is None:
-                    raise ValueError('No es pot resoldre una imatge relativa sense projecte d’origen.')
-                path = Path(old_project).resolve().parent / path
-            reference = image_reference(path, new_project)
-        zones.append(replace(zone, image_path=reference))
+        references = {}
+        for field in ('image_path', 'audio_path'):
+            reference = getattr(zone, field)
+            if reference:
+                path = Path(reference)
+                if not path.is_absolute():
+                    if old_project is None:
+                        raise ValueError('No es pot resoldre un recurs relatiu sense projecte d’origen.')
+                    path = Path(old_project).resolve().parent / path
+                reference = image_reference(path, new_project)
+            references[field] = reference
+        zones.append(replace(zone, **references))
     return replace(config, zones=tuple(zones))
 
 
@@ -49,6 +52,8 @@ def _cell_polygon(row, column, grid):
     return tuple(points)
 
 
+AUDIO_MODES = {'Mentre hi hagi una targeta': 'presence', 'Reproduir un cop': 'once', 'Segons després de sortir': 'after_exit'}
+
 DISPLAY_MODES = {'Mantenir la imatge': 'persistent', 'Mentre la targeta sigui a la zona': 'presence', 'Segons després de retirar-la': 'after_exit'}
 
 
@@ -72,13 +77,24 @@ class ZoneEditor:
         self.enabled = tk.BooleanVar(value=True)
         self.display_mode = tk.StringVar(value='Mentre la targeta sigui a la zona')
         self.duration_s = tk.StringVar(value='3')
+        self.audio_path = tk.StringVar()
+        self.audio_gain = tk.StringVar(value='0.8')
+        self.audio_fade_in_s = tk.StringVar(value='0.5')
+        self.audio_fade_out_s = tk.StringVar(value='1')
+        self.audio_loop = tk.BooleanVar(value=True)
+        self.audio_mode = tk.StringVar(value='Mentre hi hagi una targeta')
+        self.audio_duration_s = tk.StringVar(value='3')
+        self.allow_overlap = tk.BooleanVar(value=False)
+        self.priority = tk.StringVar(value='10')
         self.cards = [tk.BooleanVar(value=False) for _ in range(16)]
         self.notice = tk.StringVar()
         self.selection_info = tk.StringVar()
         self.calibration_info = tk.StringVar()
         self.runtime_info = tk.StringVar(value='Última zona activada: cap')
         self._build()
-        for var in (self.name, self.image_path, self.enabled, self.display_mode, self.duration_s, *self.cards):
+        for var in (self.name, self.image_path, self.enabled, self.display_mode, self.duration_s, self.audio_path, self.audio_gain, self.audio_fade_in_s,
+                    self.audio_fade_out_s, self.audio_loop, self.audio_mode, self.audio_duration_s,
+                    self.allow_overlap, self.priority, *self.cards):
             var.trace_add('write', self._changed)
         self.set_map(config)
 
@@ -120,6 +136,7 @@ class ZoneEditor:
         ttk.Label(seconds,text='Segons després de retirar-la:').pack(side='left')
         self.duration_entry=ttk.Spinbox(seconds,textvariable=self.duration_s,from_=.1,to=86400,increment=.5,width=7)
         self.duration_entry.pack(side='right');self.update_duration_state()
+        self.build_audio_controls(right)
         self.image_preview = tk.Label(right, bg='#171411', fg='#e6d0b5', width=32, height=8, wraplength=265)
         self.image_preview.pack(fill='both', expand=True, pady=5)
         ttk.Button(right, text='DESAR ZONA AL MAPA', command=self.save_zone).pack(side='bottom',before=self.image_preview,fill='x', pady=6)
@@ -147,7 +164,7 @@ class ZoneEditor:
         self.loading = True
         for item in self.list.get_children():self.list.delete(item)
         for zone in config.zones:
-            self.list.insert('', 'end', iid=zone.id, values=(zone.name + ('' if zone.enabled else ' · desactivada'),))
+            self.list.insert('', 'end', iid=zone.id, values=(zone.name + (' · ♪' if zone.audio_path else '') + (' · ▣' if zone.image_path else '') + ('' if zone.enabled else ' · desactivada'),))
         calibration = 'Calibració matemàtica vàlida · pendent de prova física' if config.calibration else 'SENSE CALIBRACIÓ: el mapa no està alineat amb el terra real'
         self.calibration_info.set(calibration + ' · Sense calibració no s’activen zones en directe.')
         self.loading = False
@@ -160,6 +177,9 @@ class ZoneEditor:
         self.loading = True
         self.current_id = None;self.cells = set()
         self.name.set('');self.image_path.set('');self.enabled.set(True)
+        self.audio_path.set('');self.audio_gain.set('0.8');self.audio_fade_in_s.set('0.5');self.audio_fade_out_s.set('1')
+        self.audio_loop.set(True);self.audio_mode.set('Mentre hi hagi una targeta');self.audio_duration_s.set('3')
+        self.allow_overlap.set(False);self.priority.set('10');self.update_audio_duration_state()
         self.display_mode.set('Mentre la targeta sigui a la zona');self.duration_s.set('3');self.update_duration_state()
         for i, var in enumerate(self.cards):var.set(i == self.default_card)
         for item in self.list.selection():self.list.selection_remove(item)
@@ -182,6 +202,11 @@ class ZoneEditor:
         self.loading = True
         self.current_id = id;self.cells = set(zone.cells)
         self.name.set(zone.name);self.image_path.set(zone.image_path or '');self.enabled.set(zone.enabled)
+        for key in ('audio_gain','audio_fade_in_s','audio_fade_out_s','audio_duration_s','audio_loop','allow_overlap','priority'):
+            getattr(self,key).set(getattr(zone,key))
+        self.audio_path.set(zone.audio_path or '')
+        self.audio_mode.set(next(label for label,value in AUDIO_MODES.items() if value==zone.audio_mode))
+        self.update_audio_duration_state()
         self.display_mode.set(next(label for label,value in DISPLAY_MODES.items() if value==zone.display_mode))
         self.duration_s.set(str(zone.duration_s));self.update_duration_state()
         for i, var in enumerate(self.cards):var.set(i in zone.authorized_cards)
@@ -238,11 +263,61 @@ class ZoneEditor:
         cell = self.cell_at_event(event)
         if cell is None or cell in self.visited:return
         self.visited.add(cell)
-        if self.enabled.get() and any(zone.enabled and zone.id != self.current_id and cell in zone.cells for zone in self.config.zones):
-            self.notice.set('Aquesta casella ja pertany a una altra zona habilitada.');return
+        if self.enabled.get() and any(zone.enabled and zone.id != self.current_id and cell in zone.cells and not (self.allow_overlap.get() or zone.allow_overlap) for zone in self.config.zones):
+            self.notice.set('Aquesta casella ja té una zona. Activa «Permetre solapament» per afegir-hi una capa.');return
         if cell in self.cells:self.cells.remove(cell)
         else:self.cells.add(cell)
         self._changed()
+
+    def build_audio_controls(self, parent):
+        section = ttk.LabelFrame(parent, text='So de la zona', padding=7)
+        section.pack(fill='x', pady=8)
+        ttk.Entry(section, textvariable=self.audio_path, state='readonly', width=28).pack(fill='x')
+        ttk.Button(section, text='Triar so WAV / OGG…', command=self.choose_audio).pack(fill='x', pady=3)
+        ttk.Button(section, text='Sense so', command=lambda:self.audio_path.set('')).pack(fill='x')
+        ttk.Label(section, text='Clips de fins a 30 s · Bucle disponible', wraplength=230).pack(anchor='w', pady=4)
+        for title, variable, maximum in [('Volum (0–1)', self.audio_gain, 1),
+                ('Fade in (s)', self.audio_fade_in_s, 10), ('Fade out en sortir (s)', self.audio_fade_out_s, 10)]:
+            row = ttk.Frame(section);row.pack(fill='x', pady=2)
+            ttk.Label(row, text=title).pack(side='left')
+            ttk.Spinbox(row, textvariable=variable, from_=0, to=maximum, increment=.1, width=6).pack(side='right')
+        ttk.Checkbutton(section, text='Repetir en bucle', variable=self.audio_loop).pack(anchor='w')
+        mode = ttk.Combobox(section, textvariable=self.audio_mode, values=tuple(AUDIO_MODES), state='readonly', width=28)
+        mode.pack(fill='x', pady=4)
+        mode.bind('<<ComboboxSelected>>', lambda event:self.update_audio_duration_state())
+        row = ttk.Frame(section);row.pack(fill='x')
+        ttk.Label(row, text='Segons després de sortir').pack(side='left')
+        self.audio_seconds_entry = ttk.Spinbox(row, textvariable=self.audio_duration_s, from_=.1, to=86400, width=6)
+        self.audio_seconds_entry.pack(side='right');self.update_audio_duration_state()
+        ttk.Button(section, text='Activar àudio local', command=self.enable_audio).pack(fill='x', pady=5)
+        ttk.Checkbutton(parent, text='Permetre solapament de zones', variable=self.allow_overlap).pack(anchor='w', pady=4)
+        row = ttk.Frame(parent);row.pack(fill='x', pady=3)
+        ttk.Label(row, text='Prioritat d’imatge').pack(side='left')
+        ttk.Spinbox(row, textvariable=self.priority, from_=1, to=1000, width=5).pack(side='right')
+
+    def update_audio_duration_state(self):
+        if hasattr(self,'audio_seconds_entry'):
+            self.audio_seconds_entry.configure(state='normal' if AUDIO_MODES.get(self.audio_mode.get())=='after_exit' else 'disabled')
+
+    def enable_audio(self):
+        callback = getattr(self, 'on_enable_audio', None)
+        if callback is not None:
+            callback();self.notice.set('Activant l’àudio local. Consulta l’estat a la finestra principal o a Àudio local.')
+        else:self.notice.set('Activa el dispositiu des de les eines d’àudio local.')
+
+    def choose_audio(self):
+        path = filedialog.askopenfilename(parent=self.window, filetypes=[('So WAV PCM / OGG', '*.wav *.ogg')])
+        if not path:return
+        project = self.get_project()
+        self.audio_path.set(image_reference(path, project) if project else str(Path(path).resolve()))
+        self.allow_overlap.set(True)
+
+    def audio_values(self):
+        values = {key:float(getattr(self,key).get().replace(',', '.')) for key in
+                  ('audio_gain','audio_fade_in_s','audio_fade_out_s','audio_duration_s')}
+        return dict(values, audio_path=self.audio_path.get() or None, audio_loop=self.audio_loop.get(),
+                    audio_mode=AUDIO_MODES[self.audio_mode.get()], allow_overlap=self.allow_overlap.get(),
+                    priority=int(self.priority.get()))
 
     def choose_image(self):
         path = filedialog.askopenfilename(parent=self.window, filetypes=[('Imatges JPG / PNG', '*.jpg *.jpeg *.png')])
@@ -277,10 +352,9 @@ class ZoneEditor:
         try:
             if not self.name.get().strip():raise ValueError('Escriu un nom per a la zona.')
             if not self.cells:raise ValueError('Selecciona una o diverses caselles dins del cercle.')
-            if self.enabled.get() and any(zone.enabled and zone.id!=self.current_id and zone.cells.intersection(self.cells) for zone in self.config.zones):raise ValueError('Hi ha caselles que ja pertanyen a una altra zona habilitada.')
             zone = Zone(self.current_id or uuid4().hex, self.name.get(), self.cells,
                         {i for i, var in enumerate(self.cards) if var.get()}, self.image_path.get() or None, self.enabled.get(),
-                        DISPLAY_MODES[self.display_mode.get()],float(self.duration_s.get().replace(',', '.')))
+                        DISPLAY_MODES[self.display_mode.get()],float(self.duration_s.get().replace(',', '.')), **self.audio_values())
             zones = [zone if existing.id == zone.id else existing for existing in self.config.zones]
             if not any(existing.id == zone.id for existing in self.config.zones):zones.append(zone)
             config = replace(self.config, zones=tuple(zones))
