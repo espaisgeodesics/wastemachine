@@ -8,7 +8,7 @@ ACTION_KINDS = ('color', 'image', 'note', 'cc', 'release_visual', 'play_sound', 
 AUDIO_KINDS = ('play_sound', 'stop_sound', 'audio_volume')
 AUDIO_FIELDS = ('audio_group', 'gain', 'fade_s', 'loop', 'audio_scope')
 MIDI_FUNCTIONS = {'Nota MIDI', 'Harmonia espacial', 'Arpegiador espacial', 'Control MIDI CC',
-                  'Patró rítmic', 'Ritme de bateria', 'Àudio', 'Control d’àudio / Mute'}
+                  'Patró rítmic', 'Ritme de bateria', 'Àudio', 'Control d’àudio / Mute', 'Chaos Oscillator (Kaoss XY)'}
 
 
 def text(value, label, optional=False):

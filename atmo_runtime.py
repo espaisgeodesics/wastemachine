@@ -122,7 +122,7 @@ def adapt_engine(module):
 
         def show_runtime_info(self):
             module.messagebox.showinfo('ATMO ESFERA FX · Versió i fitxer',
-                'Integració 12 · Motor ' + module.APP_VERSION + '\nPython: ' + sys.executable,
+                'Integració ' + str(getattr(self, 'atmo_integration_version', 12)) + ' · Motor ' + module.APP_VERSION + '\nPython: ' + sys.executable,
                 parent=getattr(self, 'atmo_dashboard', self.root))
 
         def resize_banner(self, event):
