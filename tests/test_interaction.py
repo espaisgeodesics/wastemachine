@@ -342,7 +342,7 @@ class InteractionTests(unittest.TestCase):
         try:
             with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
             a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
-            port=Mock();a.midi_choice.set('wasteland MIDI 1')
+            port=Mock();a.midi_choice.set('atmo_esfera_fx MIDI 1')
             with patch.object(m.mido,'open_output',return_value=port):a.connect_midi()
             a.open_midi_diagnostics()
             dictionary=m.cv2.aruco.getPredefinedDictionary(m.cv2.aruco.DICT_4X4_50)
@@ -376,7 +376,7 @@ class InteractionTests(unittest.TestCase):
         try:
             with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
             a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
-            port=Mock();a.midi_choice.set('wasteland MIDI 1')
+            port=Mock();a.midi_choice.set('atmo_esfera_fx MIDI 1')
             with patch.object(m.mido,'open_output',return_value=port):a.connect_midi()
             a.card_id.set('01');a.load_card();a.fun.set(m.MUTE_FUNCTION);a.on_function_selected()
             self.assertTrue(a.mute_settings_window.winfo_exists())

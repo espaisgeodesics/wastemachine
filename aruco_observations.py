@@ -21,7 +21,7 @@ def observation_frame(corners, ids, image_size, source_id, sequence, captured_at
             raise ValueError('Invalid detector ID')
         marker = int(raw)
         if marker >= 16:
-            continue  # Same supported subset as Wasteland; dictionary has 50 IDs.
+            continue  # Same supported subset as ATMO ESFERA FX; dictionary has 50 IDs.
         p = points[0]
         if len(p) != 4 or any(len(point) != 2 for point in p):
             raise ValueError('Invalid marker corner geometry')

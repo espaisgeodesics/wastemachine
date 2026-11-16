@@ -8,7 +8,7 @@ class MidiDiagnosticTests(unittest.TestCase):
 
     def traced_app(self):
         a=self.app();port=Mock();a.last_seen={}
-        a.midi=m.TracedMidiOutput(port,lambda message,error:a.record_midi_send('wasteland MIDI 1',message,error))
+        a.midi=m.TracedMidiOutput(port,lambda message,error:a.record_midi_send('atmo_esfera_fx MIDI 1',message,error))
         a.cards[2]['function']='Nota MIDI';a.cards[2]['channel']=1;a.cards[2]['note']=60
         return a,port
 
@@ -30,7 +30,7 @@ class MidiDiagnosticTests(unittest.TestCase):
         self.assertEqual(log.count('VISIBLE T03'),2)
         self.assertEqual(log.count('RETIRADA T03'),2)
         self.assertIn('note_off canal=1 nota=60 velocitat=0',log)
-        self.assertIn('ACCEPTAT PEL PORT LOCAL [wasteland MIDI 1]',log)
+        self.assertIn('ACCEPTAT PEL PORT LOCAL [atmo_esfera_fx MIDI 1]',log)
         self.assertRegex(log,r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}')
 
     def test_failed_note_off_remains_visible_in_log(self):
@@ -38,8 +38,8 @@ class MidiDiagnosticTests(unittest.TestCase):
         port.send.side_effect=[None,RuntimeError('Port tancat')]
         a.activate(2,.5,.5,0);a.deactivate(2)
         log=a.midi_log_snapshot()
-        self.assertIn('ERROR LOCAL [wasteland MIDI 1] note_off canal=1 nota=60 velocitat=0 | Port tancat',log)
-        self.assertNotIn('ACCEPTAT PEL PORT LOCAL [wasteland MIDI 1] note_off',log)
+        self.assertIn('ERROR LOCAL [atmo_esfera_fx MIDI 1] note_off canal=1 nota=60 velocitat=0 | Port tancat',log)
+        self.assertNotIn('ACCEPTAT PEL PORT LOCAL [atmo_esfera_fx MIDI 1] note_off',log)
 
     def test_trace_callback_cannot_break_or_duplicate_sending(self):
         port=Mock();record=Mock(side_effect=RuntimeError('Logger'))

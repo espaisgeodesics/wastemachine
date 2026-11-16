@@ -1,5 +1,5 @@
 """ATMO ESFERA FX · Integració 12 · edició de zones integrada.
-Interfície de navegació connectada als controls de Wasteland Machine 4.8.1.
+Interfície de navegació connectada als controls de ATMO ESFERA FX 4.8.1.
 No altera ni substitueix el motor, els projectes o les seves dades.
 Cal copiar aquest fitxer a la carpeta del projecte complet.
 """
@@ -12,7 +12,7 @@ from spatial_zone_editor import ZoneEditor, DISPLAY_MODES
 from atmo_runtime import adapt_engine, configure_theme, theme_widgets, reveal_window
 
 BASE = Path(__file__).resolve().parent
-ENGINE = BASE / "wasteland_4_5_15_pas_15_editor_musical_desplegable.py"
+ENGINE = BASE / "atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py"
 BG="#0b1224"; PANEL="#16243d"; SURFACE="#203452"
 TEXT="#f5f7ff"; MUTED="#a8bad5"; CYAN="#45d4d2"; PURPLE="#9b8cff"
 MODES=("Joc","Música","Exposició","Instal·lació immersiva")

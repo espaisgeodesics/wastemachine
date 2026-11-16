@@ -18,7 +18,7 @@ class Window:
         self.current_state=state
         self.owner='hidden root'
         self.alpha=0
-        self.caption='WASTELAND · Eina'
+        self.caption='ATMO ESFERA FX · Eina'
         self.focus=False
     def winfo_exists(self): return True
     def transient(self, owner): self.owner=owner
@@ -170,7 +170,7 @@ class EntryPointTests(unittest.TestCase):
 
     def test_dashboard_calls_exist_in_engine(self):
         root=self.sources()
-        engine=ast.parse((root/'wasteland_4_5_15_pas_15_editor_musical_desplegable.py').read_text(encoding='utf-8'))
+        engine=ast.parse((root/'atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py').read_text(encoding='utf-8'))
         original=next(n for n in engine.body if isinstance(n,ast.ClassDef) and n.name=='App')
         methods={n.name for n in original.body if isinstance(n,ast.FunctionDef)}
         entry=ast.parse((root/'atmo_esfera_fx_integracio_12.py').read_text(encoding='utf-8'))

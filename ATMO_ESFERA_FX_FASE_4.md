@@ -1,7 +1,7 @@
 # ATMO ESFERA FX — fase 4: regles i propietat de sortides
 
-Entrega: **Wasteland Machine 4.7.9**, sobre la [fase 3, 4.7.8](ATMO_ESFERA_FX_FASE_3.md),
-commit recuperable `6010af0`, a `codex/wasteland-camera-windows-launcher`.
+Entrega: **ATMO ESFERA FX 4.7.9**, sobre la [fase 3, 4.7.8](ATMO_ESFERA_FX_FASE_3.md),
+commit recuperable `6010af0`, a `codex/atmo_esfera_fx-camera-windows-launcher`.
 
 ## Crear i executar una regla
 

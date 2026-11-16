@@ -7,7 +7,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt -r requirements-audio.txt
 if errorlevel 1 goto failed
-echo Complement instal.lat. Obre OBRIR_WASTELAND.bat i activa Audio local.
+echo Complement instal.lat. Obre OBRIR_ATMO_ESFERA_FX.bat i activa Audio local.
 pause
 exit /b 0
 :failed

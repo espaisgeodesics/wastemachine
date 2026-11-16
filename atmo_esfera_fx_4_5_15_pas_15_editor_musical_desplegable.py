@@ -126,7 +126,7 @@ class TracedMidiOutput:
 
 class App:
  def __init__(self,root):
-    self.root=root; root.title('WASTELAND MACHINE · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
+    self.root=root; root.title('ATMO ESFERA FX · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
     self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
     self.midi_log=deque(maxlen=1000);self.midi_log_lock=threading.Lock();self.midi_log_revision=0;self.diagnostics_window=None;self.diagnostics_seen=-1
     self.marker_tracker=MarkerTracker();self.tracking_sequence=0;self.tracking_source_id=None;self.camera_source_id=None;self.tracking_errors=deque(maxlen=50);self.tracking_enabled=True
@@ -195,7 +195,7 @@ class App:
     banner=tk.Canvas(self.root,bg='#1c120e',height=60,highlightthickness=0)
     banner.pack(fill='x',padx=7,pady=(5,5))
     self.banner_source=None
-    try:self.banner_source=Image.open(ROOT/'capcalera_wasteland_460.png').convert('RGB')
+    try:self.banner_source=Image.open(ROOT/'capcalera_atmo_esfera_fx_460.png').convert('RGB')
     except OSError:pass
     self.banner_canvas=banner;banner.bind('<Configure>',self.resize_banner)
     toolbar=ttk.Frame(self.root);toolbar.pack(fill='x',padx=9,pady=(1,5))
@@ -315,7 +315,7 @@ class App:
     ttk.Label(statusbar,textvariable=self.status,foreground='#e8b47d').pack(side='left',padx=4)
  def make_panel_window(self,key,title,geometry):
     win=tk.Toplevel(self.root)
-    win.title('WASTELAND · '+title)
+    win.title('ATMO ESFERA FX · '+title)
     # Finestra propietat de la principal: Windows la manté al davant
     # de la principal, però no per sobre de Cakewalk.
     win.transient(self.root)
@@ -404,7 +404,7 @@ class App:
     try:
       with open(self.window_layout_file,'w',encoding='utf-8') as f:
         json.dump(layout,f,ensure_ascii=False,indent=2)
-      self.status.set('Distribució de finestres desada. Es recuperarà en tornar a obrir Wasteland.')
+      self.status.set('Distribució de finestres desada. Es recuperarà en tornar a obrir ATMO ESFERA FX.')
     except Exception as exc:self.status.set('No s’ha pogut desar la distribució: '+str(exc))
  def restore_window_layout(self,silent=False):
     if not self.window_layout_file.exists():
@@ -432,12 +432,12 @@ class App:
     except Exception as exc:
       self.status.set('No s’ha pogut recuperar la distribució: '+str(exc))
  def show_runtime_info(self):
-    messagebox.showinfo('Wasteland · Versió i fitxer',f'Versió: {APP_VERSION}\n\nFitxer: {Path(__file__).resolve()}\n\nPython: {sys.executable}',parent=self.root)
+    messagebox.showinfo('ATMO ESFERA FX · Versió i fitxer',f'Versió: {APP_VERSION}\n\nFitxer: {Path(__file__).resolve()}\n\nPython: {sys.executable}',parent=self.root)
  def resize_banner(self,event):
     width=max(1,event.width);height=min(112,max(48,round(width*.075)))
     self.banner_canvas.configure(height=height);self.banner_canvas.delete('all')
     if self.banner_source is None:
-      self.banner_canvas.create_text(width/2,height/2,text='WASTELAND MACHINE',fill='#edbc88',font=('Georgia',23,'bold'));return
+      self.banner_canvas.create_text(width/2,height/2,text='ATMO ESFERA FX',fill='#edbc88',font=('Georgia',23,'bold'));return
     image_height=round(self.banner_source.height*width/self.banner_source.width)
     self.banner_photo=ImageTk.PhotoImage(self.banner_source.resize((width,max(1,image_height)),Image.Resampling.LANCZOS))
     # El llenç mostra la franja panoràmica centrada, sense les vores del recurs.
@@ -904,7 +904,7 @@ class App:
       old.destroy()
     win=tk.Toplevel(self.root)
     self.music_settings_window=win
-    win.title('WASTELAND · '+kind.upper()+' · TARGETA '+self.card_id.get())
+    win.title('ATMO ESFERA FX · '+kind.upper()+' · TARGETA '+self.card_id.get())
     win.geometry('460x700' if kind=='Ritme de bateria' else ('420x620' if kind in ('Arpegiador espacial','Patró rítmic') else '370x360'))
     win.minsize(320,275)
     win.configure(bg='#151210')
@@ -943,7 +943,7 @@ class App:
       for row,(name,var) in enumerate(self.drum_notes.items()):
         ttk.Label(mapping,text=name).grid(row=row,column=0,sticky='w',padx=4,pady=3)
         tk.Spinbox(mapping,textvariable=var,from_=0,to=127,width=6,bg='#e9d8c2').grid(row=row,column=1,padx=8,pady=3)
-      ttk.Label(pane,text='Ensenya la targeta: sona el ritme. Retira-la: s’atura. Un compàs 4/4 al tempo del Wasteland. Ruta la sortida MIDI a MT Power Drum Kit dins de Sonar.',wraplength=390).pack(anchor='w',pady=10)
+      ttk.Label(pane,text='Ensenya la targeta: sona el ritme. Retira-la: s’atura. Un compàs 4/4 al tempo del ATMO ESFERA FX. Ruta la sortida MIDI a MT Power Drum Kit dins de Sonar.',wraplength=390).pack(anchor='w',pady=10)
     ttk.Button(pane,text='APLICAR A LA TARGETA I TANCAR',command=lambda:(self.apply_card(),win.destroy())).pack(fill='x',pady=(16,4))
     ttk.Label(pane,text='Per conservar els canvis en disc: Projecte → Desar projecte.',wraplength=320).pack(anchor='w',pady=(5,0))
  def load_card(self):
@@ -992,7 +992,7 @@ class App:
       messagebox.showerror('Configuració',str(e));return False
  def open_rules(self):
     if self.rules_window is not None and self.rules_window.winfo_exists():self.rules_window.lift();return
-    window=self.rules_window=tk.Toplevel(self.root);window.title('WASTELAND · Regles · '+APP_VERSION);window.geometry(f'940x{min(840,max(500,self.root.winfo_screenheight()-100))}')
+    window=self.rules_window=tk.Toplevel(self.root);window.title('ATMO ESFERA FX · Regles · '+APP_VERSION);window.geometry(f'940x{min(840,max(500,self.root.winfo_screenheight()-100))}')
     self.rules_editor=RuleEditor(window,lambda:self.rule_config,self.configure_rules,self.manual_rule,self.release_rule_visuals,lambda:self.rule_outputs.log_snapshot(),
       zones=lambda:self.spatial_map.zones,participants=lambda:self.participants.snapshot().values())
     def close():
@@ -1038,7 +1038,7 @@ class App:
       self.simulator_window.deiconify();self.simulator_window.lift();return
     if self.simulator_session is None:self.simulator_session=SimulatorSession()
     window=self.simulator_window=tk.Toplevel(self.root)
-    window.title('WASTELAND · Simulador · Fase 2');window.geometry('960x720');window.minsize(900,660)
+    window.title('ATMO ESFERA FX · Simulador · Fase 2');window.geometry('960x720');window.minsize(900,660)
     self.simulator_view=SimulatorWindow(window,self.simulator_session,lambda:self.spatial_map,
       lambda:self.rule_config,self.zone_project_path,lambda:self.participants)
     def close():
@@ -1049,7 +1049,7 @@ class App:
     if self.participant_window is not None and self.participant_window.winfo_exists():
       self.participant_window.deiconify();self.participant_window.lift();return
     window=self.participant_window=tk.Toplevel(self.root)
-    window.title('WASTELAND · Participants · Fase 1B');window.geometry('930x650');window.minsize(860,580)
+    window.title('ATMO ESFERA FX · Participants · Fase 1B');window.geometry('930x650');window.minsize(860,580)
     self.participant_editor=ParticipantEditor(window,lambda:self.participants,self.marker_tracker.snapshot,
       self.marker_tracker.sources,lambda:self.common_events.snapshot(),self.set_participant_retired,
       lambda:f'camera:{self.cam_index.get()}',zones=lambda:self.common_spatial.snapshot())
@@ -1100,7 +1100,7 @@ class App:
     old_project=self.zone_project_path()
     path=self.project
     if as_new or self.project=='Sense títol':
-      path=filedialog.asksaveasfilename(initialdir=ROOT/'PROJECTES',defaultextension='.json',filetypes=[('Projecte Wasteland','*.json')])
+      path=filedialog.asksaveasfilename(initialdir=ROOT/'PROJECTES',defaultextension='.json',filetypes=[('Projecte ATMO ESFERA FX','*.json')])
       if not path:return
     try:
       spatial=rebase_map_images(self.spatial_map,old_project,path)
@@ -1119,7 +1119,7 @@ class App:
     if not self.confirm_rule_discard():return
     if not self.confirm_participant_discard():return
     if not self.confirm_zone_discard():return
-    path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte Wasteland','*.json')]);
+    path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte ATMO ESFERA FX','*.json')]);
     if not path:return
     return self.load_project_file(path)
  def create_bosc_demo(self):
@@ -1348,7 +1348,7 @@ class App:
  def open_projection(self):
     if getattr(self,'projection',None) and self.projection.winfo_exists():
       self.projection.lift();return
-    self.projection=tk.Toplevel(self.root);self.projection.title('PROJECCIÓ · WASTELAND MACHINE');self.projection.geometry('960x540');self.projection.configure(bg='black')
+    self.projection=tk.Toplevel(self.root);self.projection.title('PROJECCIÓ · ATMO ESFERA FX');self.projection.geometry('960x540');self.projection.configure(bg='black')
     self.proj_label=tk.Label(self.projection,bg='black');self.proj_label.pack(fill='both',expand=True)
     self.projection.bind('<F11>',lambda e:self.projection.attributes('-fullscreen',not self.projection.attributes('-fullscreen')))
     self.projection.bind('<Escape>',lambda e:self.projection.attributes('-fullscreen',False))

@@ -26,7 +26,7 @@ class AudioWindow(ttk.Frame):
             self.table.heading(key,text=label);self.table.column(key,width=width)
         self.table.pack(fill='both',expand=True,pady=8)
         self.details=tk.StringVar();ttk.Label(self,textvariable=self.details,wraplength=850).pack(anchor='w')
-        ttk.Label(self,text='Tancar el panell manté la reproducció. ATURAR ÀUDIO LOCAL no controla Sonar. Complement opcional: INSTAL_LAR_AUDIO_LOCAL.bat; després OBRIR_WASTELAND.bat. WAV PCM/OGG curts, fins a 30 s.',wraplength=850).pack(anchor='w',pady=8)
+        ttk.Label(self,text='Tancar el panell manté la reproducció. ATURAR ÀUDIO LOCAL no controla Sonar. Complement opcional: INSTAL_LAR_AUDIO_LOCAL.bat; després OBRIR_ATMO_ESFERA_FX.bat. WAV PCM/OGG curts, fins a 30 s.',wraplength=850).pack(anchor='w',pady=8)
         self.bind('<Destroy>',self.destroyed,add='+');self.refresh()
 
     def stop_selected(self):

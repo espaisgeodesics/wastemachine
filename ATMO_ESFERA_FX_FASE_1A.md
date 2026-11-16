@@ -1,6 +1,6 @@
 # ATMO ESFERA FX — fase 1A completada
 
-Entrega: **Wasteland Machine 4.7.5**, sobre la base estable 4.7.4. Arquitectura i primer increment aprovats per Jordi després de l’[auditoria A–G](ATMO_ESFERA_FX_AUDITORIA.md).
+Entrega: **ATMO ESFERA FX 4.7.5**, sobre la base estable 4.7.4. Arquitectura i primer increment aprovats per Jordi després de l’[auditoria A–G](ATMO_ESFERA_FX_AUDITORIA.md).
 
 Aquesta fase introdueix el model comú de detecció i un seguiment passiu. La detecció actual continua executant les funcions musicals i visuals; el seguiment nou observa les mateixes deteccions, sense enviar notes, canviar imatges ni aplicar regles de joc. No s’han migrat els projectes ni afegit dependències.
 
@@ -91,7 +91,7 @@ python -m unittest discover -s tests -v
 
 1. Desa el projecte actual i conserva la carpeta estable 4.7.4.
 2. Extreu tot el paquet 4.7.5 en una carpeta nova; no copiïs només el principal. Necessita els quatre mòduls espacials i els dos nous mòduls de seguiment al seu costat.
-3. Obre `OBRIR_WASTELAND.bat` i comprova **4.7.5** a la capçalera/Ajuda. L’accés anterior també serveix si tots els mòduls són a la carpeta.
+3. Obre `OBRIR_ATMO_ESFERA_FX.bat` i comprova **4.7.5** a la capçalera/Ajuda. L’accés anterior també serveix si tots els mòduls són a la carpeta.
 4. Obre el teu JSON existent, comprova MIDI i fotografies com abans, inclosa la retirada i el compte enrere configurat. La calibració desada continua servint per a les proves de targetes, amb els límits físics ja documentats.
 5. Fes una prova curta de desconnexió/reobertura de càmera al Windows abans de fer que el seguiment nou controli regles. Aquest desplegament no activa penalitzacions ni jocs.
 

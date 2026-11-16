@@ -3,7 +3,7 @@
 
 **Nom públic:** ATMO ESFERA FX  
 **Lema:** L'espai es converteix en instrument.  
-**Projecte d'origen:** Wasteland Machine  
+**Projecte d'origen:** ATMO ESFERA FX  
 **Repositori:** `espaisgeodesics/wastemachine`  
 **Entorn inicial:** Windows 10, Python 3.12  
 **Idioma principal de la interfície:** català
@@ -12,7 +12,7 @@
 
 # 1. OBJECTIU GENERAL
 
-Volem transformar l'actual Wasteland Machine en **ATMO ESFERA FX**, una plataforma de creació d'experiències interactives, audiovisuals, musicals, educatives, artístiques i lúdiques.
+Volem transformar l'actual ATMO ESFERA FX en **ATMO ESFERA FX**, una plataforma de creació d'experiències interactives, audiovisuals, musicals, educatives, artístiques i lúdiques.
 
 No volem desenvolupar un únic espectacle.
 
@@ -118,11 +118,11 @@ La rotació del marcador pot servir com a control interactiu, però cal tenir en
 
 ---
 
-# 3. PUNT DE PARTIDA REAL: WASTELAND MACHINE
+# 3. PUNT DE PARTIDA REAL: ATMO ESFERA FX
 
 Abans de modificar res, inspecciona el repositori i el codi existent.
 
-La darrera versió de referència del desenvolupament és **Wasteland Machine 4.5.15, pas 15**, sempre que sigui efectivament la versió disponible al repositori.
+La darrera versió de referència del desenvolupament és **ATMO ESFERA FX 4.5.15, pas 15**, sempre que sigui efectivament la versió disponible al repositori.
 
 El programa actual utilitza:
 
@@ -794,7 +794,7 @@ Les regles han de poder consultar l'estat de diversos participants.
 
 # 16. MOTOR D'ÀUDIO
 
-Actualment Wasteland Machine treballa principalment amb MIDI.
+Actualment ATMO ESFERA FX treballa principalment amb MIDI.
 
 ATMO ESFERA FX necessita també reproducció d'àudio independent.
 
@@ -1175,7 +1175,7 @@ Quines proves físiques necessitem?
 
 **D. Estratègia de compatibilitat**
 
-Com mantindrem el Wasteland Machine actual funcionant durant la transformació?
+Com mantindrem el ATMO ESFERA FX actual funcionant durant la transformació?
 
 **E. Full de ruta**
 

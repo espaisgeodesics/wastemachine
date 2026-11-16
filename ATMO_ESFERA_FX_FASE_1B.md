@@ -1,8 +1,8 @@
 # ATMO ESFERA FX — fase 1B
 
-Entrega: **Wasteland Machine 4.7.6**, sobre la base 4.7.5, commit
+Entrega: **ATMO ESFERA FX 4.7.6**, sobre la base 4.7.5, commit
 `53393a81208c3097bd08a7b7139b9df03d3e1340`, branca
-`codex/wasteland-camera-windows-launcher`.
+`codex/atmo_esfera_fx-camera-windows-launcher`.
 Continua l’[auditoria](ATMO_ESFERA_FX_AUDITORIA.md) i la
 [fase 1A](ATMO_ESFERA_FX_FASE_1A.md). Es conserven el fitxer principal,
 els accessos BAT i les funcions musicals i visuals.

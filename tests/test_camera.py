@@ -3,8 +3,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-PATH = Path(__file__).resolve().parents[1] / 'wasteland_4_5_15_pas_15_editor_musical_desplegable.py'
-spec = importlib.util.spec_from_file_location('wasteland', PATH)
+PATH = Path(__file__).resolve().parents[1] / 'atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py'
+spec = importlib.util.spec_from_file_location('atmo_esfera_fx', PATH)
 app_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(app_module)
 

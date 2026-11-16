@@ -1,7 +1,7 @@
 # ATMO ESFERA FX — fase 6A: Kaoss XY al simulador
 
-Entrega: **Wasteland Machine 4.8.1**, sobre 4.8.0 (`81f8b00`), branca
-`codex/wasteland-camera-windows-launcher`.
+Entrega: **ATMO ESFERA FX 4.8.1**, sobre 4.8.0 (`81f8b00`), branca
+`codex/atmo_esfera_fx-camera-windows-launcher`.
 
 **Estat: motor i editor de prova, sense connexió Kaoss a les sortides reals.**
 Aquesta entrega avança la fase 6 mentre continua pendent la validació física

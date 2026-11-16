@@ -18,7 +18,7 @@ La [fase 6A, versió 4.8.1](ATMO_ESFERA_FX_FASE_6.md), incorpora el motor Kaoss 
 
 Document de requisits: [document mestre](ATMO_ESFERA_FX_DOCUMENT_MESTRE.md), especialment l’apartat 25. Aquesta revisió lliura els punts A–G que demana, sense reescriure l’aplicació ni canviar-ne la marca encara.
 
-La base inspeccionada és **Wasteland Machine 4.7.4**, commit `bde3ccac6cf25d14e3078b192eb41d26c1cb0ede`, a la branca `codex/wasteland-camera-windows-launcher`. El nom del fitxer principal conserva «4.5.15 pas 15», però `APP_VERSION` és 4.7.4. No s’ha de partir de la còpia pas 14 ni assumir que `main` contingui les últimes entregues.
+La base inspeccionada és **ATMO ESFERA FX 4.7.4**, commit `bde3ccac6cf25d14e3078b192eb41d26c1cb0ede`, a la branca `codex/atmo_esfera_fx-camera-windows-launcher`. El nom del fitxer principal conserva «4.5.15 pas 15», però `APP_VERSION` és 4.7.4. No s’ha de partir de la còpia pas 14 ni assumir que `main` contingui les últimes entregues.
 
 **Recomanació:** conservar la 4.7.4 com a referència recuperable, reutilitzar els mòduls espacials i introduir primer un model comú de detecció i seguiment en paral·lel amb el camí actual. No començar pel canvi d’estètica ni pel motor de joc.
 
@@ -28,7 +28,7 @@ La base inspeccionada és **Wasteland Machine 4.7.4**, commit `bde3ccac6cf25d14e
 
 | Component | Evidència al codi actual | Què podem reaprofitar i què falta |
 |---|---|---|
-| Aplicació i interfície | `wasteland_4_5_15_pas_15_editor_musical_desplegable.py`, classe `App`, aproximadament 1.900 línies | Tkinter, finestres, noms de targetes, distribució desada, diagnosi, editor i taula de volums. Captura, lògica i presentació encara conviuen a la mateixa classe. |
+| Aplicació i interfície | `atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py`, classe `App`, aproximadament 1.900 línies | Tkinter, finestres, noms de targetes, distribució desada, diagnosi, editor i taula de volums. Captura, lògica i presentació encara conviuen a la mateixa classe. |
 | Captura i detector | `App.toggle_cam`, `App.tick`, `cv2.aruco.ArucoDetector` | Una càmera, selecció d’índex, backend DirectShow a Windows, diccionari `DICT_4X4_50`, processament de tots els IDs 0–15 detectats. Cada detecció activa directament funcions de la targeta. No hi ha un contracte independent de fotograma/detecció ni mesura calibrada de qualitat. |
 | Seguiment actual | `active`, `last_seen`, `target_trails`, `expire_missing_cards` | Posició, rotació i historial recent per ID; retirada després de 250 ms sense veure’l. No hi ha registre de participants separat del marcador ni els estats de sessió demanats. |
 | MIDI i música | `harmony_pitches`, `arpeggio_note`, `sequencer_tick`, `drum_tick` i configuracions de targetes | Notes, harmonies, arpegis en quatre direccions, patrons de 16 passos, bateria completa, CC i rellotge intern. El fil del seqüenciador evita dependre del ritme de dibuix. No hi ha sincronització automàtica amb el transport de Sonar ni Kaoss XY. |
@@ -57,7 +57,7 @@ Aquesta auditoria no valida de nou Windows, el BAT, loopMIDI, Sonar, barrets fí
 4. Hi ha especialitzacions d’ID, especialment la targeta 02 amb CC7 i filtre CC74. Cal conservar-les com a compatibilitat i convertir-les més endavant en configuracions assignables.
 5. Hi ha una ruta cromàtica plana, però `compose_live_visuals` també permet mescla de capes. Abans de generalitzar escenes cal garantir un únic àrbitre: una ordre de color públic ha de produir color uniforme fins que una altra ordre autoritzada la substitueixi.
 6. El desament escriu directament el JSON. L’obertura valida el bloc espacial, però no tota la configuració abans de modificar l’estat. Cal preveure validació completa i escriptura atòmica en l’increment de projectes.
-7. `OBRIR_WASTELAND.bat` invoca `pip install` en cada arrencada. Cal separar instal·lació i execució i provar l’arrencada offline amb dependències ja instal·lades. L’aplicació no necessita serveis d’Internet per detectar o enviar MIDI.
+7. `OBRIR_ATMO_ESFERA_FX.bat` invoca `pip install` en cada arrencada. Cal separar instal·lació i execució i provar l’arrencada offline amb dependències ja instal·lades. L’aplicació no necessita serveis d’Internet per detectar o enviar MIDI.
 8. `LLEGEIX-ME.md` i `DIAGNOSI_MUTE_SONAR.md` contenen instruccions històriques, inclosa simulació visible i diagnosi anterior al control CC. No s’han de prendre totes com a descripció de la 4.7.4. `MAPA_ZONES.md` registra les entregues espacials posteriors.
 
 ## B. Arquitectura proposada
@@ -215,6 +215,6 @@ Ja estan decidits i no cal tornar-los a preguntar: català, Python 3.12/Windows 
 
 ## Entrega i aprovació
 
-Aquesta entrega només incorpora el document mestre i aquest informe. **Wasteland continua sent la 4.7.4**; no cal descarregar una altra versió del programa ni executar PowerShell per revisar la proposta.
+Aquesta entrega només incorpora el document mestre i aquest informe. **ATMO ESFERA FX continua sent la 4.7.4**; no cal descarregar una altra versió del programa ni executar PowerShell per revisar la proposta.
 
 L’apartat 25 del document mestre diu: «**Espera l’aprovació de l’arquitectura i de la primera fase.**» Per això el següent pas requereix aprovar l’arquitectura modular de B i la fase 1A de F. L’aprovació no implica iniciar alhora totes les funcions futures.

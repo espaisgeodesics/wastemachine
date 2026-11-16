@@ -2,7 +2,7 @@
 
 ## Abast real d'aquesta entrega
 
-La fase 1 va afegir el motor independent `spatial_zones.py` i les seves proves. La fase 2, a **Wasteland 4.7.0**, afegeix `spatial_zone_editor.py`, integra la configuració a l'editor de targetes i incorpora el bloc espacial al desament/obertura de projectes. La resta de funcions existents es conserva. La fase 3, a **Wasteland 4.7.1**, connecta el motor en directe amb la projecció persistent mitjançant `spatial_projection.py`.
+La fase 1 va afegir el motor independent `spatial_zones.py` i les seves proves. La fase 2, a **ATMO ESFERA FX 4.7.0**, afegeix `spatial_zone_editor.py`, integra la configuració a l'editor de targetes i incorpora el bloc espacial al desament/obertura de projectes. La resta de funcions existents es conserva. La fase 3, a **ATMO ESFERA FX 4.7.1**, connecta el motor en directe amb la projecció persistent mitjançant `spatial_projection.py`.
 
 El motor produeix esdeveniments i sol·licituds d'escena. No obre una càmera, no envia MIDI, no carrega ni dibuixa fotografies i no executa vídeo. L'estat persistent d'una escena aquí és una referència d'imatge; la càrrega, validació real i presentació de la imatge són tasques de la fase de projecció.
 
@@ -147,7 +147,7 @@ Validació de la fase 3: **86 proves correctes**, amb proves del motor, errors d
 
 ## Fase 4 — captura de calibració (4.7.2)
 
-Fitxer addicional necessari: `spatial_calibration.py`, al costat del principal i dels altres tres mòduls espacials. `OBRIR_WASTELAND.bat` és l’accés amb nom estable; l’accés anterior també continua funcionant.
+Fitxer addicional necessari: `spatial_calibration.py`, al costat del principal i dels altres tres mòduls espacials. `OBRIR_ATMO_ESFERA_FX.bat` és l’accés amb nom estable; l’accés anterior també continua funcionant.
 
 1. Obre la càmera. Situa-la de manera fixa i identifica quatre referències físiques al perímetre del cercle del terra: nord, est, sud i oest. Són noms de referència del mapa, no cal una brúixola. Marca-les físicament per poder repetir la prova.
 2. Obre **ZONES ESPACIALS → CALIBRAR TERRA**. La finestra mostra la imatge original de càmera sense mirall ni anotacions ArUco. Prem **CONGELAR IMATGE**.

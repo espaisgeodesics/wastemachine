@@ -46,7 +46,7 @@ def harmony_pitches(card,sector):
     return pitches,NOTE_NAMES[pitches[0]%12]
 class App:
  def __init__(self,root):
-    self.root=root; root.title('WASTELAND MACHINE 4.5.15 · Pas 14 · Mapa arpegiador i rellotge estable'); root.geometry('790x265'); root.minsize(570,205)
+    self.root=root; root.title('ATMO ESFERA FX 4.5.15 · Pas 14 · Mapa arpegiador i rellotge estable'); root.geometry('790x265'); root.minsize(570,205)
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.metronome_enabled=False; self.metronome_start=time.monotonic(); self.metronome_last_beat=-1; self.metronome_last_bpm=self.bpm; self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -89,13 +89,13 @@ class App:
     banner=tk.Frame(self.root,bg='#2c1b13',highlightbackground='#9c6139',highlightthickness=2,height=94)
     banner.pack(fill='x',padx=7,pady=(5,3));banner.pack_propagate(False)
     try:
-      self.banner_source=Image.open(ROOT/'capcalera_wasteland_4513.png').convert('RGB')
+      self.banner_source=Image.open(ROOT/'capcalera_atmo_esfera_fx_4513.png').convert('RGB')
       self.banner_photo=None
       self.banner_label=tk.Label(banner,bg='#20130e',bd=0)
       self.banner_label.pack(fill='both',expand=True)
       self.banner_label.bind('<Configure>',self.resize_banner)
     except Exception:
-      tk.Label(banner,text='WASTELAND MACHINE',font=('Georgia',19,'bold'),fg='#f5b47a',bg='#20130e').pack(fill='both',expand=True)
+      tk.Label(banner,text='ATMO ESFERA FX',font=('Georgia',19,'bold'),fg='#f5b47a',bg='#20130e').pack(fill='both',expand=True)
     toolbar=ttk.Frame(self.root);toolbar.pack(fill='x',padx=9,pady=(1,5))
     ttk.Button(toolbar,text='MONITOR ARUCO',command=self.open_aruco_monitor).pack(side='left',padx=2)
     ttk.Button(toolbar,text='MOSTRAR TOTES LES FINESTRES',command=self.show_all_panels).pack(side='left',padx=7)
@@ -183,7 +183,7 @@ class App:
     ttk.Label(statusbar,textvariable=self.status,foreground='#e8b47d').pack(side='left',padx=4)
  def make_panel_window(self,key,title,geometry):
     win=tk.Toplevel(self.root)
-    win.title('WASTELAND · '+title)
+    win.title('ATMO ESFERA FX · '+title)
     # Finestra propietat de la principal: Windows la manté al davant
     # de la principal, però no per sobre de Cakewalk.
     win.transient(self.root)
@@ -292,7 +292,7 @@ class App:
     try:
       with open(self.window_layout_file,'w',encoding='utf-8') as f:
         json.dump(layout,f,ensure_ascii=False,indent=2)
-      self.status.set('Distribució de finestres desada. Es recuperarà en tornar a obrir Wasteland.')
+      self.status.set('Distribució de finestres desada. Es recuperarà en tornar a obrir ATMO ESFERA FX.')
     except Exception as exc:self.status.set('No s’ha pogut desar la distribució: '+str(exc))
  def restore_window_layout(self,silent=False):
     if not self.window_layout_file.exists():
@@ -447,7 +447,7 @@ class App:
  def save_project(self,as_new=False):
     self.apply_card()
     if as_new or self.project=='Sense títol':
-      path=filedialog.asksaveasfilename(initialdir=ROOT/'PROJECTES',defaultextension='.json',filetypes=[('Projecte Wasteland','*.json')])
+      path=filedialog.asksaveasfilename(initialdir=ROOT/'PROJECTES',defaultextension='.json',filetypes=[('Projecte ATMO ESFERA FX','*.json')])
       if not path:return
       self.project=path
     try:
@@ -455,7 +455,7 @@ class App:
       self.status.set(f'Projecte desat: {Path(self.project).name}')
     except Exception as e:messagebox.showerror('Desar',str(e))
  def open_project(self):
-    path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte Wasteland','*.json')]);
+    path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte ATMO ESFERA FX','*.json')]);
     if not path:return
     try:
       with open(path,encoding='utf-8') as f:d=json.load(f)
@@ -530,7 +530,7 @@ class App:
  def open_projection(self):
     if getattr(self,'projection',None) and self.projection.winfo_exists():
       self.projection.lift();return
-    self.projection=tk.Toplevel(self.root);self.projection.title('PROJECCIÓ · COLOR PLA · WASTELAND MACHINE');self.projection.geometry('960x540');self.projection.configure(bg='black')
+    self.projection=tk.Toplevel(self.root);self.projection.title('PROJECCIÓ · COLOR PLA · ATMO ESFERA FX');self.projection.geometry('960x540');self.projection.configure(bg='black')
     self.proj_label=tk.Label(self.projection,bg='black');self.proj_label.pack(fill='both',expand=True)
     self.projection.bind('<F11>',lambda e:self.projection.attributes('-fullscreen',not self.projection.attributes('-fullscreen')))
     self.projection.bind('<Escape>',lambda e:self.projection.attributes('-fullscreen',False))

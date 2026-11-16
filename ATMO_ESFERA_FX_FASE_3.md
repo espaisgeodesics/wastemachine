@@ -1,7 +1,7 @@
 # ATMO ESFERA FX — fase 3: zones al flux comú
 
-Entrega: **Wasteland Machine 4.7.8**, sobre la [fase 2, 4.7.7](ATMO_ESFERA_FX_FASE_2.md),
-commit recuperable `6fc9e6c`, a `codex/wasteland-camera-windows-launcher`.
+Entrega: **ATMO ESFERA FX 4.7.8**, sobre la [fase 2, 4.7.7](ATMO_ESFERA_FX_FASE_2.md),
+commit recuperable `6fc9e6c`, a `codex/atmo_esfera_fx-camera-windows-launcher`.
 
 ## Què incorpora
 

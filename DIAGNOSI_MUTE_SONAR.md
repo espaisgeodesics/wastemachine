@@ -1,4 +1,4 @@
-# Diagnosi mínima del Mute a Sonar — Wasteland 4.6.2
+# Diagnosi mínima del Mute a Sonar — ATMO ESFERA FX 4.6.2
 
 ## Resultat de la revisió
 
@@ -21,11 +21,11 @@ Al panell MIDI hi ha el botó **DIAGNOSI MIDI**. El registre inclou:
 - `ACCEPTAT PEL PORT LOCAL` si l'API del port no ha retornat error, o `ERROR LOCAL` si ha fallat.
 - Còpia al porta-retalls i exportació a text, amb un màxim de 1.000 línies en memòria. No s'escriu cap fitxer automàticament.
 
-**Acceptació local no vol dir recepció a Sonar ni confirmació de l'estat del Mute.** Si cal comprovar la recepció independentment de Remote Control, utilitza un monitor MIDI al port de destinació i compara els missatges; el registre de Wasteland no el substitueix.
+**Acceptació local no vol dir recepció a Sonar ni confirmació de l'estat del Mute.** Si cal comprovar la recepció independentment de Remote Control, utilitza un monitor MIDI al port de destinació i compara els missatges; el registre de ATMO ESFERA FX no el substitueix.
 
 ## Prova 1 — Nota actual
 
-1. Connecta la sortida `wasteland MIDI 1` i obre DIAGNOSI MIDI. Utilitza només una targeta de prova. Evita que una altra pista d'instrument tingui aquest port i canal com a entrada si no vols disparar sons durant la prova.
+1. Connecta la sortida `atmo_esfera_fx MIDI 1` i obre DIAGNOSI MIDI. Utilitza només una targeta de prova. Evita que una altra pista d'instrument tingui aquest port i canal com a entrada si no vols disparar sons durant la prova.
 2. Neteja el registre. Mostra la targeta, retira-la durant un segon, torna-la a mostrar i retira-la de nou.
 3. El registre ha de contenir dues línies VISIBLE i dues RETIRADA, i els quatre missatges `note_on`, `note_off`, `note_on`, `note_off`, amb el mateix canal i nota.
 4. Si no apareix RETIRADA, comprova la detecció al monitor de targetes. Si apareix un ERROR LOCAL en el Note Off, tenim una fallada d'enviament a investigar. Si hi ha acceptació local de tots quatre, cal comprovar el receptor i l'assignació de Sonar; no concloure que han arribat només pel registre.

@@ -1,7 +1,7 @@
 # ATMO ESFERA FX — fase 5A: prototip d’àudio local i BOSC VIU
 
-Entrega: **Wasteland Machine 4.8.0**, sobre 4.7.9 (`032e335`), a
-`codex/wasteland-camera-windows-launcher`.
+Entrega: **ATMO ESFERA FX 4.8.0**, sobre 4.7.9 (`032e335`), a
+`codex/atmo_esfera_fx-camera-windows-launcher`.
 
 **Estat: prototip funcional validat al núvol, no backend definitiu homologat.**
 L’[auditoria](ATMO_ESFERA_FX_AUDITORIA.md) exigeix una prova del backend a Windows
@@ -21,7 +21,7 @@ No s’importen pygame/soundfile ni s’inicia el dispositiu en arrencar l’apl
 Per a una prova posterior a Windows:
 
 1. Extreu el paquet complet i executa una vegada **INSTAL_LAR_AUDIO_LOCAL.bat**.
-2. Obre **OBRIR_WASTELAND.bat**, que fa servir el mateix entorn `.venv`.
+2. Obre **OBRIR_ATMO_ESFERA_FX.bat**, que fa servir el mateix entorn `.venv`.
    L’accés històric `_461` pot seleccionar un altre Python i no tenir el complement.
 3. Obre **Àudio → Àudio local opcional...** i prem **ACTIVAR**.
 4. Si falla, el panell mostra el diagnòstic; cap so pendent es reproduirà

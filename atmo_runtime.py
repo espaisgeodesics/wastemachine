@@ -14,7 +14,7 @@ PURPLE = '#9b8cff'
 
 
 def title_atmo(text):
-    text = text.replace('WASTELAND MACHINE', 'ATMO ESFERA FX').replace('WASTELAND', 'ATMO ESFERA FX')
+    text = text.replace('ATMO ESFERA FX', 'ATMO ESFERA FX').replace('ATMO ESFERA FX', 'ATMO ESFERA FX')
     return text if text.startswith('ATMO ESFERA FX') else 'ATMO ESFERA FX · ' + text
 
 
@@ -76,8 +76,8 @@ def theme_widgets(widget):
             if 'activebackground' in options: config['activebackground'] = SURFACE
             if 'selectcolor' in options: config['selectcolor'] = SURFACE
             if 'readonlybackground' in options: config['readonlybackground'] = SURFACE
-            if 'text' in options and 'WASTELAND' in str(widget.cget('text')):
-                config['text'] = str(widget.cget('text')).replace('WASTELAND MACHINE', 'ATMO ESFERA FX').replace('WASTELAND', 'ATMO ESFERA FX')
+            if 'text' in options and 'ATMO ESFERA FX' in str(widget.cget('text')):
+                config['text'] = str(widget.cget('text')).replace('ATMO ESFERA FX', 'ATMO ESFERA FX').replace('ATMO ESFERA FX', 'ATMO ESFERA FX')
             widget.configure(**config)
         for child in widget.winfo_children(): theme_widgets(child)
     except tk.TclError:

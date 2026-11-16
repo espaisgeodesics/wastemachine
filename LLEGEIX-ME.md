@@ -1,4 +1,4 @@
-# Wasteland Machine
+# ATMO ESFERA FX
 
 **Versió actual: 4.8.1.** Mantén junts tots els fitxers del repositori; el principal importa els mòduls de seguiment, participants, zones, regles, àudio i simulació. Les dependències base continuen a `requirements.txt`; l’àudio local és un complement opcional.
 
@@ -8,7 +8,7 @@ ATMO ESFERA FX ja inclou participants amb nom/color/marcador, simulador de cinc 
 
 1. Instal·la **Python 3.12 de 64 bits** des de https://www.python.org/downloads/windows/. Inclou els components Python Launcher i Tcl/Tk (normalment seleccionats per defecte).
 2. Extreu **tot** el ZIP en una carpeta del teu ordinador. No l'executis des de dins del ZIP.
-3. Fes doble clic a **OBRIR_WASTELAND.bat**. La primera vegada necessita Internet per instal·lar les biblioteques. Les següents vegades comprova les dependències i obre el programa.
+3. Fes doble clic a **OBRIR_ATMO_ESFERA_FX.bat**. La primera vegada necessita Internet per instal·lar les biblioteques. Les següents vegades comprova les dependències i obre el programa.
 4. Les finestres de càmera, visuals, MIDI i editor s'obren per separat. Si alguna queda fora de pantalla, utilitza **Projecte → Restablir distribució inicial**.
 
 Per tornar-hi, fes doble clic al mateix fitxer BAT. No es necessita cap compte ni clau API. El programa s'executa al teu ordinador; aquest paquet no crea un accés web.
@@ -18,7 +18,7 @@ Per tornar-hi, fes doble clic al mateix fitxer BAT. No es necessita cap compte n
 - Sense càmera ni MIDI, comprova l'editor i els visuals. Si apareix un diagnòstic MIDI, tanca l'avís per continuar sense MIDI.
 - Obre la càmera amb el botó corresponent. Permet-ne l'accés a la configuració de privadesa de Windows i tanca altres aplicacions que la facin servir.
 - Els marcadors són **ArUco DICT_4X4_50, ID 0–15**, corresponents a les targetes 1–16.
-- Per enviar MIDI a Cakewalk, crea un port virtual amb loopMIDI, selecciona'l al Wasteland i habilita'l com a entrada MIDI a Cakewalk. Aquests programes es configuren separadament.
+- Per enviar MIDI a Cakewalk, crea un port virtual amb loopMIDI, selecciona'l al ATMO ESFERA FX i habilita'l com a entrada MIDI a Cakewalk. Aquests programes es configuren separadament.
 - Desa el treball amb **Projecte → Desar projecte**. Els projectes són fitxers JSON; conserva'ls i fes-ne còpies de seguretat. Els vídeos es desen a GRAVACIONS.
 
 Quan demanis un canvi, indica què has fet, què esperaves i què ha passat. Pots adjuntar una captura o copiar els errors de la consola.
@@ -33,7 +33,7 @@ La càmera física, MIDI/Cakewalk i el llançador BAT necessiten comprovació al
 
 ## Desenvolupament
 
-La versió actual és wasteland_4_5_15_pas_15_editor_musical_desplegable.py. Amb Python 3.12, crea un entorn virtual, instal·la requirements.txt i executa aquest fitxer des d'un escriptori amb Tkinter. OpenCV headless és suficient perquè les finestres les dibuixa Tkinter.
+La versió actual és atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py. Amb Python 3.12, crea un entorn virtual, instal·la requirements.txt i executa aquest fitxer des d'un escriptori amb Tkinter. OpenCV headless és suficient perquè les finestres les dibuixa Tkinter.
 
 Proves: `python -m unittest discover -s tests -v`.
 
@@ -54,7 +54,7 @@ La detecció de la targeta inicia el compàs des del primer pas i el repeteix me
 
 Utilitza el port loopMIDI d'entrada de la pista de bateria i activa l'escolta d'entrada a Sonar. El canal es pot ajustar a la configuració del ritme (sovint 10 per a bateria GM, o l'entrada Omni de la pista). Les notes proposades són 36, 38, 42, 46 i 49; les pots canviar a la mateixa finestra si el mapa del teu MT Power Drum Kit difereix. No s'ha provat el plugin real al núvol. No activa els grooves interns del plugin: genera les notes MIDI que l'instrument interpreta.
 
-El tempo és el del Wasteland. Cada bucle és un compàs de 4/4 i encara no se sincronitza automàticament amb el transport de Sonar. Retira una targeta abans d'ensenyar-ne una altra si vols canviar de ritme sense superposar-los.
+El tempo és el del ATMO ESFERA FX. Cada bucle és un compàs de 4/4 i encara no se sincronitza automàticament amb el transport de Sonar. Retira una targeta abans d'ensenyar-ne una altra si vols canviar de ritme sense superposar-los.
 
 ## Llista de targetes i mapes de configuració
 
@@ -79,13 +79,13 @@ La projecció i la gravació reben la mateixa composició en directe. La projecc
 La funció **Àudio** envia un pols de nota MIDI per iniciar un clip configurat prèviament a Sonar. No reprodueix fitxers localment ni activa directament qualsevol pista del timeline. Necessita una cel·la de la vista Matrix de Sonar, o un sampler amb reproducció one-shot, que tingui aquesta nota assignada.
 
 1. A Sonar, carrega l'àudio a una cel·la Matrix o un sampler. Configura'l perquè una nota curta iniciï el clip complet, sense bucle i sense aturar-se quan arriba el note-off. Per començar, utilitza llançament immediat, sense esperar cap compàs. No el vinculis a una pista amb un instrument de bateria que pugui interpretar la mateixa nota.
-2. Associa una nota MIDI lliure d'un canal concret al llançament del clip, rebuda des del mateix port loopMIDI del Wasteland. La configuració d'aquesta associació es fa a Sonar. Comprova que una pulsació curta reprodueixi l'àudio sencer abans d'utilitzar la càmera.
-3. A l'editor del Wasteland, selecciona **Àudio**. El menú s'obre automàticament: indica canal, nota i la durada real del clip en segons. El botó **PROVAR DISPAR A SONAR** envia el pols sense necessitat de càmera. Desa el projecte per conservar els paràmetres.
+2. Associa una nota MIDI lliure d'un canal concret al llançament del clip, rebuda des del mateix port loopMIDI del ATMO ESFERA FX. La configuració d'aquesta associació es fa a Sonar. Comprova que una pulsació curta reprodueixi l'àudio sencer abans d'utilitzar la càmera.
+3. A l'editor del ATMO ESFERA FX, selecciona **Àudio**. El menú s'obre automàticament: indica canal, nota i la durada real del clip en segons. El botó **PROVAR DISPAR A SONAR** envia el pols sense necessitat de càmera. Desa el projecte per conservar els paràmetres.
 4. En detectar la targeta s'envia un sol dispar. Retirar-la no envia una ordre d'aturada. El bloqueig impedeix repetir-lo durant la durada indicada, encara que es retiri i es torni a detectar la targeta. Quan acaba aquest temps, cal una nova aparició de la targeta per tornar-lo a disparar; no es repeteix automàticament si es manté visible. També es bloquegen dues targetes amb la mateixa nota i canal mentre el clip està ocupat.
 
-**La durada és un bloqueig temporal configurat, no una detecció del final real.** Sonar no retorna aquest final al Wasteland. Si hi ha espera de llançament, estirament de temps o canvis al clip, cal ajustar la durada perquè no es pugui tornar a disparar abans d'hora. El monitor mostra el bloqueig restant; això confirma l'enviament del dispar, no que Sonar estigui sonant. Cal validar la reproducció a Sonar al teu ordinador.
+**La durada és un bloqueig temporal configurat, no una detecció del final real.** Sonar no retorna aquest final al ATMO ESFERA FX. Si hi ha espera de llançament, estirament de temps o canvis al clip, cal ajustar la durada perquè no es pugui tornar a disparar abans d'hora. El monitor mostra el bloqueig restant; això confirma l'enviament del dispar, no que Sonar estigui sonant. Cal validar la reproducció a Sonar al teu ordinador.
 
-El pols MIDI dura com a màxim 80 ms; el receptor ha d'ignorar-ne la finalització per continuar en one-shot. La retirada d'una targeta, el canvi de funció o la pausa de visuals no aturen el clip. Per aturar-lo abans del final, utilitza els controls de Sonar. El botó SILENCI ABSOLUT del Wasteland bloqueja MIDI i envia ordres de silenci als instruments, però no és un control de transport de les pistes d'àudio de Sonar.
+El pols MIDI dura com a màxim 80 ms; el receptor ha d'ignorar-ne la finalització per continuar en one-shot. La retirada d'una targeta, el canvi de funció o la pausa de visuals no aturen el clip. Per aturar-lo abans del final, utilitza els controls de Sonar. El botó SILENCI ABSOLUT del ATMO ESFERA FX bloqueja MIDI i envia ordres de silenci als instruments, però no és un control de transport de les pistes d'àudio de Sonar.
 
 ## Interfície simplificada
 
@@ -97,7 +97,7 @@ La finestra que s'obre en seleccionar **Àudio** té dues pestanyes: **Reproducc
 
 Cada control permet escollir moviment horitzontal, vertical, rotació o distància al centre; invertir-ne el sentit; ajustar mínim/màxim entre 0 i 127, i canviar el número CC. Per exemple, volum vertical invertit fa que a dalt soni més fort. Per evitar arribar al silenci, posa el mínim de volum a 30 o 40. Els controls actius han de tenir CC diferents. Tots utilitzen el canal MIDI de la targeta.
 
-Aquests controls **envien missatges MIDI, no afegeixen processament d'àudio al Wasteland**. Una pista d'àudio de Sonar no interpreta automàticament tots aquests CC: assigna'ls a volum, panoràmica o paràmetres de plugin amb MIDI Learn / ACT, o utilitza un sampler que els admeti. Configura l'entrada MIDI i els canals perquè no modifiquin instruments que no vulguis controlar. Per fer l'aprenentatge d'un paràmetre, activa primer només aquell control i mou la targeta.
+Aquests controls **envien missatges MIDI, no afegeixen processament d'àudio al ATMO ESFERA FX**. Una pista d'àudio de Sonar no interpreta automàticament tots aquests CC: assigna'ls a volum, panoràmica o paràmetres de plugin amb MIDI Learn / ACT, o utilitza un sampler que els admeti. Configura l'entrada MIDI i els canals perquè no modifiquin instruments que no vulguis controlar. Per fer l'aprenentatge d'un paràmetre, activa primer només aquell control i mou la targeta.
 
 Mentre la targeta és present, els moviments modifiquen els controls sense tornar a iniciar el clip. Retirar-la deixa l'últim valor al receptor i el clip continua; tornar-la a mostrar abans que acabi permet continuar controlant-la sense repetir el dispar. La configuració es desa amb el projecte. Inversió de reproducció, canvi de velocitat o bucles no s'han afegit: requereixen un receptor adequat i una configuració específica a Sonar; aquesta funció conserva la reproducció completa una sola vegada.
 
@@ -117,11 +117,11 @@ Moure un fader envia només el CC d'aquella franja; el màster envia els nivells
 
 El **Nom assignat** ara es pot editar directament sota el número de targeta a l'editor; prem APLICAR i desa el projecte. La previsualització ja no mostra la franja de simulació ni el control de gir. La finestra de targetes té una vista compacta, amb la casella **Detall ArUco** per veure totes les columnes quan calgui. Les distribucions antigues que tenien aquesta finestra molt ampla s'adapten una vegada; les noves distribucions desades respecten la mida que triïs.
 
-La capçalera gràfica utilitza `capcalera_wasteland_460.png`, que ha d'estar al costat del fitxer Python. Manté l'estètica i el títol centrat de la imatge original i n'elimina els falsos controls. No hi ha subtítol ni segona versió a sota.
+La capçalera gràfica utilitza `capcalera_atmo_esfera_fx_460.png`, que ha d'estar al costat del fitxer Python. Manté l'estètica i el títol centrat de la imatge original i n'elimina els falsos controls. No hi ha subtítol ni segona versió a sota.
 
 ## Arrencada identificable i tres finestres iguals (4.6.1)
 
-La barra de títol mostra 4.6.1. A **Ajuda → Versió i fitxer que s'està executant** pots consultar el camí exacte del programa i el Python utilitzat. El nou **OBRIR_WASTELAND_461.bat** obre explícitament el fitxer principal de la mateixa carpeta, primer amb el Python 3.12 d'usuari que ja funciona, després amb el virtualenv local o el Python Launcher si cal. Mantén al costat la imatge capcalera_wasteland_460.png.
+La barra de títol mostra 4.6.1. A **Ajuda → Versió i fitxer que s'està executant** pots consultar el camí exacte del programa i el Python utilitzat. El nou **OBRIR_ATMO_ESFERA_FX_461.bat** obre explícitament el fitxer principal de la mateixa carpeta, primer amb el Python 3.12 d'usuari que ja funciona, després amb el virtualenv local o el Python Launcher si cal. Mantén al costat la imatge capcalera_atmo_esfera_fx_460.png.
 
 La distribució inicial conserva càmera a dalt a l'esquerra, previsualització a dalt a la dreta i editor a sota a la dreta, amb totes tres de la mateixa mida. Si la distribució desada és anterior a aquesta revisió, les tres mides s'adapten en arrencar sense eliminar-ne el fitxer. Pots desar aquesta distribució nova o moure les finestres i tornar-la a desar. El MIDI continua en una finestra compacta independent.
 
@@ -129,7 +129,7 @@ El camp **Nom assignat** és a l'editor, just sota Targeta / ID ArUco. Escriu-hi
 
 ## Diagnosi del Mute a Sonar (4.6.2)
 
-Al panell MIDI, **DIAGNOSI MIDI** mostra aparicions/retirades i els missatges acceptats o rebutjats pel port local. Pots copiar o desar el registre. No confirma la recepció a Sonar. Les ordres de prova CC 0 i 127 serveixen per verificar manualment una assignació absoluta del Mute sense enviar notes. La revisió 4.6.2 només diagnosticava el problema; després de verificar els dos estats a Sonar, la 4.6.3 afegeix la funció de presència/Mute descrita al final. Instruccions i conclusions detallades a DIAGNOSI_MUTE_SONAR.md. L'accés OBRIR_WASTELAND_461.bat continua obrint el mateix fitxer principal actualitzat; la barra de títol ara indica 4.6.2.
+Al panell MIDI, **DIAGNOSI MIDI** mostra aparicions/retirades i els missatges acceptats o rebutjats pel port local. Pots copiar o desar el registre. No confirma la recepció a Sonar. Les ordres de prova CC 0 i 127 serveixen per verificar manualment una assignació absoluta del Mute sense enviar notes. La revisió 4.6.2 només diagnosticava el problema; després de verificar els dos estats a Sonar, la 4.6.3 afegeix la funció de presència/Mute descrita al final. Instruccions i conclusions detallades a DIAGNOSI_MUTE_SONAR.md. L'accés OBRIR_ATMO_ESFERA_FX_461.bat continua obrint el mateix fitxer principal actualitzat; la barra de títol ara indica 4.6.2.
 
 ## Control d'àudio / Mute per presència (4.6.3)
 
@@ -173,7 +173,7 @@ Per provar sense dispositius, obre el simulador i prem **CARREGAR ZONES I REGLES
 
 **Projecte → Crear BOSC VIU de prova...** crea una carpeta nova amb cinc zones, regles i WAV sintètics. Obre el simulador per provar ocells, riu, vent, clariana i alarma sense càmera ni dispositiu d’àudio. Els sons són de prova, no gravacions de natura; la clariana és un color substituïble per una fotografia.
 
-El complement real és opcional: **INSTAL_LAR_AUDIO_LOCAL.bat**, després **OBRIR_WASTELAND.bat** i **Àudio → Àudio local opcional... → ACTIVAR**. Hi ha fins a setze capes, bucles curts, volum/fade per participant o grup i màster local. Les noves accions són Reproduir so local, Aturar so local i Volum local. La funció antiga Àudio de les targetes continua sent MIDI per a Sonar.
+El complement real és opcional: **INSTAL_LAR_AUDIO_LOCAL.bat**, després **OBRIR_ATMO_ESFERA_FX.bat** i **Àudio → Àudio local opcional... → ACTIVAR**. Hi ha fins a setze capes, bucles curts, volum/fade per participant o grup i màster local. Les noves accions són Reproduir so local, Aturar so local i Volum local. La funció antiga Àudio de les targetes continua sent MIDI per a Sonar.
 
 **ATURAR ÀUDIO LOCAL** només atura el reproductor local. El silenci absolut també el bloqueja; tancar el panell no atura la reproducció. El simulador continua silenciós i mostra les veus a Sortida de prova. No s’activa el dispositiu automàticament ni es desa l’activació al projecte.
 

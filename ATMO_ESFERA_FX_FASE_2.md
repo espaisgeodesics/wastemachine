@@ -1,7 +1,7 @@
 # ATMO ESFERA FX — fase 2: simulador de cinc participants
 
-Entrega: **Wasteland Machine 4.7.7**, sobre la [fase 1B, 4.7.6](ATMO_ESFERA_FX_FASE_1B.md),
-commit recuperable `c349ed2`, branca `codex/wasteland-camera-windows-launcher`.
+Entrega: **ATMO ESFERA FX 4.7.7**, sobre la [fase 1B, 4.7.6](ATMO_ESFERA_FX_FASE_1B.md),
+commit recuperable `c349ed2`, branca `codex/atmo_esfera_fx-camera-windows-launcher`.
 Continua l’abast de la fase 2 definit a l’[auditoria](ATMO_ESFERA_FX_AUDITORIA.md).
 
 ## Ús
