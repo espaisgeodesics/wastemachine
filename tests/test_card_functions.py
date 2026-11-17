@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 from atmo_card_functions import CHAOS_FUNCTION, LiveKaoss, live_configs, default_config, CardKaossEditor
 from kaoss_xy import KaossConfig
+from atmo_preview import NO_VISUAL, visual_index
 from experience_rules import RulesConfig, RuleAction, ExperienceRule
 
 
@@ -25,7 +26,7 @@ def method(name):
            'MUTE_FUNCTION':'Control d’àudio / Mute','time':time,'CARD_LOST_TIMEOUT':.25,
            'math':math,'config_replace':replace,'default_config':default_config,
            'NOTE_NAMES':['Do','Do#','Re','Re#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si'],
-           'NAMES':['visual'],'messagebox':Mock()}
+           'NAMES':['visual'],'messagebox':Mock(),'NO_VISUAL':NO_VISUAL,'visual_index':visual_index}
     exec(compile(ast.Module(body=[function],type_ignores=[]),str(SOURCE),'exec'),scope)
     return scope[name]
 

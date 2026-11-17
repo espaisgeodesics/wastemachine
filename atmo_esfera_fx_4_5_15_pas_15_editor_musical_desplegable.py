@@ -4,6 +4,7 @@ from pathlib import Path
 from collections import deque
 from dataclasses import replace
 from marker_tracking import MarkerTracker, ObservationFrame
+from atmo_preview import NO_VISUAL, SURFACES, visual_index, assigned_visuals, mix_frames, map_frame, map_pointer
 from zone_audio import ZoneAudioPlayer
 from atmo_card_functions import CHAOS_FUNCTION, LiveKaoss, CardKaossEditor, default_config
 from kaoss_xy import KaossConfig
@@ -42,12 +43,13 @@ ROOT=Path(__file__).resolve().parent
 (ROOT/'GRAVACIONS').mkdir(exist_ok=True)
 W,H=640,360
 NAMES=['Motor de ferro','Tempesta de pols','Vapor tòxic','Reactor elèctric','Túnel mecànic','Forja de foc','Fantasma digital','Ones mecàniques','Ferralla orbital','Nucli radioactiu','Ull de la màquina','Sol terminal','Cercle cromàtic 360°']
+NAMES.append('Cap')
 ZONE_FUNCTION='Activar zona espacial'
 MUTE_FUNCTION='Control d’àudio / Mute'
 FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Ritme de bateria','Àudio',MUTE_FUNCTION,ZONE_FUNCTION,CHAOS_FUNCTION,'Cap acció']
 DEFAULTS=[]
 for i in range(16):
-    DEFAULTS.append({'name':f'Targeta {i+1:02d}','function':'Nota MIDI' if i<4 else ('Control MIDI CC' if i<12 else 'Canviar visual'), 'channel':1,'note':36+i,'cc':20+i,'visual':i%12,'axis':'Rotació','min':0,'max':127,'harmony_key':'La menor','harmony_root':9,'harmony_scale':'Menor natural (eòlica)','harmony_velocity':85,'arp_division':'1/2 temps','arp_gate':60})
+    DEFAULTS.append({'name':f'Targeta {i+1:02d}','function':'Nota MIDI' if i<4 else ('Control MIDI CC' if i<12 else 'Canviar visual'), 'channel':1,'note':36+i,'cc':20+i,'visual':NO_VISUAL,'axis':'Rotació','min':0,'max':127,'harmony_key':'La menor','harmony_root':9,'harmony_scale':'Menor natural (eòlica)','harmony_velocity':85,'arp_division':'1/2 temps','arp_gate':60})
 
 NOTE_NAMES=['Do','Do#','Re','Re#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si']
 SCALE_INTERVALS={
@@ -132,7 +134,7 @@ class App:
  def __init__(self,root):
     self.live_kaoss=LiveKaoss(self);self.kaoss_draft=None;self.kaoss_window=None;self.basic_function_window=None
     self.root=root; root.title('ATMO ESFERA FX · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
-    self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
+    self.preview_surface=tk.StringVar(value='Cercle');self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
     self.midi_log=deque(maxlen=1000);self.midi_log_lock=threading.Lock();self.midi_log_revision=0;self.diagnostics_window=None;self.diagnostics_seen=-1
     self.marker_tracker=MarkerTracker();self.tracking_sequence=0;self.tracking_source_id=None;self.camera_source_id=None;self.tracking_errors=deque(maxlen=50);self.tracking_enabled=True
     self.participants=ParticipantRegistry();self.common_events=CommonEventLog();self.participant_window=None;self.participant_editor=None
@@ -158,7 +160,7 @@ class App:
     self._visual_coords=(u,v,np.sqrt(u*u+v*v)+1e-4,np.arctan2(v,u))
     self.last_color_xy=None; self.smooth_color_xy=None; self.color_smooth_time=None; self.color_transition_seconds=0.5; self.color_max_brightness=0.80; self.card2_rotation_prev=None; self.card2_rotation_total=0.0; self.card2_last_send=0.0; self.card2_cc_values={}; self.card2_volume=0; self.card2_filter=64; self.full=tk.BooleanVar(value=False); self.cam_index=tk.IntVar(value=0)
     self.harmony_key=tk.StringVar(value='La menor'); self.harmony_root=tk.StringVar(value='La'); self.harmony_scale=tk.StringVar(value='Menor natural (eòlica)'); self.bpm_var=tk.IntVar(value=self.bpm); self.harmony_velocity=tk.IntVar(value=85); self.arp_division=tk.StringVar(value='1/2 temps'); self.arp_gate=tk.IntVar(value=60); self.card_id=tk.StringVar(value='01'); self.fun=tk.StringVar(); self.axis=tk.StringVar(); self.note=tk.IntVar(); self.cc=tk.IntVar(); self.channel=tk.IntVar(); self.visual=tk.StringVar(); self.midi_choice=tk.StringVar(value='Sense MIDI'); self.status=tk.StringVar(value='Preparat · Obre la càmera per detectar les targetes')
-    self.cards[0]['visual']=12; self.cards[1]['function']='Control MIDI CC'; self.cards[1]['cc']=7; self.cards[1]['axis']='Horitzontal'; self.build(); self.select_visual(12); self.load_card(); self.follow_live_preview(); self.refresh_midi(); self.root.protocol('WM_DELETE_WINDOW',self.close); self.root.after(50,self.tick); self.root.after(450,self.raise_all_panels); self.arp_thread=threading.Thread(target=self.arpeggio_worker,daemon=True); self.arp_thread.start()
+    self.cards[1]['function']='Control MIDI CC'; self.cards[1]['cc']=7; self.cards[1]['axis']='Horitzontal'; self.build(); self.select_visual(NO_VISUAL); self.load_card(); self.follow_live_preview(); self.refresh_midi(); self.root.protocol('WM_DELETE_WINDOW',self.close); self.root.after(50,self.tick); self.root.after(450,self.raise_all_panels); self.arp_thread=threading.Thread(target=self.arpeggio_worker,daemon=True); self.arp_thread.start()
  def build(self):
     bg='#151210'; panel='#261c16'; copper='#ba7945'; cream='#f0d9b5'
     self.root.configure(bg=bg)
@@ -260,6 +262,10 @@ class App:
     self.mixer_window.withdraw()
     self.vis_label=tk.Label(visual_content,bg='#0d0b0b',fg='#e0c3a0',anchor='center',bd=0)
     self.vis_label.pack(fill='both',expand=True,padx=5,pady=5)
+    map_controls=ttk.Frame(visual_content);map_controls.pack(fill='x',padx=6,pady=3,before=self.vis_label)
+    ttk.Label(map_controls,text='Mapa de previsualització').pack(side='left')
+    surface=ttk.Combobox(map_controls,textvariable=self.preview_surface,values=tuple(SURFACES),state='readonly',width=13)
+    surface.pack(side='left',padx=6);surface.bind('<<ComboboxSelected>>',lambda event:self.change_preview_surface())
     self.midi_window=self.make_panel_window('midi','CONNEXIÓ MIDI → CAKEWALK','315x210+815+65')
     midi_box=ttk.Frame(self.midi_window);midi_box.pack(fill='both',expand=True,padx=6,pady=6)
     self.editor_window=self.make_panel_window('editor','EDITOR DE TARGETES','350x650+1430+80')
@@ -312,7 +318,7 @@ class App:
       tk.Spinbox(frame,textvariable=var,from_=from_,to=to,width=8,bg='#e9d8c2').pack(anchor='w',padx=8)
     ttk.Button(frame,text='CONFIGURAR FUNCIÓ…',command=self.open_function_settings).pack(fill='x',padx=8,pady=6)
     ttk.Label(frame,text='Visual assignat').pack(anchor='w',padx=8,pady=(5,0))
-    ttk.Combobox(frame,textvariable=self.visual,values=NAMES,state='readonly',width=25).pack(fill='x',padx=8)
+    ttk.Combobox(frame,textvariable=self.visual,values=(NAMES[-1],*NAMES[:-1]),state='readonly',width=25).pack(fill='x',padx=8)
     ttk.Button(frame,text='APLICAR / CREAR TARGETA',command=self.apply_card,style='Accent.TButton').pack(fill='x',padx=8,pady=9)
     statusbar=tk.Frame(self.root,bg='#1a1714',highlightbackground='#203452',highlightthickness=1)
     statusbar.pack(fill='x',padx=8,pady=(1,4))
@@ -608,6 +614,7 @@ class App:
     self.update_assigned_cards()
  def card_preview_frame(self,i,t):
     c=self.cards[i];kind=c['function']
+    if visual_index(c.get('visual',NO_VISUAL))==NO_VISUAL:return np.zeros((H,W,3),np.uint8)
     if kind in ('Harmonia espacial','Arpegiador espacial'):
       return self.harmony_map_preview(chromatic=c.get('visual')==12,card_index=i)
     if kind in ('Patró rítmic','Ritme de bateria'):
@@ -723,7 +730,7 @@ class App:
       ttk.Combobox(body,textvariable=self.axis,values=('Horitzontal','Vertical','Rotació'),state='readonly').pack(fill='x',pady=8)
     elif kind=='Canviar visual':
       ttk.Label(body,text='Visual que activarà la targeta').pack(anchor='w')
-      ttk.Combobox(body,textvariable=self.visual,values=NAMES,state='readonly').pack(fill='x',pady=8)
+      ttk.Combobox(body,textvariable=self.visual,values=(NAMES[-1],*NAMES[:-1]),state='readonly').pack(fill='x',pady=8)
     else:ttk.Label(body,text='Aquesta funció no necessita paràmetres addicionals.').pack(anchor='w',pady=8)
     def apply():
       if self.card_id.get()!=selected or self.fun.get()!=kind:
@@ -800,23 +807,26 @@ class App:
       self.status.set(player.last_error);self.spatial_warning=player.last_error
     self.update_spatial_editor_runtime()
  def compose_output_frame(self,t):
+    self._atmo_output_t=t
     rule_frame=self.rule_outputs.frame((W,H))
     if rule_frame is not None:return rule_frame
-    player=self.zone_projection
-    image=player.image_frame((W,H))
+    image=self.zone_projection.image_frame((W,H))
     if image is not None:return image
-    if player.mode=='color' and player.color_card in self.active:
-      self.color_by_position(None,card_index=player.color_card)
-      return self.projection_color_frame()
     return self.compose_live_visuals(t)
+ def preview_content_frame(self,t):
+    rule_frame=self.rule_outputs.frame((W,H))
+    if rule_frame is not None:return rule_frame
+    image=self.zone_projection.image_frame((W,H))
+    if image is not None:return image
+    return self.compose_live_visuals(t,include_chromatic=False)
  def projector_frame(self):
-    player=self.zone_projection
     width=max(1,self.proj_label.winfo_width());height=max(1,self.proj_label.winfo_height())
     rule_frame=self.rule_outputs.frame((width,height))
     if rule_frame is not None:return rule_frame
-    image=player.image_frame((width,height))
+    image=self.zone_projection.image_frame((width,height))
     if image is not None:return image
-    if player.mode=='color' and player.color_card in self.active:return np.full((height,width,3),self.last_frame[0,0],np.uint8)
+    if assigned_visuals(self.cards,self.active,ZONE_FUNCTION)==[12]:
+      return np.full((height,width,3),self.last_frame[0,0],np.uint8)
     return self.last_frame
  def zone_map_preview(self):
     frame=np.full((H,W,3),(25,20,17),np.uint8);radius=int(H*.40);left=W/2-radius;top=H/2-radius;diameter=2*radius
@@ -1121,11 +1131,12 @@ class App:
     if not self.live_kaoss.stop():
       self.status.set('Reconnecta MIDI per alliberar les notes Chaos abans de crear un projecte.');return
     self.live_kaoss.invalidate_editors()
+    self.preview_surface.set('Cercle')
     self.configure_rules(RulesConfig())
     if self.rules_editor is not None:self.rules_editor.reload()
     self.replace_participants(ParticipantRegistry())
     self.spatial_map=SpatialMap()
-    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS)); self.cards[0]['visual']=12; self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table();self.reset_spatial_projection();self.refresh_zone_editor(); self.status.set('Projecte nou');self.live_kaoss.configure(self.cards,self.rule_config)
+    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS));self.select_visual(NO_VISUAL); self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table();self.reset_spatial_projection();self.refresh_zone_editor(); self.status.set('Projecte nou');self.live_kaoss.configure(self.cards,self.rule_config)
  def update_bpm(self):
     try:
       with self.arp_lock:
@@ -1156,7 +1167,7 @@ class App:
     try:
       spatial=rebase_map_images(self.spatial_map,old_project,path)
       rules=rebase_rule_images(self.rule_config,old_project,path)
-      data={'version':4,'master_volume':self.master_volume.get(),'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual}
+      data={'version':4,'preview_surface':SURFACES[self.preview_surface.get()],'master_volume':self.master_volume.get(),'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual}
       data=spatial.into_project(data)
       data['participants']=self.participants.to_dict()
       data['experience_rules']=rules.to_dict()
@@ -1190,11 +1201,15 @@ class App:
       participants=ParticipantRegistry.from_project(d)
       rules=RulesConfig.from_project(d);rules.validate_channels(d['cards'])
       if len(d['cards'])!=16:raise ValueError('El projecte no conté 16 targetes')
+      for card in d['cards']:card['visual']=visual_index(card.get('visual',NO_VISUAL))
+      shape=d.get('preview_surface','circle')
+      if shape not in SURFACES.values():raise ValueError('Forma del mapa no vàlida')
       self.live_kaoss.prepare(d['cards'],rules)
       self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path;self.spatial_map=spatial;self.reset_spatial_projection();self.refresh_zone_editor(); self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
       self.replace_participants(participants)
       self.configure_rules(rules)
       self.live_kaoss.configure(self.cards,rules);self.live_kaoss.invalidate_editors()
+      self.preview_surface.set(next(label for label,value in SURFACES.items() if value==shape))
       if self.rules_editor is not None:self.rules_editor.reload()
       return True
     except Exception as e:messagebox.showerror('Obrir',str(e));return False
@@ -1337,18 +1352,8 @@ class App:
     if self.simulation.get() and self.camera:self.toggle_cam()
     self.status.set('Simulació: tria una targeta a l’editor i mantén el clic sobre la previsualització.' if self.simulation.get() else 'Simulació desactivada.')
  def simulation_position(self,event):
-    # El mapa ocupa només la imatge centrada; els marges no són coordenades.
-    width=self.vis_label.winfo_width();height=self.vis_label.winfo_height()
-    scale=min(max(1,width-8)/W,max(1,height-8)/H)
-    image_w=max(1,int(W*scale));image_h=max(1,int(H*scale))
-    x=(event.x-(width-image_w)/2)/image_w
-    y=(event.y-(height-image_h)/2)/image_h
-    if not (0<=x<=1 and 0<=y<=1):return None
-    if self.radial_preview():
-      rr=int(min(H*.425,W*.32))
-      x=.5+(x*W-W/2)/(2*rr);y=.5+(y*H-H/2)/(2*rr)
-      x=max(0,min(1,x));y=max(0,min(1,y))
-    return x,y
+    return map_pointer(event.x,event.y,self.vis_label.winfo_width(),self.vis_label.winfo_height(),
+                       W,H,SURFACES[self.preview_surface.get()],self.spatial_map.calibration)
  def simulation_press(self,event):
     if not self.simulation.get() or self.muted:return
     self.simulation_release()
@@ -1678,30 +1683,18 @@ class App:
     dx=(x-.5)*2;dy=(y-.5)*2;length=max(1,math.hypot(dx,dy))
     rr=int(min(H*.425,W*.32))
     return (round(W/2+dx/length*rr),round(H/2+dy/length*rr))
+ def change_preview_surface(self):
+    self.preview_dirty=True
+    self.status.set('Forma del mapa actualitzada. Desa el projecte per conservar-la.')
  def live_preview_frame(self):
-    if self.zone_projection.mode!='color' and (self.zone_projection.mode=='zone' or any(self.cards[i]['function']==ZONE_FUNCTION for i in self.active)):return self.zone_map_preview()
-    if not self.active:return self.last_frame.copy()
-    musical=[i for i in self.active if self.cards[i].get('function') in ('Harmonia espacial','Arpegiador espacial')]
-    chromatic=any(self.cards[i]['function']!=ZONE_FUNCTION and self.cards[i].get('visual')==12 for i in self.active)
-    if musical:frame=self.harmony_map_preview(chromatic=chromatic,card_index=musical[0])
-    elif chromatic:frame=self.color_wheel_preview()
-    else:frame=self.last_frame.copy()
-    radial=bool(musical or chromatic);now=time.monotonic()
-    colors=[(70,210,255),(255,185,70),(150,255,120),(235,120,245)]
-    for i,(x,y,angle) in self.active.items():
-      color=colors[i%len(colors)]
-      points=[self.tracking_point(tx,ty,radial) for stamp,tx,ty in self.target_trails.get(i,()) if now-stamp<=2.5]
-      if len(points)>1:cv2.polylines(frame,[np.array(points,np.int32)],False,color,2,cv2.LINE_AA)
-      px,py=self.tracking_point(x,y,radial)
-      cv2.circle(frame,(px,py),11,(8,8,8),-1,cv2.LINE_AA)
-      cv2.circle(frame,(px,py),8,color,2,cv2.LINE_AA)
-      dx=int(16*math.cos(angle*math.tau));dy=int(16*math.sin(angle*math.tau))
-      cv2.line(frame,(px,py),(px+dx,py+dy),color,2,cv2.LINE_AA)
-      label=('SIM ' if i==self.sim_card else '')+f'T{i+1:02d}'
-      tx=max(3,min(W-100,px+16));ty=max(20,min(H-40,py-12))
-      cv2.putText(frame,label,(tx,ty),cv2.FONT_HERSHEY_SIMPLEX,.48,(8,8,8),3,cv2.LINE_AA)
-      cv2.putText(frame,label,(tx,ty),cv2.FONT_HERSHEY_SIMPLEX,.48,color,1,cv2.LINE_AA)
-    return frame
+    now=time.monotonic();t=getattr(self,'_atmo_output_t',now-self.t0)
+    self.compose_live_visuals(t,include_chromatic=False)
+    content=self.preview_content_frame(t)
+    chromatic=12 in assigned_visuals(self.cards,self.active,ZONE_FUNCTION)
+    color=self.projection_color_frame()[0,0] if chromatic else None
+    icons={key:value for key,value in getattr(self,'_atmo_layers',{}).items() if key!=12}
+    return map_frame(content,self.cards,self.active,self.target_trails,self.spatial_map,
+                     SURFACES[self.preview_surface.get()],color,now,icons)
  def activate(self,i,x,y,angle):
     if self.muted:return
     c=self.cards[i];v={'Rotació':angle,'Horitzontal':x,'Vertical':y}.get(c['axis'],angle);v=max(0,min(1,v))
@@ -1729,7 +1722,7 @@ class App:
         if i not in self.arp_states:self.arp_states[i]={'pitches':[c['note']],'index':0,'last_step':None,'playing':None,'off_at':0}
     elif c['function']=='Arpegiador espacial':
       self.spatial_arpeggio(i,x,y)
-    elif c['function']=='Canviar visual' and not was:
+    elif c['function']=='Canviar visual' and not was and visual_index(c.get('visual',NO_VISUAL))!=NO_VISUAL:
       if c['visual']!=12:self.zone_projection.request_live()
       self.select_visual(c['visual'])
     elif c['function']=='Tempo':
@@ -1769,7 +1762,7 @@ class App:
     self.stop_arpeggio(i)
     self.stop_harmony(i)
     self.active.pop(i,None);self.target_trails.pop(i,None);self.last_cc.pop(i,None);self.audio_cc_values.pop(i,None);self.visual_dirty=True;self.preview_dirty=True
-    if self.cards[i].get('visual')==12 and not any(self.cards[j].get('visual')==12 for j in self.active):
+    if self.cards[i].get('visual')==12 and not any(self.cards[j].get('visual')==12 and self.cards[j].get('function') not in ('Cap acció',ZONE_FUNCTION) for j in self.active):
       self.last_color_xy=None;self.smooth_color_xy=None
     if i==1:self.card2_rotation_prev=None;self.card2_rotation_total=0.
     if not self.active and self.preview_card is None:self.preview_caption.set('Repòs · Cap targeta activa')
@@ -1778,20 +1771,19 @@ class App:
       if self.midi:
         try:self.midi.send(mido.Message('note_off',channel=ch,note=note,velocity=0))
         except Exception:pass
- def compose_live_visuals(self,t):
-    visuals=sorted({int(self.cards[i].get('visual',0))%len(NAMES) for i in self.active if self.cards[i].get('function') not in ('Cap acció',ZONE_FUNCTION)})
-    if not visuals:return np.zeros((H,W,3),np.uint8)
-    if 12 in visuals:self.color_by_position(None)
-    layers=[self.projection_color_frame() if n==12 else self.render(t,visual=n) for n in visuals]
-    if len(layers)==1:return layers[0]
-    # Mescla de tipus pantalla: els negres són transparents i les llums se superposen.
-    remaining=np.ones((H,W,3),np.float32)
-    gain=1/math.sqrt(len(layers))
-    for layer in layers:remaining*=1-layer.astype(np.float32)*(gain/255)
-    return np.clip((1-remaining)*255,0,255).astype(np.uint8)
+ def compose_live_visuals(self,t,include_chromatic=True):
+    visuals=assigned_visuals(self.cards,self.active,ZONE_FUNCTION)
+    key=(t,tuple(visuals))
+    if getattr(self,'_atmo_layers_key',None)!=key:
+      if 12 in visuals:self.color_by_position(None,render_preview=False)
+      self._atmo_layers={n:self.projection_color_frame() if n==12 else self.render(t,visual=n) for n in visuals}
+      self._atmo_layers_key=key
+    layers=[self._atmo_layers[n] for n in visuals if include_chromatic or n!=12]
+    return mix_frames(layers,W,H)
  def render(self,t,visual=None):
     # Camps continus en coordenades precalculades: animació sense soroll aleatori.
     n=self.current_visual if visual is None else visual
+    if n==NO_VISUAL:return np.zeros((H,W,3),np.uint8)
     if n==12:return self.projection_color_frame()
     if not hasattr(self,'_render_coords'):self._render_coords=tuple(np.ascontiguousarray(coord[::2,::2]) for coord in self._visual_coords)
     u,v,r,a=self._render_coords
@@ -1869,8 +1861,8 @@ class App:
     glow=cv2.GaussianBlur(np.maximum(rgb-95,0),(0,0),2)
     rgb=(rgb+glow*.55)*np.clip(1-r[...,None]*.18,.35,1)
     return cv2.resize(np.clip(rgb,0,255).astype(np.uint8),(W,H),interpolation=cv2.INTER_CUBIC)
- def color_by_position(self,frame,card_index=None):
-    chromatic_cards=[i for i in self.active if self.cards[i].get('visual')==12]
+ def color_by_position(self,frame,card_index=None,render_preview=True):
+    chromatic_cards=sorted(i for i in self.active if self.cards[i].get('visual')==12 and self.cards[i].get('function') not in ('Cap acció',ZONE_FUNCTION))
     if card_index in chromatic_cards:chromatic_cards=[card_index]
     if chromatic_cards:
       x,y,_=self.active[chromatic_cards[0]]
@@ -1883,7 +1875,7 @@ class App:
       else:
         alpha=1-math.exp(-dt/max(.01,self.color_transition_seconds))
         self.smooth_color_xy=tuple(a+(b-a)*alpha for a,b in zip(self.smooth_color_xy,self.last_color_xy))
-    return self.color_wheel_preview()
+    return self.color_wheel_preview() if render_preview else None
  def projection_color_frame(self):
     # Només el color que selecciona la targeta cromàtica, sense cap gràfic.
     # El color és exactament el del fons de la previsualització del cercle.
@@ -2116,11 +2108,7 @@ class App:
         self.visual_dirty=False
         self.last_visual_update=now_vis;frame_changed=True
       if self.visual_window.state()=='normal' and (self.preview_dirty or frame_changed):
-        preview=self.card_preview_frame(self.preview_card,now_vis-self.t0) if self.preview_card is not None else self.live_preview_frame()
-        if self.preview_card is not None and self.sim_card is not None and self.sim_xy is not None:
-          px,py=self.tracking_point(*self.sim_xy,self.radial_preview())
-          cv2.circle(preview,(px,py),14,(0,240,255),2)
-          cv2.putText(preview,f'SIM T{self.sim_card+1:02d}',(max(0,min(W-110,px+18)),max(20,py)),cv2.FONT_HERSHEY_SIMPLEX,.5,(0,240,255),1)
+        preview=self.live_preview_frame()
         self.display(self.vis_label,cv2.cvtColor(preview,cv2.COLOR_BGR2RGB),'vis_photo')
         self.preview_dirty=False
       vis=self.last_frame
