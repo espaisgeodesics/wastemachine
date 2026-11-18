@@ -71,6 +71,7 @@ class AssignedVisualTests(unittest.TestCase):
 class SeparationTests(unittest.TestCase):
     def app(self,cards):
         app=SimpleNamespace(cards=cards,active={i:(.5,.5,0) for i in range(len(cards))})
+        app.projection_mosaic=SimpleNamespace(frame=lambda size:None)
         app.card_media=SimpleNamespace(key=None,tail=None,apply=lambda frame:frame)
         app.rule_outputs=Mock();app.rule_outputs.frame.return_value=None
         app.zone_projection=Mock();app.zone_projection.image_frame.return_value=None

@@ -6,6 +6,7 @@ from dataclasses import replace
 from marker_tracking import MarkerTracker, ObservationFrame
 from card_media import CardMediaPlayer, MEDIA_VISUAL, MEDIA_LABEL, media_settings, rebase_card_media, fit_frame
 from card_media_editor import CardMediaEditor
+from atmo_projection_mosaic import ProjectionMosaic
 from atmo_ambience import ambience_preset, ambience_settings, normalise_ambience_card
 from atmo_music import music_zone, arp_settings, arp_pitches, note_label, sequence_notes, DIRECTIONS, ARP_MAPS, ARP_SOURCES, arpeggio_note as configured_arpeggio_note
 from atmo_mixer import mixer_config as card_mixer_config, sound_kind, shared_route, midi_level, note_velocity, independent_channels
@@ -133,7 +134,7 @@ class TracedMidiOutput:
 
 class App:
  def __init__(self,root):
-    self.card_media=CardMediaPlayer();self.media_draft=None;self.media_window=None;self.media_revision=-1;self.media_warning=''
+    self.projection_mosaic=ProjectionMosaic();self.card_media=CardMediaPlayer();self.media_draft=None;self.media_window=None;self.media_revision=-1;self.media_warning=''
     self.live_kaoss=LiveKaoss(self);self.kaoss_draft=None;self.kaoss_effect_draft=None;self.kaoss_window=None;self.basic_function_window=None
     self.root=root; root.title('ATMO ESFERA FX · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
     self.preview_surface=tk.StringVar(value='Cercle');self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
@@ -211,6 +212,7 @@ class App:
     self.panic_button=tk.Button(toolbar,text='SILENCI ABSOLUT',command=self.toggle_panic,bg='#a52626',fg='white',font=('Segoe UI',10,'bold'));self.panic_button.pack(side='left',padx=3)
     ttk.Button(toolbar,text='TARGETES EN FUNCIÓ',command=lambda:self.show_panel('cards')).pack(side='left',padx=3)
     ttk.Button(toolbar,text='ZONES ESPACIALS',command=self.open_zone_editor).pack(side='left',padx=3)
+    ttk.Button(toolbar,text='CALIBRAR EL TERRA',command=self.open_calibration_editor).pack(side='left',padx=3)
     ttk.Button(toolbar,text='TAULA DE VOLUMS',command=self.open_mixer).pack(side='left',padx=3)
     # Cada mòdul té una finestra nativa de Windows: es pot arrossegar,
     # canviar de mida, minimitzar i restaurar independentment.
@@ -267,8 +269,8 @@ class App:
     self.vis_label.pack(fill='both',expand=True,padx=5,pady=5)
     map_controls=ttk.Frame(visual_content);map_controls.pack(fill='x',padx=6,pady=3,before=self.vis_label)
     ttk.Label(map_controls,text='Mapa de previsualització').pack(side='left')
-    surface=ttk.Combobox(map_controls,textvariable=self.preview_surface,values=tuple(SURFACES),state='readonly',width=13)
-    surface.pack(side='left',padx=6);surface.bind('<<ComboboxSelected>>',lambda event:self.change_preview_surface())
+    ttk.Label(map_controls,text='Contorn automàtic segons la calibració').pack(side='left',padx=6)
+    ttk.Button(map_controls,text='CALIBRAR EL TERRA',command=self.open_calibration_editor).pack(side='right',padx=3)
     self.midi_window=self.make_panel_window('midi','CONNEXIÓ MIDI → CAKEWALK','315x210+815+65')
     midi_box=ttk.Frame(self.midi_window);midi_box.pack(fill='both',expand=True,padx=6,pady=6)
     self.editor_window=self.make_panel_window('editor','EDITOR DE TARGETES','350x650+1430+80')
@@ -801,7 +803,11 @@ class App:
     self.show_panel('calibration');self.calibration_editor.refresh()
  def apply_calibration(self,calibration):
     if not self.confirm_zone_discard():return False
-    self.spatial_map=replace(self.spatial_map,calibration=calibration)
+    try:updated=replace(self.spatial_map,calibration=calibration)
+    except ValueError as exc:
+      messagebox.showerror('Calibració del terra',str(exc),parent=self.calibration_window);return False
+    self.spatial_map=updated
+    self.preview_surface.set(next(label for label,value in SURFACES.items() if value==calibration.shape))
     self.reset_spatial_projection(keep_scene=True);self.refresh_zone_editor()
     self.status.set('Calibració aplicada. Comprova la posició al mapa i desa el projecte.')
     return True
@@ -864,6 +870,9 @@ class App:
     self.media_revision=revision
     if error and error!=self.media_warning:self.status.set('Imatge/vídeo de targeta: '+error)
     self.media_warning=error
+    observations={i:position[:2] for i,position in self.active.items() if self.cards[i].get('function')==ZONE_FUNCTION}
+    if self.projection_mosaic.update(self.spatial_map,self.zone_project_path(),observations,self.active,self.cards,self.visual_paused,self.muted,time.monotonic()):self.visual_dirty=True
+    if self.projection_mosaic.error:self.status.set(self.projection_mosaic.error)
  def compose_output_frame(self,t):
     self._atmo_output_t=t
     rule_frame=self.rule_outputs.frame((W,H))
@@ -882,6 +891,8 @@ class App:
     width=max(1,self.proj_label.winfo_width());height=max(1,self.proj_label.winfo_height())
     rule_frame=self.rule_outputs.frame((width,height))
     if rule_frame is not None:return rule_frame
+    mosaic=self.projection_mosaic.frame((width,height))
+    if mosaic is not None:return mosaic
     image=self.zone_projection.image_frame((width,height))
     if self.card_media.key is not None or self.card_media.tail is not None:
       base=image if image is not None else fit_frame(self._atmo_clean_frame,width,height)
@@ -1227,14 +1238,20 @@ class App:
     self.participants=registry;self.common_events=CommonEventLog()
     if self.participant_editor is not None:
       self.participant_editor.reset();self.participant_editor.refresh_rows()
+ def confirm_new_project(self):
+    if getattr(self,'atmo_starting',False):return True
+    answer=messagebox.askyesnocancel('Nou projecte','Vols desar el projecte actual abans de començar-ne un de nou?\n\nSí: desar i continuar. No: descartar i continuar. Cancel·lar: seguir treballant.',parent=self.root)
+    if answer is None:return False
+    return bool(self.save_project()) if answer else True
  def new_project(self):
+    if not self.confirm_new_project():return
     if not self.confirm_rule_discard():return
     if not self.confirm_participant_discard():return
     if not self.confirm_zone_discard():return
     if not self.live_kaoss.stop():
       self.status.set('Reconnecta MIDI per alliberar les notes Chaos abans de crear un projecte.');return
     self.live_kaoss.invalidate_editors()
-    self.card_media.reset()
+    self.card_media.reset();self.projection_mosaic.reset()
     self.preview_surface.set('Cercle')
     self.configure_rules(RulesConfig())
     if self.rules_editor is not None:self.rules_editor.reload()
@@ -1282,7 +1299,9 @@ class App:
       self.rule_config=rules;self.rule_engine.config=rules
       if self.rules_editor is not None:self.rules_editor.reload()
       self.status.set(f'Projecte desat: {Path(self.project).name}')
-    except Exception as e:messagebox.showerror('Desar',str(e))
+      return True
+    except Exception as e:
+      messagebox.showerror('Desar',str(e));return False
  def open_project(self):
     if not self.confirm_rule_discard():return
     if not self.confirm_participant_discard():return
@@ -1316,10 +1335,10 @@ class App:
           for sector in range(8):
             for ring in range(3):arp_pitches(card,sector,ring,harmony_pitches(card,sector)[0],SCALE_INTERVALS)
       rules.validate_channels(d['cards'])
-      shape=d.get('preview_surface','circle')
+      shape=spatial.calibration.shape if spatial.calibration is not None else 'circle'
       if shape not in SURFACES.values():raise ValueError('Forma del mapa no vàlida')
       self.live_kaoss.prepare(d['cards'],rules)
-      self.card_media.reset()
+      self.card_media.reset();self.projection_mosaic.reset()
       self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path;self.spatial_map=spatial;self.reset_spatial_projection();self.refresh_zone_editor(); self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
       self.replace_participants(participants)
       self.configure_rules(rules)
@@ -2278,7 +2297,7 @@ class App:
     if not self.confirm_rule_discard():return
     if not self.confirm_zone_discard():return
     self._closing=True
-    self.card_media.close()
+    self.card_media.close();self.projection_mosaic.reset()
     self.arp_stop.set()
     self.arp_thread.join(timeout=1.0)
     self.all_notes_off()

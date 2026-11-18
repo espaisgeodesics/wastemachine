@@ -5,7 +5,7 @@ Camera inputs require calibration. update_normalized is an explicit simulation A
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import floor, hypot, isfinite
 from pathlib import Path
 from types import MappingProxyType
@@ -41,8 +41,10 @@ def _point(value) -> Point:
 class Grid:
     rows: int = 8
     columns: int = 8
+    shape: str = 'circle'
 
     def __post_init__(self):
+        if self.shape not in ('circle','square','rectangle'):raise ValueError('Invalid floor shape')
         _integer(self.rows, 'rows', 1, 128)
         _integer(self.columns, 'columns', 1, 128)
 
@@ -50,6 +52,7 @@ class Grid:
         row, column = cell
         _integer(row, 'row', 0, self.rows - 1)
         _integer(column, 'column', 0, self.columns - 1)
+        if self.shape!='circle':return True
         nearest_x = max(column / self.columns, min(.5, (column + 1) / self.columns))
         nearest_y = max(row / self.rows, min(.5, (row + 1) / self.rows))
         # A zero-area tangency is not an interactive part of the floor.
@@ -57,7 +60,7 @@ class Grid:
 
     def cell_at(self, point: Point) -> Cell | None:
         x, y = _point(point)
-        if not (0 <= x <= 1 and 0 <= y <= 1) or hypot(x - .5, y - .5) > .5 + 1e-12:
+        if not (0 <= x <= 1 and 0 <= y <= 1) or (self.shape=='circle' and hypot(x - .5, y - .5) > .5 + 1e-12):
             return None
         def index(value, count):
             scaled = value * count
@@ -188,9 +191,14 @@ class Calibration:
     # Corresponding physical markers: north, east, south, west of the floor.
     camera_points: tuple[Point, ...]
     floor_points: tuple[Point, ...] = ((.5, 0), (1, .5), (.5, 1), (0, .5))
+    shape: str = 'circle'
+    aspect_ratio: float = 1.
     _matrix: np.ndarray = field(init=False, repr=False, compare=False)
 
     def __post_init__(self):
+        if self.shape not in ('circle','square','rectangle'):raise ValueError('Invalid calibrated floor shape')
+        ratio=_number(self.aspect_ratio,'floor aspect ratio')
+        if not .05<=ratio<=20 or (self.shape!='rectangle' and abs(ratio-1)>1e-9):raise ValueError('Invalid floor proportions')
         source, target = _quad(self.camera_points), _quad(self.floor_points)
         object.__setattr__(self, 'camera_points', source)
         object.__setattr__(self, 'floor_points', target)
@@ -212,7 +220,7 @@ class Calibration:
             raise ValueError('Calibration crosses a projective horizon')
         inverse = np.linalg.inv(matrix)
         center = inverse[2] @ np.array((.5, .5, 1))
-        extent = .5 * hypot(inverse[2, 0], inverse[2, 1])
+        extent = .5 * (hypot(inverse[2, 0], inverse[2, 1]) if self.shape=='circle' else abs(inverse[2,0])+abs(inverse[2,1]))
         if abs(center) <= extent + 1e-8:
             raise ValueError('Calibration horizon intersects the circular floor')
         matrix.setflags(write=False)
@@ -255,6 +263,8 @@ class SpatialMap:
             raise ValueError('Invalid grid or stabilization')
         if self.calibration is not None and not isinstance(self.calibration, Calibration):
             raise ValueError('Invalid calibration')
+        if self.calibration is not None and self.grid.shape!=self.calibration.shape:
+            object.__setattr__(self,'grid',replace(self.grid,shape=self.calibration.shape))
         if self.stabilization.hysteresis >= .5 * min(1 / self.grid.rows, 1 / self.grid.columns):
             raise ValueError('Hysteresis must be smaller than half a cell')
         zones = tuple(self.zones)
@@ -265,7 +275,7 @@ class SpatialMap:
             ids.add(zone.id)
             for cell in zone.cells:
                 if not self.grid.eligible(cell):
-                    raise ValueError(f'Cell {cell} lies outside the circular floor')
+                    raise ValueError(f'La casella {cell} queda fora del terra calibrat')
                 if zone.enabled:
                     previous = layers.setdefault(cell, [])
                     if any(not (zone.allow_overlap or old.allow_overlap) for old in previous):
@@ -278,9 +288,10 @@ class SpatialMap:
     def to_dict(self) -> dict:
         calibration = None if self.calibration is None else {
             'camera_points': [list(p) for p in self.calibration.camera_points],
-            'floor_points': [list(p) for p in self.calibration.floor_points]}
+            'floor_points': [list(p) for p in self.calibration.floor_points],
+            'shape':self.calibration.shape,'aspect_ratio':self.calibration.aspect_ratio}
         return {'schema_version': SCHEMA_VERSION,
-                'grid': {'rows': self.grid.rows, 'columns': self.grid.columns},
+                'grid': {'rows': self.grid.rows, 'columns': self.grid.columns,'shape':self.grid.shape},
                 'zones': [{'id': z.id, 'name': z.name, 'cells': [list(c) for c in sorted(z.cells)],
                            'authorized_cards': sorted(z.authorized_cards), 'image_path': z.image_path,
                            'enabled': z.enabled, 'display_mode': z.display_mode, 'duration_s': z.duration_s,

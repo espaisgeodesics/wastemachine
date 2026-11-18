@@ -169,8 +169,10 @@ class AtmoZoneEditor(ZoneEditor):
         c = self.canvas
         c.delete("all")
         width, height = max(1, c.winfo_width()), max(1, c.winfo_height())
-        size = max(1, min(width, height)-40)
-        ox, oy = (width-size)/2, (height-size)/2
+        ratio=getattr(self.config.calibration,'aspect_ratio',1.)
+        map_height=max(1,min(height-40,(width-40)/ratio));size=map_height*ratio
+        self.map_height=map_height
+        ox, oy = (width-size)/2, (height-map_height)/2
         self.geometry = (ox, oy, size)
         grid = self.config.grid
         palette = ("#277f91", "#8565bb", "#bc7e4b", "#5c9c79", "#a75c8b", "#8b9d4b")
@@ -189,14 +191,14 @@ class AtmoZoneEditor(ZoneEditor):
                 cell = row, col
                 selected = cell in self.cells
                 fill = CYAN if selected else owners.get(cell, "#223b59" if grid.eligible(cell) else "#101c30")
-                c.create_rectangle(ox+col*size/grid.columns, oy+row*size/grid.rows,
-                                   ox+(col+1)*size/grid.columns, oy+(row+1)*size/grid.rows,
+                c.create_rectangle(ox+col*size/grid.columns, oy+row*map_height/grid.rows,
+                                   ox+(col+1)*size/grid.columns, oy+(row+1)*map_height/grid.rows,
                                    fill=fill, outline=TEXT if selected else "#3c5674",
                                    width=2 if selected else 1)
                 if cell in audio_cells:
-                    c.create_text(ox+(col+.75)*size/grid.columns,oy+(row+.25)*size/grid.rows,
+                    c.create_text(ox+(col+.75)*size/grid.columns,oy+(row+.25)*map_height/grid.rows,
                                   text='♪',fill=TEXT,font=('Segoe UI',9,'bold'))
-        c.create_oval(ox, oy, ox+size, oy+size, outline=CYAN, width=2)
+        getattr(c,'create_oval' if grid.shape=='circle' else 'create_rectangle')(ox, oy, ox+size, oy+map_height, outline=CYAN, width=2)
         c.create_text(width/2, 10, text=f"{grid.rows} × {grid.columns} · {len(self.config.zones)} zones",
                       fill=MUTED, font=("Segoe UI", 9))
         self.selection_info.set(f"{len(self.cells)} caselles seleccionades · Clic / arrossega per afegir o treure")

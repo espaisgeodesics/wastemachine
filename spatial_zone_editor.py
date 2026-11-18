@@ -32,7 +32,7 @@ def rebase_map_images(config, old_project, new_project):
 def _cell_polygon(row, column, grid):
     # Clip an approximation of the circle to the cell rectangle.
     from math import cos, sin, tau
-    points = [(.5 + .5*cos(i*tau/96), .5 + .5*sin(i*tau/96)) for i in range(96)]
+    points = [(.5 + .5*cos(i*tau/96), .5 + .5*sin(i*tau/96)) for i in range(96)] if grid.shape=='circle' else [(0,0),(1,0),(1,1),(0,1)]
     for axis, boundary, greater in ((0, column/grid.columns, True),
                                     (0, (column+1)/grid.columns, False),
                                     (1, row/grid.rows, True),
@@ -184,7 +184,7 @@ class ZoneEditor:
         for i, var in enumerate(self.cards):var.set(i == self.default_card)
         for item in self.list.selection():self.list.selection_remove(item)
         self.loading = False;self.dirty = False
-        self.notice.set('Selecciona caselles dins del cercle i configura una zona nova.')
+        self.notice.set('Selecciona caselles dins del terra calibrat i configura una zona nova.')
         self.update_thumbnail();self.draw()
 
     def set_default_card(self, card):
@@ -229,8 +229,10 @@ class ZoneEditor:
 
     def draw(self):
         width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
-        size = max(1, min(width, height)-28)
-        ox, oy = (width-size)/2, (height-size)/2
+        ratio=getattr(self.config.calibration,'aspect_ratio',1.)
+        map_height=max(1,min(height-28,(width-28)/ratio));size=map_height*ratio
+        self.map_height=map_height
+        ox, oy = (width-size)/2, (height-map_height)/2
         self.geometry = (ox, oy, size)
         self.canvas.delete('all')
         colors = ('#506c55', '#715876', '#416776', '#86633b', '#6c7041', '#754d49')
@@ -244,17 +246,17 @@ class ZoneEditor:
                 cell = row, column
                 if not self.config.grid.eligible(cell):continue
                 polygon = _cell_polygon(row, column, self.config.grid)
-                points = [value for x, y in polygon for value in (ox+x*size, oy+y*size)]
+                points = [value for x, y in polygon for value in (ox+x*size, oy+y*map_height)]
                 if len(points) < 6:continue
                 selected = cell in self.cells
                 self.canvas.create_polygon(points, fill='#ba8548' if selected else owners.get(cell, '#2d241e'),
                                            outline='#ffe1a4' if selected else '#76604d', width=2 if selected else 1)
-        self.canvas.create_oval(ox, oy, ox+size, oy+size, outline='#e1b887', width=2)
+        getattr(self.canvas,'create_oval' if self.config.grid.shape=='circle' else 'create_rectangle')(ox, oy, ox+size, oy+map_height, outline='#e1b887', width=2)
         self.selection_info.set(f'{len(self.cells)} caselles seleccionades · Clic / arrossega per afegir o treure')
 
     def cell_at_event(self, event):
         ox, oy, size = self.geometry
-        return self.config.grid.cell_at(((event.x-ox)/size, (event.y-oy)/size))
+        return self.config.grid.cell_at(((event.x-ox)/size, (event.y-oy)/getattr(self,'map_height',size)))
 
     def press(self, event):
         self.visited = set();self.drag(event)
@@ -351,7 +353,7 @@ class ZoneEditor:
     def save_zone(self):
         try:
             if not self.name.get().strip():raise ValueError('Escriu un nom per a la zona.')
-            if not self.cells:raise ValueError('Selecciona una o diverses caselles dins del cercle.')
+            if not self.cells:raise ValueError('Selecciona una o diverses caselles dins del terra calibrat.')
             zone = Zone(self.current_id or uuid4().hex, self.name.get(), self.cells,
                         {i for i, var in enumerate(self.cards) if var.get()}, self.image_path.get() or None, self.enabled.get(),
                         DISPLAY_MODES[self.display_mode.get()],float(self.duration_s.get().replace(',', '.')), **self.audio_values())

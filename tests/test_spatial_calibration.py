@@ -54,21 +54,16 @@ class CalibrationTests(unittest.TestCase):
             self.editor.points=points;self.assertFalse(self.editor.apply())
         self.applied.assert_not_called()
 
-    def test_circle_and_four_sides_share_the_same_calibration(self):
+    def test_shape_change_requires_new_corner_points_and_saves_dimensions(self):
         self.mark();self.editor.draw()
-        items=self.editor.canvas.find_withtag('perimeter');self.assertEqual(len(items),1)
-        vertices=self.editor.canvas.coords(items[0]);self.assertEqual(len(vertices),362)
-        left,top,width,height=self.editor.bounds
-        for index,point in zip((0,45,90,135),self.editor.points):
-            self.assertAlmostEqual(vertices[2*index],left+point[0]*width,places=6)
-            self.assertAlmostEqual(vertices[2*index+1],top+point[1]*height,places=6)
-        before=list(self.editor.points)
-        self.editor.outline.set('Quatre costats');self.editor.draw()
-        self.assertEqual(len(self.editor.canvas.find_withtag('perimeter')),4)
-        self.assertEqual(before,self.editor.points);self.assertTrue(self.editor.apply())
-        self.editor.outline.set('Circumferència del domo');self.editor.draw()
         self.assertEqual(len(self.editor.canvas.find_withtag('perimeter')),1)
-        self.assertEqual(before,self.editor.points)
+        self.editor.outline.set('Rectangle');self.editor.change_shape()
+        self.assertEqual(self.editor.points,[None]*4)
+        self.editor.floor_width.set('6');self.editor.floor_height.set('3')
+        for point in ((.1,.1),(.9,.1),(.9,.9),(.1,.9)):self.click(*point)
+        self.assertTrue(self.editor.apply());calibration=self.applied.call_args.args[0]
+        self.assertEqual(calibration.shape,'rectangle');self.assertEqual(calibration.aspect_ratio,2)
+        np.testing.assert_allclose(calibration.project((.1,.1)),(0,0),atol=1e-8)
 
     def test_stale_or_absent_camera_cannot_be_captured(self):
         self.stamp=time.monotonic()-2;self.assertFalse(self.editor.freeze())

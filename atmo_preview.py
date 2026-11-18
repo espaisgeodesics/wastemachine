@@ -3,7 +3,7 @@ from functools import lru_cache
 import math
 from pathlib import Path
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 NO_VISUAL = 13
 MEDIA_VISUAL = 14
@@ -40,10 +40,10 @@ def font(size):
     return ImageFont.load_default()
 
 
-def bounds(width,height,surface,panel_width=0):
+def bounds(width,height,surface,panel_width=0,aspect_ratio=None):
     available_h=max(1,height-96)
     available_w=max(1,width-64-panel_width)
-    ratio=width/height if surface=='rectangle' else 1
+    ratio=(aspect_ratio or width/height) if surface=='rectangle' else 1
     h=min(available_h,available_w/ratio);w=h*ratio
     return ((width-panel_width-w)/2,54+(available_h-h)/2,(width-panel_width+w)/2,54+(available_h+h)/2)
 
@@ -55,19 +55,20 @@ def floor_point(position, calibration):
 
 
 def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=None,now=0,icons=None,music_layers=None):
+    if config.calibration is not None:surface=config.calibration.shape
     if surface not in SURFACES.values():raise ValueError('Forma del mapa no vàlida')
     height,width=content_bgr.shape[:2]
     canvas=Image.new('RGB',(width,height),'#0b1224')
     draw=ImageDraw.Draw(canvas)
-    box=bounds(width,height,surface,180 if music_layers else 0);left,top,right,bottom=box
+    box=bounds(width,height,surface,180 if music_layers else 0,getattr(config.calibration,'aspect_ratio',None));left,top,right,bottom=box
     w,h=right-left,bottom-top
     shape='ellipse' if surface=='circle' else 'rectangle'
     rgb_color=tuple(int(v) for v in color_bgr[::-1]) if color_bgr is not None else (69,212,210)
     outer=(left-10,top-10,right+10,bottom+10)
     getattr(draw,shape)(outer,outline=rgb_color,width=8 if color_bgr is not None else 2)
     mask=Image.new('L',(width,height));getattr(ImageDraw.Draw(mask),shape)(box,fill=255)
-    content=Image.fromarray(np.ascontiguousarray(content_bgr[:,:,::-1])).resize((max(1,round(w)),max(1,round(h))))
-    inner=Image.new('RGB',(width,height),'black');inner.paste(content,(round(left),round(top)))
+    content=ImageOps.contain(Image.fromarray(np.ascontiguousarray(content_bgr[:,:,::-1])),(max(1,round(w)),max(1,round(h))))
+    inner=Image.new('RGB',(width,height),'black');inner.paste(content,(round(left+(w-content.width)/2),round(top+(h-content.height)/2)))
     canvas.paste(inner,(0,0),mask)
     overlay=Image.new('RGBA',(width,height));zones=ImageDraw.Draw(overlay)
     for zone in config.zones:
@@ -105,8 +106,8 @@ def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=
         visual=visual_index(cards[index].get('visual',NO_VISUAL))
         icon=(icons or {}).get(visual)
         if icon is not None and inside:
-            thumbnail=Image.fromarray(np.ascontiguousarray(icon[:,:,::-1])).resize((28,28))
-            canvas.paste(thumbnail,(round(px)-14,round(py)-14))
+            thumbnail=ImageOps.contain(Image.fromarray(np.ascontiguousarray(icon[:,:,::-1])),(28,28))
+            canvas.paste(thumbnail,(round(px)-thumbnail.width//2,round(py)-thumbnail.height//2))
             draw=ImageDraw.Draw(canvas)
             draw.rectangle((px-15,py-15,px+15,py+15),outline=color,width=2)
         else:
@@ -129,11 +130,12 @@ def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=
 
 
 def map_pointer(x,y,widget_width,widget_height,frame_width,frame_height,surface,calibration=None,panel_width=0):
+    if calibration is not None:surface=calibration.shape
     factor=min(max(1,widget_width-8)/frame_width,max(1,widget_height-8)/frame_height)
     image_w=max(1,int(frame_width*factor));image_h=max(1,int(frame_height*factor))
     frame_x=(x-(widget_width-image_w)/2)/image_w*frame_width
     frame_y=(y-(widget_height-image_h)/2)/image_h*frame_height
-    left,top,right,bottom=bounds(frame_width,frame_height,surface,panel_width)
+    left,top,right,bottom=bounds(frame_width,frame_height,surface,panel_width,getattr(calibration,'aspect_ratio',None))
     point=((frame_x-left)/(right-left),(frame_y-top)/(bottom-top))
     if not all(0<=value<=1 for value in point):return None
     if surface=='circle' and math.hypot(point[0]-.5,point[1]-.5)>.5:return None

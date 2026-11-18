@@ -1,6 +1,6 @@
-## Versió actual: ATMO ESFERA FX 17
+## Versió actual: ATMO ESFERA FX 18
 
-Obre **OBRIR_ATMO.bat** amb Python 3.12. Consulta [les novetats i proves de la integració 17](ATMO_ESFERA_FX_INTEGRACIO_17.md).
+Obre **OBRIR_ATMO.bat** amb Python 3.12. Consulta [les novetats de la integració 18](ATMO_ESFERA_FX_INTEGRACIO_18.md).
 
 # ATMO ESFERA FX
 
