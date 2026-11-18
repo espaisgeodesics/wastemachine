@@ -58,22 +58,22 @@ class SimulatorWindowTests(unittest.TestCase):
         self.view.rotate()
         self.assertEqual(self.session.poses()['virtual-1'].orientation, .25)
         self.view.visibility(False)
-        self.session.advance(time.monotonic())
+        self.session.advance(max(time.monotonic(),(self.session._last_time or 0)+.000001))
         self.assertEqual(self.session.registry.states(self.session.tracker.snapshot())['virtual-1'].presence, 'temporarily_lost')
         self.view.visibility(True)
         self.view.editor.set_retired(True)
-        self.session.advance(time.monotonic())
+        self.session.advance(max(time.monotonic(),(self.session._last_time or 0)+.000001))
         self.assertEqual(self.session.registry.states(self.session.tracker.snapshot())['virtual-1'].presence, 'retired')
         self.view.editor.set_retired(False)
         self.view.available.set(False)
         self.view.change_source()
-        self.session.advance(time.monotonic())
+        self.session.advance(max(time.monotonic(),(self.session._last_time or 0)+.000001))
         self.view.editor.refresh_rows()
         self.assertIn('NO DISPONIBLE', self.view.editor.source_status.get())
         self.assertEqual(len(self.session.registry.snapshot()), 5)
         self.view.available.set(True)
         self.view.change_source()
-        self.session.advance(time.monotonic())
+        self.session.advance(max(time.monotonic(),(self.session._last_time or 0)+.000001))
         self.assertTrue(all(s.observed for s in self.session.registry.states(self.session.tracker.snapshot()).values()))
 
     def test_simulator_keeps_camera_project_participants_midi_and_public_frames_unchanged(self):
@@ -89,7 +89,7 @@ class SimulatorWindowTests(unittest.TestCase):
         self.view.rotate()
         self.view.visibility(False)
         self.view.retire('virtual-2', True)
-        self.session.advance(time.monotonic())
+        self.session.advance(max(time.monotonic(),(self.session._last_time or 0)+.000001))
         self.assertEqual(self.app.participants.to_dict(), config)
         self.assertEqual(self.app.cards, cards)
         self.assertEqual(self.app.marker_tracker.snapshot(), tracker)
@@ -182,7 +182,7 @@ class SimulatorWindowTests(unittest.TestCase):
         editor.preset_name.set('ÒRBITA');editor.load_preset()
         self.assertEqual(self.session.kaoss.configs,{})
         self.assertTrue(editor.apply())
-        self.session.advance(time.monotonic())
+        self.session.advance(max(time.monotonic(),(self.session._last_time or 0)+.000001))
         self.assertTrue(any(c.kind=='cc' for c in self.session.midi_commands))
         self.assertFalse(any(c.kind=='note_on' for c in self.session.midi_commands))
         self.app.midi.send.assert_not_called()
@@ -191,7 +191,7 @@ class SimulatorWindowTests(unittest.TestCase):
 
     def test_kaoss_editor_invalid_config_preserves_running_note_and_silence_releases(self):
         editor=self.view.kaoss_editor
-        self.assertTrue(editor.apply());self.session.advance(time.monotonic())
+        self.assertTrue(editor.apply());self.session.advance(max(time.monotonic(),(self.session._last_time or 0)+.000001))
         configs=dict(self.session.kaoss.configs)
         editor.variables['channel'].set('invalid')
         with patch('kaoss_editor.messagebox.showerror') as error:
@@ -221,7 +221,7 @@ class SimulatorWindowTests(unittest.TestCase):
             error.assert_called_once();self.assertEqual(self.session.kaoss.configs,configs)
 
     def test_kaoss_close_releases_notes_and_cancels_timer(self):
-        self.assertTrue(self.view.kaoss_editor.apply());self.session.advance(time.monotonic())
+        self.assertTrue(self.view.kaoss_editor.apply());self.session.advance(max(time.monotonic(),(self.session._last_time or 0)+.000001))
         self.assertEqual(len(self.session.kaoss.voices),1)
         self.app.simulator_window.destroy();self.app.simulator_window=None;self.app.simulator_view=None
         self.assertEqual(self.session.kaoss.voices,{})

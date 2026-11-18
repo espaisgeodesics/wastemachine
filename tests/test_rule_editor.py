@@ -189,7 +189,7 @@ class RuleIntegrationTests(unittest.TestCase):
         self.save(new/'p.json')
         self.app.rule_outputs.store.clear();self.app.manual_rule('r')
         m.np.testing.assert_array_equal(self.app.compose_output_frame(1)[m.H//2,m.W//2],[0,255,0])
-        self.assertEqual(self.app.rule_outputs.winner().image.path,image)
+        self.assertEqual(self.app.rule_outputs.winner().image.path,image.resolve())
 
     def test_real_detector_to_rules_keeps_legacy_notes_and_deduplicates_rule_midi(self):
         from spatial_zones import SpatialMap, Zone, Calibration

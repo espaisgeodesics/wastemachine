@@ -39,6 +39,8 @@ class SongTests(unittest.TestCase):
         with patch('local_audio.SHORT_CLIP_S',.01):clip=self.backend.load(path)
         self.assertTrue(clip.streamed)
         self.backend.start(clip,0,True,time.monotonic())
+        self.backend.pg.mixer.Channel(0).stop()
+        self.assertTrue(self.backend.busy(0,time.monotonic()))
         end=time.monotonic()+.2
         while time.monotonic()<end:self.assertTrue(self.backend.busy(0,time.monotonic()));time.sleep(.01)
         self.backend.stop(0);self.backend.start(clip,0,False,time.monotonic())

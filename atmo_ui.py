@@ -80,9 +80,10 @@ def wrap_controls(frame):
 def build_workspace(app):
     from atmo_runtime import BG,PANEL,TEXT,MUTED,CYAN,PURPLE,FONT
     area=ttk.Frame(app.root);area.pack(fill='both',expand=True,padx=22,pady=(20,16))
-    ttk.Label(area,text='El teu espai, en directe',style='Title.TLabel').pack(anchor='w')
-    ttk.Label(area,text='Prepara la captura, defineix les targetes i dona vida a l’escena.',style='Muted.TLabel').pack(anchor='w',pady=(5,20))
-    grid=ttk.Frame(area);grid.pack(fill='both',expand=True)
+    body=scrollable_form(area,padding=0)
+    ttk.Label(body,text='El teu espai, en directe',style='Title.TLabel').pack(anchor='w')
+    ttk.Label(body,text='Prepara la captura, defineix les targetes i dona vida a l’escena.',style='Muted.TLabel').pack(anchor='w',pady=(5,20))
+    grid=ttk.Frame(body);grid.pack(fill='both',expand=True)
     sections=(('01','Captura i espai','Situa les targetes en el terra real.',( ('Càmera',lambda:app.show_panel('camera')),('Calibrar el terra',app.open_calibration_editor),('Mapa de previsualització',lambda:app.show_panel('visual')))),
               ('02','Composició','Defineix què activa cada targeta.',(('Editor de targetes',lambda:app.show_panel('editor')),('Targetes en funció',lambda:app.show_panel('cards')),('Connexió MIDI',lambda:app.show_panel('midi')))),
               ('03','Escena i so','Combina imatges, cançons i projecció.',(('Zones espacials',app.open_zone_editor),('Àudio local',app.open_local_audio),('Taula de volums',app.open_mixer),('Projecció',app.open_projection))))
@@ -105,3 +106,24 @@ def build_workspace(app):
             elif not area.winfo_manager():area.pack(fill='both',expand=True,padx=22,pady=(20,16))
     app.root.bind('<Configure>',visible,add='+')
     return area
+
+
+def install_menu_bar(app):
+    """Reuse every existing menu command in a themed, keyboard accessible bar."""
+    menu_name=app.root.cget('menu')
+    if not menu_name:return
+    menu=app.root.nametowidget(menu_name)
+    bar=ttk.Frame(app.root,style='Card.TFrame')
+    bar.pack(fill='x',before=app.banner_canvas)
+    app.root.configure(menu='')
+    for index in range((menu.index('end') or 0)+1):
+        if menu.type(index)!='cascade':continue
+        title=menu.entrycget(index,'label');submenu=menu.entrycget(index,'menu')
+        button=ttk.Menubutton(bar,text=title,menu=submenu,underline=0,takefocus=True)
+        button.pack(side='left',padx=3,pady=3)
+        def post(event,widget=button,path=submenu):
+            widget.focus_set()
+            widget.tk.call(path,'post',widget.winfo_rootx(),widget.winfo_rooty()+widget.winfo_height())
+            return 'break'
+        if title:app.root.bind('<Alt-'+title[0].lower()+'>',post,add='+')
+    app.atmo_menu_bar=bar

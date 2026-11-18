@@ -40,6 +40,20 @@ class VisualRegressionTests(unittest.TestCase):
         self.root.tk.call('ttk::combobox::Post',str(combo));self.root.update()
         self.root.tk.call('ttk::combobox::Unpost',str(combo));self.root.update()
         self.assertFalse(self.errors);self.assertEqual(combo.get(),'Cap')
+    def test_dark_menu_reuses_original_commands(self):
+        from atmo_ui import install_menu_bar
+        from unittest.mock import Mock
+        command=Mock();menu=tk.Menu(self.root);sub=tk.Menu(menu,tearoff=False)
+        sub.add_command(label='Desar',command=command);menu.add_cascade(label='Projecte',menu=sub)
+        self.root.configure(menu=menu)
+        banner=tk.Canvas(self.root);banner.pack()
+        app=SimpleNamespace(root=self.root,banner_canvas=banner)
+        install_menu_bar(app);self.root.update()
+        self.assertEqual(self.root.cget('menu'),'')
+        button=app.atmo_menu_bar.winfo_children()[0]
+        self.assertEqual(str(button.cget('menu')),str(sub))
+        sub.invoke(0);command.assert_called_once()
+
     def test_calibration_apply_remains_visible_at_all_font_scales(self):
         for scale in (1.,1.25,1.5):
             self.root.tk.call('tk','scaling',96/72*scale)

@@ -38,6 +38,8 @@ def configure_theme(root):
     style.configure('Card.TFrame', background=PANEL)
     style.configure('Surface.TFrame', background=SURFACE)
     style.configure('TLabel', background=BG, foreground=TEXT)
+    style.configure('TMenubutton',background=PANEL,foreground=TEXT,arrowcolor=CYAN,padding=(10,6),borderwidth=0)
+    style.map('TMenubutton',background=[('active',SURFACE)],foreground=[('active',CYAN)])
     style.configure('Muted.TLabel', background=BG, foreground=MUTED)
     style.configure('Title.TLabel', background=BG, foreground=TEXT, font=(FONT, 17, 'bold'))
     style.configure('Section.TLabel', background=BG, foreground=CYAN, font=(FONT, 11, 'bold'))
@@ -70,8 +72,8 @@ def configure_theme(root):
             foreground=[('disabled', MUTED), ('readonly', TEXT)],
             bordercolor=[('focus', CYAN)])
     style.configure('Treeview', background=PANEL, fieldbackground=PANEL,
-                    foreground=TEXT, bordercolor=SURFACE, rowheight=30, font=(FONT, 10))
-    style.configure('Treeview.Heading', background=SURFACE, foreground=CYAN,
+                    foreground=TEXT, bordercolor=SURFACE,lightcolor=SURFACE,darkcolor=SURFACE, rowheight=30, font=(FONT, 10))
+    style.configure('Treeview.Heading', background=SURFACE, foreground=CYAN,lightcolor=SURFACE,darkcolor=SURFACE,
                     padding=(8, 8), font=(FONT, 10, 'bold'))
     style.map('Treeview', background=[('selected', CYAN)], foreground=[('selected', BG)])
     style.configure('TNotebook', background=BG, borderwidth=0, tabmargins=(2, 4, 2, 0))
@@ -163,6 +165,8 @@ def theme_widgets(widget):
             if 'activebackground' in options and kind != 'Menu': config['activebackground'] = SURFACE
             if 'selectcolor' in options and kind in ('Checkbutton','Radiobutton'):
                 config['selectcolor'] = SURFACE
+            if kind in ('Entry','Spinbox','Text','Listbox') and 'relief' in options:config['relief']='flat'
+            if 'buttonbackground' in options:config['buttonbackground']=SURFACE
             if 'readonlybackground' in options: config['readonlybackground'] = SURFACE
             if 'disabledbackground' in options:config['disabledbackground']=PANEL
             if 'disabledforeground' in options:config['disabledforeground']=MUTED
@@ -232,7 +236,8 @@ def adapt_engine(module):
     class AtmoApp(original):
         def build(self):
             super().build()
-            from atmo_ui import build_workspace
+            from atmo_ui import build_workspace,install_menu_bar
+            install_menu_bar(self)
             self.workspace_home=build_workspace(self)
             install_window_theme(self.root)
             self.midi_cb.unbind('<<ComboboxSelected>>')

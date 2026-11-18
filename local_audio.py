@@ -259,11 +259,18 @@ class PygameAudioBackend(SilentAudioBackend):
     def busy(self, slot, now):
         self._ready();channel=self.pg.mixer.Channel(slot)
         state=self.streams.get(slot)
-        if state is not None and not state['eof'] and channel.get_queue() is None:
-            chunk=self._chunk(state)
-            if chunk is not None:
-                if channel.get_busy():channel.queue(chunk)
-                else:channel.play(chunk)
+        if state is not None:
+            # SDL may report a short idle interval while queued buffers switch.
+            # Recover an underrun using the next chunk instead of dropping the song.
+            if not channel.get_busy():
+                chunk=channel.get_queue()
+                if chunk is None and not state['eof']:chunk=self._chunk(state)
+                if chunk is None:self.stop(slot);return False
+                channel.play(chunk)
+            if channel.get_queue() is None and not state['eof']:
+                chunk=self._chunk(state)
+                if chunk is not None:channel.queue(chunk)
+            return True
         result=channel.get_busy()
         if not result:self.stop(slot)
         return result

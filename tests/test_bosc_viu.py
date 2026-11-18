@@ -105,7 +105,7 @@ class AudioRuleSchemaTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root=Path(tmp)
             rebased=rebase_rule_images(config,root/'old'/'p.json',root/'new'/'p.json')
-            self.assertEqual(rebased.rules[0].actions[0].value,str(root/'old'/'sons'/'a.wav'))
+            self.assertEqual(rebased.rules[0].actions[0].value,str((root/'old'/'sons'/'a.wav').resolve()))
             self.assertEqual(config.rules[0].actions[0].value,'sons/a.wav')
 
     def test_audio_disabled_or_muted_does_not_defer_actions_but_visuals_work(self):

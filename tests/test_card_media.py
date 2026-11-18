@@ -101,7 +101,7 @@ class DecodeTests(unittest.TestCase):
             with self.assertRaises(ValueError):media_settings(dict(media_fade_in_s=value))
         original=[dict(media_path='media/test.png')]
         moved=rebase_card_media(original,'/tmp/old/project.json','/tmp/new/project.json')
-        self.assertEqual(moved[0]['media_path'],'/tmp/old/media/test.png')
+        self.assertEqual(Path(moved[0]['media_path']).resolve(),Path('/tmp/old/media/test.png').resolve())
         self.assertEqual(original[0]['media_path'],'media/test.png')
 
 if __name__=='__main__':unittest.main()

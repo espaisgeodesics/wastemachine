@@ -89,7 +89,7 @@ class RuleModelTests(unittest.TestCase):
             root=Path(tmp);old=root/'old'/'p.json';new=root/'new'/'p.json'
             config=RulesConfig((rule(kind='image',value='photo.png'),))
             rebased=rebase_rule_images(config,old,new)
-            self.assertEqual(rebased.rules[0].actions[0].value,str(root/'old'/'photo.png'))
+            self.assertEqual(rebased.rules[0].actions[0].value,str((root/'old'/'photo.png').resolve()))
             self.assertEqual(config.rules[0].actions[0].value,'photo.png')
             with self.assertRaises(ValueError):rebase_rule_images(config,None,new)
 

@@ -21,6 +21,7 @@ class Window:
         self.alpha=0
         self.caption='ATMO ESFERA FX · Eina'
         self.focus=False
+    def bind(self,*args,**kwargs):return 'fake-binding'
     def winfo_exists(self): return True
     def transient(self, owner): self.owner=owner
     def attributes(self, key, value): self.alpha=value

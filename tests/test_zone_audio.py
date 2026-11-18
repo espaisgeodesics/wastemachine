@@ -171,7 +171,7 @@ class EditorSoundTests(unittest.TestCase):
         editor=EditingTests().editor();editor.get_project=Mock(return_value=None)
         with patch('spatial_zone_editor.filedialog.askopenfilename',return_value='/tmp/clip.wav'):
             editor.choose_audio()
-        self.assertTrue(editor.allow_overlap.get());self.assertEqual(editor.audio_path.get(),'/tmp/clip.wav')
+        self.assertTrue(editor.allow_overlap.get());self.assertEqual(Path(editor.audio_path.get()).resolve(),Path('/tmp/clip.wav').resolve())
 
 
 class MultimediaModelTests(unittest.TestCase):
@@ -209,8 +209,8 @@ class MultimediaModelTests(unittest.TestCase):
             old=Path(folder)/'old'/'project.json';new=Path(folder)/'new'/'project.json'
             config=SpatialMap(zones=(self.zone('a',image_path='scene.png',audio_path='sound.wav'),))
             moved=rebase_map_images(config,old,new)
-            self.assertEqual(Path(moved.zones[0].audio_path),old.parent/'sound.wav')
-            self.assertEqual(Path(moved.zones[0].image_path),old.parent/'scene.png')
+            self.assertEqual(Path(moved.zones[0].audio_path),(old.parent/'sound.wav').resolve())
+            self.assertEqual(Path(moved.zones[0].image_path),(old.parent/'scene.png').resolve())
             returned=rebase_map_images(moved,new,old)
             self.assertEqual(returned.zones[0].audio_path,'sound.wav')
 
