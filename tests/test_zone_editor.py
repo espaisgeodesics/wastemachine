@@ -33,6 +33,7 @@ class ImageReferenceTests(unittest.TestCase):
 @unittest.skipUnless(os.environ.get('DISPLAY') or os.name=='nt','Requires a graphical display')
 class ZoneEditorTests(unittest.TestCase):
     def setUp(self):
+        discard=patch.object(m.messagebox,'askyesnocancel',return_value=False);discard.start();self.addCleanup(discard.stop)
         self.root=m.tk.Tk()
         with patch.object(m.mido,'get_output_names',return_value=[]):self.app=m.App(self.root)
         self.app.arp_stop.set();self.app.arp_thread.join(timeout=1)
@@ -42,7 +43,7 @@ class ZoneEditorTests(unittest.TestCase):
 
     def tearDown(self):
         self.editor.dirty=False
-        for timer in self.root.tk.call('after','info'):self.root.after_cancel(timer)
+        for timer in self.root.tk.call('after','info'):self.root.tk.call('after','cancel',timer)
         self.app.close()
 
     def event(self,row,column):

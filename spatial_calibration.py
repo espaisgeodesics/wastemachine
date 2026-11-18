@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 from spatial_zones import Calibration
+from atmo_ui import wrap_controls
 
 REFERENCES = ('NORD', 'EST', 'SUD', 'OEST')
 SHAPES={'Circumferència del domo':'circle','Quadrat':'square','Rectangle':'rectangle'}
@@ -41,8 +42,8 @@ class CalibrationEditor:
         self.canvas.pack(fill='both',expand=True,padx=10,pady=8)
         self.canvas.bind('<Configure>',lambda event:self.draw())
         self.canvas.bind('<Button-1>',self.click)
-        ttk.Label(window,textvariable=self.notice,wraplength=850).pack(fill='x',padx=10,pady=4)
-        footer=ttk.Frame(window);footer.pack(fill='x',padx=10,pady=8)
+        ttk.Label(window,textvariable=self.notice,wraplength=850).pack(side='bottom',fill='x',padx=10,pady=4,before=self.canvas)
+        footer=ttk.Frame(window);footer.pack(side='bottom',fill='x',padx=10,pady=8,before=self.canvas)
         ttk.Button(footer,text='APLICAR CALIBRACIÓ',command=self.apply).pack(side='left',padx=3)
         ttk.Label(footer,text='Després desa el projecte per conservar-la.').pack(side='left',padx=10)
         saved=self.get_calibration()
@@ -50,6 +51,7 @@ class CalibrationEditor:
             self.outline.set(next(k for k,v in SHAPES.items() if v==saved.shape))
             self.floor_width.set(str(saved.aspect_ratio))
         self.change_shape(clear=False)
+        wrap_controls(perimeter);wrap_controls(controls)
         self.refresh()
 
     def references(self):
@@ -122,7 +124,7 @@ class CalibrationEditor:
         cw=max(1,self.canvas.winfo_width());ch=max(1,self.canvas.winfo_height())
         factor=min(cw/width,ch/height);dw=max(1,int(width*factor));dh=max(1,int(height*factor))
         x=(cw-dw)/2;y=(ch-dh)/2;self.bounds=(x,y,dw,dh)
-        self.photo=ImageTk.PhotoImage(Image.fromarray(self.frame[:,:,::-1]).resize((dw,dh),Image.Resampling.BILINEAR))
+        self.photo=ImageTk.PhotoImage(Image.fromarray(self.frame[:,:,::-1]).resize((dw,dh),Image.Resampling.BILINEAR),master=self.canvas)
         self.canvas.create_image(x,y,image=self.photo,anchor='nw')
         if not self.frozen:return
         coords=[(x+p[0]*dw,y+p[1]*dh) if p is not None else None for p in self.points]

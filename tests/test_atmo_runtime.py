@@ -15,6 +15,7 @@ class Value:
 
 class Window:
     def __init__(self, state='withdrawn'):
+        self.config={}
         self.current_state=state
         self.owner='hidden root'
         self.alpha=0

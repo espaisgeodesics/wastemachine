@@ -28,9 +28,9 @@ def dark_titlebar(window):
         if not dark:dark = set_value(19, 1)
         # Windows 10 supports immersive dark; exact caption colors are supported
         # on newer Windows. Unsupported attributes are harmless HRESULT failures.
-        caption = set_value(35, colorref('#0b1224'))
-        set_value(36, colorref('#f5f7ff'))
-        set_value(34, colorref('#203452'))
+        caption = set_value(35, colorref('#080e20'))
+        set_value(36, colorref('#f2f6ff'))
+        set_value(34, colorref('#1a2c49'))
         redraw = user32.SetWindowPos
         redraw.argtypes = (wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
                            ctypes.c_int, ctypes.c_int, wintypes.UINT)

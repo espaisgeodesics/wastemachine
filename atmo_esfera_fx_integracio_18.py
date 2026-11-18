@@ -7,7 +7,8 @@ from tkinter import messagebox
 from atmo_esfera_fx_integracio_12 import AtmoZoneEditor, label, btn, BG, PANEL, TEXT, MUTED, CYAN, PURPLE, MODES
 from atmo_primary import primary_engine
 from atmo_windows import maximize_window
-from atmo_runtime import theme_widgets
+from atmo_runtime import theme_widgets, configure_theme, install_window_theme, SURFACE
+from PIL import Image, ImageTk, ImageOps
 
 BASE = Path(__file__).resolve().parent
 ENGINE = BASE / 'atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py'
@@ -46,73 +47,89 @@ def open_engine(mode, game_action=None):
 
 
 def main():
-    splash=tk.Tk();splash.title("ATMO ESFERA FX · Inici")
-    splash.geometry("1100x690");splash.minsize(940,620);splash.configure(bg=BG)
-    theme_widgets(splash)
-    maximize_window(splash)
-    selected={"mode":None,"game_action":None}
-    label(splash,"ATMO ESFERA FX",32,bold=True).pack(pady=(52,5))
-    label(splash,"L'espai es converteix en instrument",13,MUTED).pack()
-    label(splash,"Què vols crear?",18,bold=True).pack(pady=(38,20))
-    row=tk.Frame(splash,bg=BG);row.pack(fill="both",expand=True,padx=30,pady=(0,30))
-    subtitles=("Experiències interactives","Composició i control sonor","Continguts i recorreguts visuals","Espais immersius reactius")
-    colors=(CYAN,PURPLE,"#f7c27a","#80c5f7")
+    splash=tk.Tk(); splash.title('ATMO ESFERA FX · Inici')
+    splash.geometry('1280x760'); splash.minsize(940,620); splash.configure(bg=BG)
+    install_window_theme(splash); theme_widgets(splash); maximize_window(splash)
+    selected={'mode':None,'game_action':None}; images=[]
+    def clear():
+        images.clear()
+        for child in splash.winfo_children(): child.destroy()
+    def header(subtitle):
+        band=tk.Frame(splash,bg=BG); band.pack(fill='x',padx=35,pady=(20,12))
+        path=BASE/'atmo_assets'/'atmo_logo.png'
+        if path.is_file():
+            try:
+                with Image.open(path) as im: photo=ImageTk.PhotoImage(im.resize((65,65),Image.Resampling.LANCZOS),master=splash)
+                images.append(photo);tk.Label(band,image=photo,bg=BG).pack(side='left',padx=(0,14))
+            except (OSError,tk.TclError): pass
+        titles=tk.Frame(band,bg=BG);titles.pack(side='left')
+        label(titles,'ATMO ESFERA FX',27,bold=True).pack(anchor='w')
+        label(titles,subtitle,12,MUTED).pack(anchor='w')
+        tk.Frame(splash,bg=SURFACE,height=1).pack(fill='x',padx=35)
     def choose(mode):
-        # Pantalla 2 obligatòria per a TOTS els modes; el motor encara no s'ha creat.
-        for child in splash.winfo_children():
-            child.destroy()
-        splash.title("ATMO ESFERA FX · "+mode+" · Projecte")
-        label(splash,"ATMO ESFERA FX",29,bold=True).pack(pady=(45,7))
-        label(splash,mode.upper()+" · TRIA EL PROJECTE",19,CYAN,True).pack(pady=(6,10))
-        label(splash,"Primer selecciona com vols començar. Després s'obrirà l'editor.",11,MUTED).pack(pady=(0,23))
-        options=tk.Frame(splash,bg=BG);options.pack(pady=8)
+        clear();splash.title('ATMO ESFERA FX · '+mode+' · Projecte')
+        header('Una experiència comença amb un projecte')
+        label(splash,mode.upper()+' · TRIA EL PROJECTE',20,CYAN,True).pack(pady=(35,10))
+        label(splash,'Selecciona com vols començar. Després s’obrirà l’editor.',11,MUTED).pack(pady=(0,18))
+        options=tk.Frame(splash,bg=PANEL,padx=30,pady=20);options.pack(pady=8)
         def proceed(action):
-            selected["mode"]=mode
-            selected["game_action"]=action
-            splash.destroy()
-        btn(options,"+  Projecte nou",lambda:proceed("new"),True).pack(fill="x",pady=7)
-        btn(options,"Obrir un projecte existent",lambda:proceed("open")).pack(fill="x",pady=7)
-        btn(options,"Triar una plantilla",lambda:proceed("template")).pack(fill="x",pady=7)
-        btn(options,"Entrar a l'editor sense carregar cap projecte",lambda:proceed(None)).pack(fill="x",pady=7)
-        btn(splash,"← Tornar a les experiències",lambda:show_start()).pack(pady=12)
-
+            selected['mode']=mode;selected['game_action']=action;splash.destroy()
+        for title,action,primary in (('+  Projecte nou','new',True),('Obrir un projecte existent','open',False),('Triar una plantilla','template',False),('Entrar a l’editor sense carregar cap projecte',None,False)):
+            btn(options,title,lambda a=action:proceed(a),primary).pack(fill='x',pady=6)
+        btn(splash,'← Tornar a les experiències',show_start).pack(pady=15)
     def show_start():
-        for child in splash.winfo_children():child.destroy()
-        splash.title("ATMO ESFERA FX · Inici")
-        label(splash,"ATMO ESFERA FX",32,bold=True).pack(pady=(52,5))
-        label(splash,"L'espai es converteix en instrument",13,MUTED).pack()
-        label(splash,"Què vols crear?",18,bold=True).pack(pady=(38,20))
-        row=tk.Frame(splash,bg=BG);row.pack(fill="both",expand=True,padx=30,pady=(0,30))
-        subtitles=("Experiències interactives","Composició i control sonor","Continguts i recorreguts visuals","Espais immersius reactius")
-        colors=(CYAN,PURPLE,"#f7c27a","#80c5f7")
-        for idx,(mode,subtitle,color) in enumerate(zip(MODES,subtitles,colors)):
-            card=tk.Frame(row,bg=PANEL,padx=13,pady=15)
-            card.grid(row=0,column=idx,sticky="nsew",padx=6)
-            # Reservem primer el botó inferior: no es tallarà si el subtítol
-            # ocupa dues línies (com passa a Exposició).
-            btn(card,"Entrar",lambda m=mode:choose(m),True).pack(side="bottom",fill="x",pady=(8,0))
-            row.grid_columnconfigure(idx,weight=1);row.grid_rowconfigure(0,weight=1)
-            art=tk.Canvas(card,width=180,height=155,bg=PANEL,highlightthickness=0)
-            art.pack(fill="x",pady=(8,12))
-            if idx==0:
-                for x,y in [(35,40),(145,40),(35,120),(145,120)]:art.create_oval(x-13,y-13,x+13,y+13,fill=color,outline="")
-                art.create_line(35,40,145,120,fill=color,width=3)
-                art.create_line(145,40,35,120,fill=color,width=3)
-            elif idx==1:
-                for j,h in enumerate((32,70,105,55,90,42)):
-                    x=24+j*27;art.create_rectangle(x,130-h,x+16,130,fill=color,outline="")
-            elif idx==2:
-                art.create_oval(26,18,155,146,outline=color,width=5)
-                art.create_polygon(90,25,145,110,35,110,fill=color,outline="")
-            else:
-                for r in (38,65):art.create_oval(90-r,82-r,90+r,82+r,outline=color,width=3)
-                for x,y in ((90,18),(155,82),(90,146),(25,82)):art.create_oval(x-6,y-6,x+6,y+6,fill=color,outline="")
-            label(card,mode,14,bold=True,wraplength=190).pack(pady=(5,8))
-            label(card,subtitle,10,MUTED,wraplength=180).pack(pady=(0,8))
-
-    show_start()
-    splash.mainloop()
-    if selected["mode"]:open_engine(selected["mode"],selected["game_action"])
+        clear(); splash.title('ATMO ESFERA FX · Inici')
+        header('L’espai es converteix en instrument')
+        label(splash,'Tria el teu univers',22,bold=True).pack(pady=(8,12))
+        row=tk.Frame(splash,bg=BG)
+        row.pack(fill='both',expand=True,padx=20,pady=(0,20))
+        subtitles=('Experiències interactives','Composició i control sonor',
+                   'Continguts i recorreguts visuals','Espais immersius reactius')
+        names=('joc','musica','exposicio','immersiva')
+        for idx,(mode,subtitle,name) in enumerate(zip(MODES,subtitles,names)):
+            row.grid_columnconfigure(idx,weight=1,uniform='mode')
+            card=tk.Frame(row,bg=PANEL,padx=6,pady=7,highlightthickness=1,
+                          highlightbackground=SURFACE)
+            card.grid(row=0,column=idx,sticky='nsew',padx=5)
+            # La imatge és el contingut principal; la seva mida segueix la targeta.
+            artwork=tk.Label(card,bg=SURFACE,bd=0,cursor='hand2')
+            artwork.pack(fill='both',expand=True,pady=(0,9))
+            artwork.bind('<Button-1>',lambda event,m=mode:choose(m))
+            path=BASE/'atmo_assets'/('atmo_'+name+'.png')
+            try:
+                with Image.open(path) as source:
+                    original=source.convert('RGB').copy()
+            except (OSError,ValueError):
+                original=None
+            cache={'size':None,'image':None,'job':None}
+            def redraw(event=None, target=artwork, source=original, state=cache):
+                if not target.winfo_exists(): return
+                width=max(160,target.winfo_width())
+                height=max(140,target.winfo_height())
+                size=(width,height)
+                if size==state['size']: return
+                state['size']=size
+                if source is not None:
+                    thumb=ImageOps.fit(source,size,method=Image.Resampling.LANCZOS,
+                                       centering=(.5,.5))
+                    photo=ImageTk.PhotoImage(thumb,master=splash)
+                    state['image']=photo
+                    target.configure(image=photo,text='')
+                else:
+                    target.configure(image='',text='✧',fg=CYAN,
+                                     font=('Segoe UI',44),bg=SURFACE)
+            def schedule(event, target=artwork, state=cache, source=original):
+                if state['job'] is not None:
+                    try: target.after_cancel(state['job'])
+                    except tk.TclError: pass
+                state['job']=target.after(90,lambda: redraw(target=target,source=source,state=state))
+            artwork.bind('<Configure>',schedule)
+            label(card,mode,16,bold=True,wraplength=260).pack(pady=(0,3))
+            label(card,subtitle,10,MUTED,wraplength=250).pack(pady=(0,8))
+            btn(card,'Entrar a '+mode,lambda m=mode:choose(m),True).pack(fill='x',pady=(0,2))
+        row.grid_rowconfigure(0,weight=1)
+    show_start();splash.mainloop()
+    if selected['mode']:open_engine(selected['mode'],selected['game_action'])
 
 if __name__=="__main__":main()
 

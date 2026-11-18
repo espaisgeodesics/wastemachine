@@ -21,7 +21,7 @@ class SimulatorWindowTests(unittest.TestCase):
         self.app.arp_stop.set()
         self.app.arp_thread.join(timeout=1)
         for timer in self.root.tk.call('after', 'info'):
-            self.root.after_cancel(timer)
+            self.root.tk.call('after','cancel',timer)
         self.app.open_simulator()
         self.view = self.app.simulator_view
         self.session = self.app.simulator_session
@@ -33,7 +33,7 @@ class SimulatorWindowTests(unittest.TestCase):
             self.app.simulator_window = None
             self.app.simulator_view = None
         for timer in self.root.tk.call('after', 'info'):
-            self.root.after_cancel(timer)
+            self.root.tk.call('after','cancel',timer)
         self.app.close()
 
     def select(self, pid='virtual-1'):

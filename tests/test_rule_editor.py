@@ -19,6 +19,7 @@ def config(actions=None, trigger='manual'):
 @unittest.skipUnless(os.environ.get('DISPLAY') or os.name=='nt','Requires a graphical display')
 class RuleIntegrationTests(unittest.TestCase):
     def setUp(self):
+        discard=patch.object(m.messagebox,'askyesnocancel',return_value=False);discard.start();self.addCleanup(discard.stop)
         self.root=m.tk.Tk()
         with patch.object(m.mido,'get_output_names',return_value=[]):self.app=m.App(self.root)
         self.app.arp_stop.set();self.app.arp_thread.join(timeout=1)
@@ -29,7 +30,7 @@ class RuleIntegrationTests(unittest.TestCase):
             self.app.rules_window.destroy();self.app.rules_window=None;self.app.rules_editor=None
         if self.app.simulator_window is not None:
             self.app.simulator_window.destroy();self.app.simulator_window=None;self.app.simulator_view=None
-        for timer in self.root.tk.call('after','info'):self.root.after_cancel(timer)
+        for timer in self.root.tk.call('after','info'):self.root.tk.call('after','cancel',timer)
         self.app.close()
 
     def test_manual_rule_real_outputs_override_and_release_to_legacy_frame(self):

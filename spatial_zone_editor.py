@@ -276,8 +276,13 @@ class ZoneEditor:
         section.pack(fill='x', pady=8)
         ttk.Entry(section, textvariable=self.audio_path, state='readonly', width=28).pack(fill='x')
         ttk.Button(section, text='Triar so WAV / OGG…', command=self.choose_audio).pack(fill='x', pady=3)
+        ttk.Button(section,text='ACTIVAR ÀUDIO LOCAL',command=self.enable_audio).pack(fill='x',pady=3)
+        ttk.Button(section,text='PROVAR SO DE LA ZONA',command=lambda:self.on_audio_test() if hasattr(self,'on_audio_test') else None).pack(fill='x',pady=3)
+        ttk.Button(section,text='ATURAR PROVA',command=lambda:self.on_audio_stop() if hasattr(self,'on_audio_stop') else None).pack(fill='x',pady=3)
+        self.audio_status=tk.StringVar(value='Àudio local: obre el dispositiu per escoltar les zones')
+        ttk.Label(section,textvariable=self.audio_status,wraplength=245).pack(fill='x',pady=4)
         ttk.Button(section, text='Sense so', command=lambda:self.audio_path.set('')).pack(fill='x')
-        ttk.Label(section, text='Clips de fins a 30 s · Bucle disponible', wraplength=230).pack(anchor='w', pady=4)
+        ttk.Label(section, text='WAV / OGG · Clips i cançons · Bucle disponible', wraplength=230).pack(anchor='w', pady=4)
         for title, variable, maximum in [('Volum (0–1)', self.audio_gain, 1),
                 ('Fade in (s)', self.audio_fade_in_s, 10), ('Fade out en sortir (s)', self.audio_fade_out_s, 10)]:
             row = ttk.Frame(section);row.pack(fill='x', pady=2)
@@ -291,7 +296,6 @@ class ZoneEditor:
         ttk.Label(row, text='Segons després de sortir').pack(side='left')
         self.audio_seconds_entry = ttk.Spinbox(row, textvariable=self.audio_duration_s, from_=.1, to=86400, width=6)
         self.audio_seconds_entry.pack(side='right');self.update_audio_duration_state()
-        ttk.Button(section, text='Activar àudio local', command=self.enable_audio).pack(fill='x', pady=5)
         ttk.Checkbutton(parent, text='Permetre solapament de zones', variable=self.allow_overlap).pack(anchor='w', pady=4)
         row = ttk.Frame(parent);row.pack(fill='x', pady=3)
         ttk.Label(row, text='Prioritat d’imatge').pack(side='left')
@@ -342,7 +346,7 @@ class ZoneEditor:
         try:
             with Image.open(check.path) as source:
                 image = ImageOps.exif_transpose(source).convert('RGB');image.thumbnail((260, 160))
-            self.thumbnail = ImageTk.PhotoImage(image)
+            self.thumbnail = ImageTk.PhotoImage(image,master=self.image_preview)
             self.image_preview.configure(image=self.thumbnail, text='', width=260, height=160)
         except (OSError, ValueError, Image.DecompressionBombError) as exc:
             self.image_preview.configure(image='', text='Imatge no vàlida: '+str(exc), width=32, height=8)

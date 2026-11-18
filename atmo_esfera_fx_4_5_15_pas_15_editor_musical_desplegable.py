@@ -1,3 +1,5 @@
+from atmo_runtime import configure_theme, install_window_theme, BG, PANEL, SURFACE, TEXT, MUTED, CYAN, PURPLE, DANGER
+from atmo_ui import draw_banner, scrollable_form, wrap_controls
 import os, sys, json, time, math, random, datetime, threading
 import tempfile
 from pathlib import Path
@@ -12,6 +14,7 @@ from atmo_music import music_zone, arp_settings, arp_pitches, note_label, sequen
 from atmo_mixer import mixer_config as card_mixer_config, sound_kind, shared_route, midi_level, note_velocity, independent_channels
 from atmo_preview import NO_VISUAL, SURFACES, visual_index, assigned_visuals, mix_frames, map_frame, map_pointer
 from zone_audio import ZoneAudioPlayer
+from local_audio import AudioCommand
 from atmo_card_functions import CHAOS_FUNCTION, LiveKaoss, CardKaossEditor, default_config
 from kaoss_xy import KaossConfig
 from dataclasses import replace as config_replace
@@ -165,21 +168,9 @@ class App:
     self.harmony_key=tk.StringVar(value='La menor'); self.harmony_root=tk.StringVar(value='La'); self.harmony_scale=tk.StringVar(value='Menor natural (eòlica)'); self.bpm_var=tk.IntVar(value=self.bpm); self.harmony_velocity=tk.IntVar(value=85); self.arp_division=tk.StringVar(value='1/2 temps'); self.arp_gate=tk.IntVar(value=60); self.card_id=tk.StringVar(value='01'); self.fun=tk.StringVar(); self.axis=tk.StringVar(); self.note=tk.IntVar(); self.cc=tk.IntVar(); self.channel=tk.IntVar(); self.visual=tk.StringVar(); self.midi_choice=tk.StringVar(value='Sense MIDI'); self.status=tk.StringVar(value='Preparat · Obre la càmera per detectar les targetes')
     self.cards[1]['function']='Control MIDI CC'; self.cards[1]['cc']=7; self.cards[1]['axis']='Horitzontal'; self.build(); self.select_visual(NO_VISUAL); self.load_card(); self.follow_live_preview(); self.refresh_midi(); self.root.protocol('WM_DELETE_WINDOW',self.close); self.root.after(50,self.tick); self.root.after(450,self.raise_all_panels); self.arp_thread=threading.Thread(target=self.arpeggio_worker,daemon=True); self.arp_thread.start()
  def build(self):
-    bg='#151210'; panel='#261c16'; copper='#ba7945'; cream='#f0d9b5'
+    bg=BG;panel=PANEL;copper=CYAN;cream=TEXT
     self.root.configure(bg=bg)
-    s=ttk.Style(); s.theme_use('clam')
-    s.configure('TFrame',background=bg)
-    s.configure('TLabel',background=bg,foreground=cream,font=('Segoe UI',9))
-    s.configure('TLabelFrame',background=bg,foreground='#f0b36f',bordercolor='#996139',relief='groove',borderwidth=2)
-    s.configure('TLabelFrame.Label',background='#2b1e16',foreground='#f2c18c',font=('Segoe UI',10,'bold'))
-    s.configure('TButton',background='#65412b',foreground='#fff0d7',padding=(8,5),font=('Segoe UI',9,'bold'),bordercolor='#a36b40',relief='raised')
-    s.map('TButton',background=[('active','#95603b'),('pressed','#3d291c')])
-    s.configure('Accent.TButton',background='#a95422',foreground='#fff2d9',padding=(9,6))
-    s.map('Accent.TButton',background=[('active','#d06b2b')])
-    s.configure('TCheckbutton',background=bg,foreground=cream,font=('Segoe UI',9))
-    s.configure('TCombobox',fieldbackground='#ebdcc5',background='#90643f')
-    s.configure('Treeview',background='#241d18',foreground='#e8d4ba',fieldbackground='#241d18',rowheight=21,font=('Segoe UI',9))
-    s.configure('Treeview.Heading',background='#51301e',foreground='#f0ba7b',font=('Segoe UI',9,'bold'))
+    install_window_theme(self.root)
     menu=tk.Menu(self.root);fm=tk.Menu(menu,tearoff=False)
     fm.add_command(label='Nou projecte',command=self.new_project)
     fm.add_command(label='Obrir projecte...',command=self.open_project)
@@ -202,17 +193,16 @@ class App:
     menu.add_cascade(label='Àudio',menu=audio_menu)
     help_menu=tk.Menu(menu,tearoff=False);help_menu.add_command(label='Versió i fitxer que s’està executant',command=self.show_runtime_info)
     menu.add_cascade(label='Ajuda',menu=help_menu);self.root.config(menu=menu)
-    banner=tk.Canvas(self.root,bg='#1c120e',height=60,highlightthickness=0)
+    banner=tk.Canvas(self.root,bg='#080e20',height=60,highlightthickness=0)
     banner.pack(fill='x',padx=7,pady=(5,5))
     self.banner_source=None
-    try:self.banner_source=Image.open(ROOT/'capcalera_atmo_esfera_fx_460.png').convert('RGB')
-    except OSError:pass
     self.banner_canvas=banner;banner.bind('<Configure>',self.resize_banner)
     toolbar=ttk.Frame(self.root);toolbar.pack(fill='x',padx=9,pady=(1,5))
-    self.panic_button=tk.Button(toolbar,text='SILENCI ABSOLUT',command=self.toggle_panic,bg='#a52626',fg='white',font=('Segoe UI',10,'bold'));self.panic_button.pack(side='left',padx=3)
+    self.panic_button=tk.Button(toolbar,text='SILENCI ABSOLUT',command=self.toggle_panic,bg=DANGER,fg=BG,font=('Segoe UI',10,'bold'));self.panic_button.pack(side='left',padx=3)
     ttk.Button(toolbar,text='TARGETES EN FUNCIÓ',command=lambda:self.show_panel('cards')).pack(side='left',padx=3)
     ttk.Button(toolbar,text='ZONES ESPACIALS',command=self.open_zone_editor).pack(side='left',padx=3)
     ttk.Button(toolbar,text='CALIBRAR EL TERRA',command=self.open_calibration_editor).pack(side='left',padx=3)
+    ttk.Button(toolbar,text='ÀUDIO LOCAL',command=self.open_local_audio).pack(side='left',padx=3)
     ttk.Button(toolbar,text='TAULA DE VOLUMS',command=self.open_mixer).pack(side='left',padx=3)
     # Cada mòdul té una finestra nativa de Windows: es pot arrossegar,
     # canviar de mida, minimitzar i restaurar independentment.
@@ -221,7 +211,7 @@ class App:
     self.camera_window=self.make_panel_window('camera','CÀMERA ARUCO', '680x460+35+300')
     camera_controls=ttk.Frame(self.camera_window);camera_controls.pack(fill='x',padx=5,pady=(5,0))
     ttk.Button(camera_controls,text='OBRIR / TANCAR CÀMERA',command=self.toggle_cam).pack(side='left',padx=3)
-    self.cam_label=tk.Label(self.camera_window,bg='#0c1012',fg='#e0c3a0',text='Càmera desconnectada',anchor='center',bd=0)
+    self.cam_label=tk.Label(self.camera_window,bg='#0c1012',fg='#b4c4dd',text='Càmera desconnectada',anchor='center',bd=0)
     self.cam_label.pack(fill='both',expand=True,padx=5,pady=5)
     self.visual_window=self.make_panel_window('visual','VISUAL · PREVISUALITZACIÓ','680x460+740+300')
     ttk.Label(self.visual_window,textvariable=self.preview_caption,wraplength=600).pack(fill='x',padx=5,pady=3)
@@ -259,13 +249,15 @@ class App:
     ttk.Scale(master,from_=0,to=127,variable=self.master_volume,command=self.change_master_volume).pack(side='left',fill='x',expand=True,padx=10)
     self.master_label=ttk.Label(master,text='100 %',width=8);self.master_label.pack(side='right')
     holder=ttk.Frame(self.mixer_window);holder.pack(fill='both',expand=True,padx=8,pady=8)
-    self.mixer_canvas=tk.Canvas(holder,bg='#151210',highlightthickness=0)
+    self.mixer_canvas=tk.Canvas(holder,bg='#080e20',highlightthickness=0)
     scroll=ttk.Scrollbar(holder,orient='horizontal',command=self.mixer_canvas.xview)
     self.mixer_canvas.configure(xscrollcommand=scroll.set);scroll.pack(side='bottom',fill='x');self.mixer_canvas.pack(fill='both',expand=True)
+    vertical=ttk.Scrollbar(holder,orient='vertical',command=self.mixer_canvas.yview);vertical.pack(side='right',fill='y',before=self.mixer_canvas)
+    self.mixer_canvas.configure(yscrollcommand=vertical.set)
     self.mixer_body=ttk.Frame(self.mixer_canvas);self.mixer_canvas.create_window((0,0),window=self.mixer_body,anchor='nw')
     self.mixer_body.bind('<Configure>',lambda e:self.mixer_canvas.configure(scrollregion=self.mixer_canvas.bbox('all')))
     self.mixer_window.withdraw()
-    self.vis_label=tk.Label(visual_content,bg='#0d0b0b',fg='#e0c3a0',anchor='center',bd=0)
+    self.vis_label=tk.Label(visual_content,bg='#080e20',fg='#b4c4dd',anchor='center',bd=0)
     self.vis_label.pack(fill='both',expand=True,padx=5,pady=5)
     map_controls=ttk.Frame(visual_content);map_controls.pack(fill='x',padx=6,pady=3,before=self.vis_label)
     ttk.Label(map_controls,text='Mapa de previsualització').pack(side='left')
@@ -286,7 +278,7 @@ class App:
     def wheel(event):sidebar.yview_scroll(-1 if event.delta>0 else 1,'units')
     sidebar.bind('<MouseWheel>',wheel);right.bind('<MouseWheel>',wheel)
     frame=self.sidebar_panel(right,'EDITOR DE TARGETES',pady=3)
-    control_strip=tk.Frame(self.root,bg='#1e1712',highlightbackground='#203452',highlightthickness=1)
+    control_strip=tk.Frame(self.root,bg='#121f39',highlightbackground='#1a2c49',highlightthickness=1)
     control_strip.pack(fill='x',padx=8,pady=(2,4))
     ttk.Button(control_strip,text='CÀMERA',command=lambda:self.toggle_panel('camera')).pack(side='left',padx=3,pady=3)
     ttk.Button(control_strip,text='VISUAL',command=lambda:self.toggle_panel('visual')).pack(side='left',padx=3)
@@ -294,7 +286,7 @@ class App:
     ttk.Button(control_strip,text='EDITOR',command=lambda:self.toggle_panel('editor')).pack(side='left',padx=3)
     ttk.Button(control_strip,text='PROJECCIÓ',command=self.open_projection,style='Accent.TButton').pack(side='left',padx=3)
     ttk.Label(control_strip,text='BPM').pack(side='left',padx=(8,2))
-    bpm_spin=tk.Spinbox(control_strip,textvariable=self.bpm_var,from_=40,to=180,increment=1,width=5,command=self.update_bpm,bg='#e9d8c2')
+    bpm_spin=tk.Spinbox(control_strip,textvariable=self.bpm_var,from_=40,to=180,increment=1,width=5,command=self.update_bpm,bg=SURFACE,fg=TEXT)
     bpm_spin.pack(side='left',padx=3)
     bpm_spin.bind('<Return>',lambda event:self.update_bpm())
     bpm_spin.bind('<FocusOut>',lambda event:self.update_bpm())
@@ -320,16 +312,17 @@ class App:
       if label=='Funció':combo.bind('<<ComboboxSelected>>',self.on_function_selected)
     for label,var,from_,to in [('Canal MIDI (1-16)',self.channel,1,16),('Nota MIDI (0-127)',self.note,0,127)]:
       ttk.Label(frame,text=label).pack(anchor='w',padx=8,pady=(5,0))
-      tk.Spinbox(frame,textvariable=var,from_=from_,to=to,width=8,bg='#e9d8c2').pack(anchor='w',padx=8)
+      tk.Spinbox(frame,textvariable=var,from_=from_,to=to,width=8,bg=SURFACE,fg=TEXT).pack(anchor='w',padx=8)
     ttk.Button(frame,text='CONFIGURAR FUNCIÓ…',command=self.open_function_settings).pack(fill='x',padx=8,pady=6)
     ttk.Label(frame,text='Visual assignat').pack(anchor='w',padx=8,pady=(5,0))
     visual_choice=ttk.Combobox(frame,textvariable=self.visual,values=('Cap',MEDIA_LABEL,*NAMES[:13]),state='readonly',width=25);visual_choice.pack(fill='x',padx=8)
     visual_choice.bind('<<ComboboxSelected>>',lambda event:self.open_card_media_settings() if self.visual.get()==MEDIA_LABEL else None)
     ttk.Button(frame,text='APLICAR / CREAR TARGETA',command=self.apply_card,style='Accent.TButton').pack(fill='x',padx=8,pady=9)
-    statusbar=tk.Frame(self.root,bg='#1a1714',highlightbackground='#203452',highlightthickness=1)
+    wrap_controls(toolbar);wrap_controls(control_strip)
+    statusbar=tk.Frame(self.root,bg='#121f39',highlightbackground='#1a2c49',highlightthickness=1)
     statusbar.pack(fill='x',padx=8,pady=(1,4))
-    tk.Label(statusbar,text='●',bg='#1a1714',fg='#42c990').pack(side='left',padx=(6,2))
-    ttk.Label(statusbar,textvariable=self.status,foreground='#e8b47d').pack(side='left',padx=4)
+    tk.Label(statusbar,text='●',bg='#121f39',fg='#42c990').pack(side='left',padx=(6,2))
+    ttk.Label(statusbar,textvariable=self.status,foreground=MUTED).pack(side='left',padx=4)
  def make_panel_window(self,key,title,geometry):
     win=tk.Toplevel(self.root)
     win.title('ATMO ESFERA FX · '+title)
@@ -338,7 +331,7 @@ class App:
     win.transient(self.root)
     win.geometry(geometry)
     win.minsize(250,140)
-    win.configure(bg='#151210')
+    win.configure(bg='#080e20')
     win.protocol('WM_DELETE_WINDOW',win.withdraw)
     self.panel_windows[key]=win
     # Finestres germanes de la principal, no modals: totes poden estar obertes alhora.
@@ -451,14 +444,7 @@ class App:
  def show_runtime_info(self):
     messagebox.showinfo('ATMO ESFERA FX · Versió i fitxer',f'Versió: {APP_VERSION}\n\nFitxer: {Path(__file__).resolve()}\n\nPython: {sys.executable}',parent=self.root)
  def resize_banner(self,event):
-    width=max(1,event.width);height=min(112,max(48,round(width*.075)))
-    self.banner_canvas.configure(height=height);self.banner_canvas.delete('all')
-    if self.banner_source is None:
-      self.banner_canvas.create_text(width/2,height/2,text='ATMO ESFERA FX',fill='#edbc88',font=('Georgia',23,'bold'));return
-    image_height=round(self.banner_source.height*width/self.banner_source.width)
-    self.banner_photo=ImageTk.PhotoImage(self.banner_source.resize((width,max(1,image_height)),Image.Resampling.LANCZOS))
-    # El llenç mostra la franja panoràmica centrada, sense les vores del recurs.
-    self.banner_canvas.create_image(width/2,height/2,image=self.banner_photo,anchor='center')
+    draw_banner(self,event)
  def update_monitor_columns(self):
     self.assigned_cards.configure(displaycolumns='#all' if self.monitor_details.get() else ('card','name','function','state','channel','note','cc','value'))
  def mixer_config(self,i):
@@ -492,10 +478,10 @@ class App:
         strip=ttk.LabelFrame(self.mixer_body,text=f'Targeta {i+1:02d}',padding=8);strip.grid(row=0,column=i,sticky='ns',padx=4,pady=4)
         name=ttk.Label(strip,text=c.get('name',''),width=18,wraplength=135);name.pack(pady=4)
         status='Àudio local' if kind=='local' else ('MIDI · canal compartit' if kind=='midi' and shared_route(self.cards,i) else ('So MIDI' if kind=='midi' else 'Sense so propi'))
-        ttk.Label(strip,text=status,foreground='#a8bad5' if kind=='none' else '#45d4d2',wraplength=140).pack(pady=3)
+        ttk.Label(strip,text=status,foreground='#a8bad5' if kind=='none' else '#4ce2e0',wraplength=140).pack(pady=3)
         variables={key:tk.DoubleVar(value=config[key]) if key=='level' else tk.IntVar(value=config[key]) for key in ('channel','cc','level')}
         level_label=ttk.Label(strip,text='Sense so' if kind=='none' else f'{round(config["level"]*100/127)} %');level_label.pack()
-        slider=tk.Scale(strip,from_=127,to=0,orient='vertical',variable=variables['level'],showvalue=False,length=175,bg='#0b1224',fg='#f5f7ff',highlightthickness=0,state='disabled' if kind=='none' else 'normal',command=lambda value,index=i:self.change_mixer_volume(index,value));slider.pack(pady=4)
+        slider=tk.Scale(strip,from_=127,to=0,orient='vertical',variable=variables['level'],showvalue=False,length=175,bg='#080e20',fg='#f5f7ff',highlightthickness=0,state='disabled' if kind=='none' else 'normal',command=lambda value,index=i:self.change_mixer_volume(index,value));slider.pack(pady=4)
         if kind=='midi':
           for title,key,minimum,maximum in [('Canal','channel',1,16),('CC','cc',0,127)]:
             line=ttk.Frame(strip);line.pack(fill='x',pady=2);ttk.Label(line,text=title,width=6).pack(side='left')
@@ -555,16 +541,16 @@ class App:
       self.apply_all_volumes()
     except (ValueError,tk.TclError) as exc:self.status.set('Taula de volums: '+str(exc))
  def sidebar_panel(self,parent,title,pady=3):
-    outer=tk.Frame(parent,bg='#0b1224',bd=0,highlightthickness=0)
+    outer=tk.Frame(parent,bg='#080e20',bd=0,highlightthickness=0)
     outer.pack(fill='x',pady=pady,padx=2)
-    tk.Label(outer,text=title,bg='#0b1224',fg='#45d4d2',font=('Segoe UI',10,'bold')).pack(anchor='w',padx=8,pady=8)
-    body=tk.Frame(outer,bg='#0b1224',padx=3,pady=5)
+    tk.Label(outer,text=title,bg='#080e20',fg='#4ce2e0',font=('Segoe UI',10,'bold')).pack(anchor='w',padx=8,pady=8)
+    body=tk.Frame(outer,bg='#080e20',padx=3,pady=5)
     body.pack(fill='both',expand=True,padx=3,pady=(0,3))
     return body
  def industrial_panel(self,parent,title,row,col,padx):
-    shell=tk.Frame(parent,bg='#0b1224',bd=0,highlightthickness=0)
+    shell=tk.Frame(parent,bg='#080e20',bd=0,highlightthickness=0)
     shell.grid(row=row,column=col,sticky='nsew',padx=padx)
-    tk.Label(shell,text=title,bg='#0b1224',fg='#45d4d2',font=('Segoe UI',10,'bold')).pack(anchor='w',padx=8,pady=8)
+    tk.Label(shell,text=title,bg='#080e20',fg='#4ce2e0',font=('Segoe UI',10,'bold')).pack(anchor='w',padx=8,pady=8)
     return shell
  def choose_card_from_table(self,event=None):
     sel=self.cards_table.selection()
@@ -715,20 +701,20 @@ class App:
     d.line(pts,fill='#e4b776',width=2)
     for xx in (50,65,80,95,110):
       yy=cy-int(_m.sqrt(max(0,r*r-(xx-cx)**2)))
-      d.line((xx,yy,xx,56),fill='#9e805b',width=1)
+      d.line((xx,yy,xx,56),fill='#b4c4dd',width=1)
     for yy in (33,44):
       span=int(_m.sqrt(max(0,r*r-(cy-yy)**2)))
-      d.line((cx-span,yy,cx+span,yy),fill='#9e805b',width=1)
-    d.line((38,56,65,33,92,44,118,56),fill='#d2a36d',width=1)
-    d.line((38,56,65,44,92,33,118,56),fill='#d2a36d',width=1)
+      d.line((cx-span,yy,cx+span,yy),fill='#b4c4dd',width=1)
+    d.line((38,56,65,33,92,44,118,56),fill='#4ce2e0',width=1)
+    d.line((38,56,65,44,92,33,118,56),fill='#4ce2e0',width=1)
     # Ovni i petit robot mecànic.
     d.ellipse((126,13,164,25),fill='#b68a56',outline='#f5cf91',width=2)
     d.arc((136,7,155,23),180,360,fill='#e7bf7d',width=2)
     d.ellipse((141,17,147,21),fill='#7ce4d0')
     d.ellipse((15,28,37,50),fill='#bd8b58',outline='#f2c58b',width=2)
-    d.ellipse((19,35,25,41),fill='#f4d08d');d.ellipse((29,35,35,41),fill='#f4d08d')
+    d.ellipse((19,35,25,41),fill='#f2f6ff');d.ellipse((29,35,35,41),fill='#f2f6ff')
     d.line((26,28,26,21),fill='#e1b778',width=2);d.ellipse((24,18,28,22),fill='#f5c47a')
-    return ImageTk.PhotoImage(im)
+    return ImageTk.PhotoImage(im,master=self.root)
  def open_aruco_monitor(self):
     # Compatibilitat amb les crides antigues: un únic monitor per a tot.
     self.show_panel('cards')
@@ -786,9 +772,12 @@ class App:
       self.zone_window.minsize(920,580)
       self.zone_editor=ZoneEditor(self.zone_window,self.spatial_map,lambda:self.cards,self.zone_project_path,self.apply_spatial_map,default_card)
     else:self.zone_editor.set_default_card(default_card)
-    self.zone_editor.on_enable_audio=self.local_audio.enable
+    self.zone_editor.on_enable_audio=self.enable_zone_audio
     self.zone_editor.on_calibrate=self.open_calibration_editor
     self.zone_editor.on_release=self.release_zone_scene
+    self.zone_editor.on_audio_enable=self.enable_zone_audio
+    self.zone_editor.on_audio_test=self.test_zone_audio
+    self.zone_editor.on_audio_stop=self.stop_zone_audio_test
     self.show_panel('zones');self.update_spatial_editor_runtime()
  def calibration_context(self):
     shape=None if self.camera_frame is None else self.camera_frame.shape[:2]
@@ -813,6 +802,7 @@ class App:
     return True
  def apply_spatial_map(self,config):
     self.spatial_map=config;self.reset_spatial_projection(keep_scene=True)
+    if any(zone.enabled and zone.audio_path for zone in config.zones) and self.local_audio.snapshot().state=='disabled':self.enable_zone_audio()
     self.status.set('Mapa de zones actualitzat. Desa el projecte. Les activacions requereixen calibració vàlida.')
  def refresh_zone_editor(self):
     if self.zone_editor is not None:self.zone_editor.set_map(self.spatial_map)
@@ -831,6 +821,11 @@ class App:
     player=self.zone_projection
     last=player.zone_name or 'cap'
     output={'zone':'fotografia persistent','color':'color cromàtic','live':'visuals en directe','black':'negre en repòs'}[player.mode]
+    if hasattr(self.zone_editor,'audio_status'):
+      audio=self.local_audio.snapshot()
+      detail=self.zone_audio.last_error or audio.detail
+      audible=audio.state=='ready' and not self.muted
+      self.zone_editor.audio_status.set(('Actiu' if audible else 'Aturat / pendent')+' · '+detail+f' · {len(audio.voices)} capes'+(' · SILENCI ABSOLUT activat' if self.muted else ''))
     self.zone_editor.runtime_info.set(f'Última zona activada: {last} · Sortida: {output}'+(' · '+player.last_error if player.last_error else ''))
  def release_zone_scene(self):
     self.rule_outputs.clear_visuals()
@@ -946,8 +941,8 @@ class App:
     if self.cards[int(self.card_id.get())-1]['function']!=MUTE_FUNCTION:
       self.cc.set(119);self.mute_audible.set(0);self.mute_silent.set(127)
     win=tk.Toplevel(self.root);self.mute_settings_window=win
-    win.title('CONTROL D’ÀUDIO / MUTE · TARGETA '+self.card_id.get());win.geometry('460x480');win.transient(self.root);win.configure(bg='#151210')
-    pane=ttk.Frame(win);pane.pack(fill='both',expand=True,padx=16,pady=12)
+    win.title('CONTROL D’ÀUDIO / MUTE · TARGETA '+self.card_id.get());win.geometry('460x480');win.transient(self.root);win.configure(bg='#080e20')
+    pane=scrollable_form(win,padding=16)
     ttk.Label(pane,text='PRESÈNCIA DE TARGETA → MUTE',font=('Segoe UI',11,'bold')).pack(anchor='w',pady=8)
     for title,var,minimum,maximum in [('Canal MIDI',self.channel,1,16),('Controlador CC',self.cc,0,119),('Visible → pista audible',self.mute_audible,0,127),('Absent → pista silenciada',self.mute_silent,0,127)]:
       ttk.Label(pane,text=title).pack(anchor='w',pady=(8,2))
@@ -961,7 +956,7 @@ class App:
     old=getattr(self,'audio_settings_window',None)
     if old is not None and old.winfo_exists():old.destroy()
     win=tk.Toplevel(self.root);self.audio_settings_window=win
-    win.title('ÀUDIO · DISPAR A SONAR · TARGETA '+self.card_id.get());win.geometry('560x700');win.transient(self.root);win.configure(bg='#151210')
+    win.title('ÀUDIO · DISPAR A SONAR · TARGETA '+self.card_id.get());win.geometry('560x700');win.transient(self.root);win.configure(bg='#080e20')
     footer=ttk.Frame(win);footer.pack(side='bottom',fill='x',padx=16,pady=10)
     tabs=ttk.Notebook(win);tabs.pack(fill='both',expand=True,padx=12,pady=10)
     pane=ttk.Frame(tabs,padding=12);controls=ttk.Frame(tabs,padding=12)
@@ -1000,8 +995,8 @@ class App:
     old=getattr(self,'cc_settings_window',None)
     if old is not None and old.winfo_exists():old.destroy()
     win=tk.Toplevel(self.root);self.cc_settings_window=win
-    win.title('CONTROL MIDI CC · TARGETA '+self.card_id.get());win.geometry('400x390');win.configure(bg='#151210');win.transient(self.root)
-    pane=ttk.Frame(win);pane.pack(fill='both',expand=True,padx=16,pady=12)
+    win.title('CONTROL MIDI CC · TARGETA '+self.card_id.get());win.geometry('400x390');win.configure(bg='#080e20');win.transient(self.root)
+    pane=scrollable_form(win,padding=16)
     ttk.Label(pane,text='CONTROL MIDI CC',font=('Segoe UI',12,'bold')).pack(anchor='w',pady=8)
     for title,var,maximum,minimum in [('Canal MIDI',self.channel,16,1),('Número de controlador CC',self.cc,127,0)]:
       ttk.Label(pane,text=title).pack(anchor='w',pady=(6,2))
@@ -1023,31 +1018,31 @@ class App:
     win.title('ATMO ESFERA FX · '+kind.upper()+' · TARGETA '+self.card_id.get())
     win.geometry('460x700' if kind=='Ritme de bateria' else ('420x620' if kind in ('Arpegiador espacial','Patró rítmic') else '370x360'))
     win.minsize(320,275)
-    win.configure(bg='#151210')
+    win.configure(bg='#080e20')
     win.transient(self.root)
     win.lift(self.root)
     selected=self.card_id.get()
     apply_button=ttk.Button(win,text='APLICAR A LA TARGETA I TANCAR',style='Accent.TButton');apply_button.pack(side='bottom',fill='x',padx=16,pady=10)
     holder=ttk.Frame(win);holder.pack(fill='both',expand=True)
-    canvas=tk.Canvas(holder,bg='#0b1224',highlightthickness=0)
+    canvas=tk.Canvas(holder,bg='#080e20',highlightthickness=0)
     scroll=ttk.Scrollbar(holder,orient='vertical',command=canvas.yview);scroll.pack(side='right',fill='y')
     canvas.pack(fill='both',expand=True);canvas.configure(yscrollcommand=scroll.set)
     pane=ttk.Frame(canvas,padding=16);item=canvas.create_window((0,0),window=pane,anchor='nw')
     pane.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
     canvas.bind('<Configure>',lambda event:canvas.itemconfigure(item,width=event.width))
-    ttk.Label(pane,text=kind.upper(),foreground='#e7ae70',font=('Segoe UI',12,'bold')).pack(anchor='w',pady=(0,12))
+    ttk.Label(pane,text=kind.upper(),foreground=CYAN,font=('Segoe UI',12,'bold')).pack(anchor='w',pady=(0,12))
     if kind not in ('Patró rítmic','Ritme de bateria'):
       ttk.Label(pane,text='Nota fonamental').pack(anchor='w',pady=(4,2))
       ttk.Combobox(pane,textvariable=self.harmony_root,values=NOTE_NAMES,state='readonly').pack(fill='x')
       ttk.Label(pane,text='Escala / mode').pack(anchor='w',pady=(9,2))
       ttk.Combobox(pane,textvariable=self.harmony_scale,values=list(SCALE_INTERVALS),state='readonly').pack(fill='x')
     ttk.Label(pane,text='Força de les notes MIDI (1–127)').pack(anchor='w',pady=(9,2))
-    tk.Spinbox(pane,textvariable=self.harmony_velocity,from_=1,to=127,bg='#e9d8c2').pack(anchor='w')
+    tk.Spinbox(pane,textvariable=self.harmony_velocity,from_=1,to=127,bg=SURFACE,fg=TEXT).pack(anchor='w')
     if kind in ('Arpegiador espacial','Patró rítmic'):
       ttk.Label(pane,text='Divisió rítmica').pack(anchor='w',pady=(10,2))
       ttk.Combobox(pane,textvariable=self.arp_division,values=['1 temps','1/2 temps','1/4 temps','1/8 temps','1/16 temps'],state='readonly').pack(fill='x')
       ttk.Label(pane,text='Durada de les notes (%)').pack(anchor='w',pady=(10,2))
-      tk.Spinbox(pane,textvariable=self.arp_gate,from_=10,to=95,increment=5,bg='#e9d8c2').pack(anchor='w')
+      tk.Spinbox(pane,textvariable=self.arp_gate,from_=10,to=95,increment=5,bg=SURFACE,fg=TEXT).pack(anchor='w')
     if kind=='Arpegiador espacial':
       ttk.Label(pane,text='Direcció de les notes').pack(anchor='w',pady=(10,2))
       ttk.Combobox(pane,textvariable=self.arp_direction,values=ARP_DIRECTIONS,state='readonly').pack(fill='x')
@@ -1066,12 +1061,12 @@ class App:
       ttk.Label(pane,text='Ritme complet amb una sola targeta').pack(anchor='w',pady=(10,2))
       ttk.Combobox(pane,textvariable=self.drum_preset,values=list(DRUM_PRESETS),state='readonly').pack(fill='x')
       ttk.Label(pane,text='Canal MIDI de la pista de bateria (1–16)').pack(anchor='w',pady=(10,2))
-      tk.Spinbox(pane,textvariable=self.channel,from_=1,to=16,bg='#e9d8c2').pack(anchor='w')
+      tk.Spinbox(pane,textvariable=self.channel,from_=1,to=16,bg=SURFACE,fg=TEXT).pack(anchor='w')
       ttk.Label(pane,text='Notes MIDI · adapta-les al mapa del teu instrument').pack(anchor='w',pady=(10,2))
       mapping=ttk.Frame(pane);mapping.pack(fill='x')
       for row,(name,var) in enumerate(self.drum_notes.items()):
         ttk.Label(mapping,text=name).grid(row=row,column=0,sticky='w',padx=4,pady=3)
-        tk.Spinbox(mapping,textvariable=var,from_=0,to=127,width=6,bg='#e9d8c2').grid(row=row,column=1,padx=8,pady=3)
+        tk.Spinbox(mapping,textvariable=var,from_=0,to=127,width=6,bg=SURFACE,fg=TEXT).grid(row=row,column=1,padx=8,pady=3)
       ttk.Label(pane,text='Ensenya la targeta: sona el ritme. Retira-la: s’atura. Un compàs 4/4 al tempo del ATMO ESFERA FX. Ruta la sortida MIDI a MT Power Drum Kit dins de Sonar.',wraplength=390).pack(anchor='w',pady=10)
     def apply():
       if self.card_id.get()!=selected or self.fun.get()!=kind:
@@ -1122,7 +1117,7 @@ class App:
         if not 1<=int(self.channel.get())<=16 or not 0<=int(self.cc.get())<=119 or not all(0<=value<=127 for value in mute_values) or mute_values[0]==mute_values[1]:raise ValueError('Mute: canal 1–16, CC 0–119 i dos valors diferents entre 0 i 127.')
         for i,other in enumerate(self.cards):
           if i!=card_index and other['function']==MUTE_FUNCTION and (other['channel'],other['cc'])==(int(self.channel.get()),int(self.cc.get())):raise ValueError(f'La ruta Mute ja és de la targeta {i+1:02d}. Tria un altre canal o CC per a una pista independent.')
-      previous=self.cards[card_index]
+      previous=dict(self.cards[card_index])
       prospective=list(self.cards);prospective[card_index]=dict(previous,function=self.fun.get(),channel=max(1,min(16,int(self.channel.get()))))
       if self.fun.get()==CHAOS_FUNCTION:
         config=self.kaoss_draft or default_config(self,card_index)
@@ -1154,7 +1149,8 @@ class App:
       if c['visual']==12 and int(self.card_id.get())-1 in self.active:self.select_visual(12)
       self.select_card_preview(card_index)
       self.sync_mute_controls()
-      self.apply_all_volumes()
+      if card_index in getattr(self,'mixer_rows',{}):self.mixer_rows[card_index]['name'].config(text=c.get('name',''))
+      if previous.get('channel')!=c.get('channel'):self.apply_all_volumes()
       self.status.set(f'Targeta {self.card_id.get()} configurada. Desa el projecte per conservar els canvis.');self.update_cards_table()
       return True
     except Exception as e:
@@ -1167,6 +1163,40 @@ class App:
     def close():
       if self.rules_editor.discard():window.destroy();self.rules_window=None;self.rules_editor=None
     window.protocol('WM_DELETE_WINDOW',close)
+ def enable_zone_audio(self):
+    self.local_audio.enable()
+    self.status.set('Activant àudio local. Si falta el complement, executa INSTAL_LAR_AUDIO_LOCAL.bat amb Python 3.12.')
+    self.update_spatial_editor_runtime()
+ def stop_zone_audio_test(self):
+    self.audio_test_generation=getattr(self,'audio_test_generation',0)+1
+    try:self.local_audio.submit(AudioCommand('stop_sound','zone-preview','operator',fade_s=.2))
+    except ValueError as exc:self.status.set(str(exc))
+ def test_zone_audio(self):
+    editor=self.zone_editor
+    if editor is None or not editor.audio_path.get():
+      self.status.set('Tria un fitxer de so per provar la zona.');return
+    if self.muted:
+      self.status.set('Desactiva SILENCI ABSOLUT abans de provar el so.');return
+    try:
+      path=Path(editor.audio_path.get())
+      if not path.is_absolute():
+        project=self.zone_project_path()
+        if project is None:raise ValueError('Desa el projecte o tria un fitxer amb ruta absoluta')
+        path=Path(project).resolve().parent/path
+      command=AudioCommand('play_sound','zone-preview','operator',path=str(path.resolve()),gain=float(editor.audio_gain.get()),fade_s=float(editor.audio_fade_in_s.get()))
+    except (ValueError,tk.TclError) as exc:self.status.set(str(exc));return
+    self.stop_zone_audio_test();generation=self.audio_test_generation
+    context=self.calibration_generation
+    self.enable_zone_audio()
+    deadline=time.monotonic()+5
+    def play_when_ready():
+      if generation!=self.audio_test_generation or context!=self.calibration_generation or self.muted or getattr(self,'_closing',False):return
+      status=self.local_audio.snapshot()
+      if status.state=='starting' and time.monotonic()<deadline:self.root.after(50,play_when_ready);return
+      if status.state!='ready':self.status.set('No es pot provar el so: '+status.detail);self.update_spatial_editor_runtime();return
+      try:self.local_audio.submit(command)
+      except ValueError as exc:self.status.set(str(exc))
+    play_when_ready()
  def open_local_audio(self):
     if self.audio_window is not None and self.audio_window.winfo_exists():self.audio_window.lift();return
     window=self.audio_window=tk.Toplevel(self.root);window.title('ÀUDIO LOCAL · '+APP_VERSION);window.geometry('940x600')
@@ -1174,6 +1204,7 @@ class App:
     def close():window.destroy();self.audio_window=None;self.audio_view=None
     window.protocol('WM_DELETE_WINDOW',close)
  def stop_local_audio(self):
+    self.audio_test_generation=getattr(self,'audio_test_generation',0)+1
     if hasattr(self,'zone_audio'):self.zone_audio.stop()
     if hasattr(self,'local_audio'):self.local_audio.stop_all()
  def confirm_rule_discard(self):
@@ -1399,7 +1430,7 @@ class App:
     win=self.make_panel_window('diagnostic','DIAGNOSI MIDI','940x550+80+100');self.diagnostics_window=win
     ttk.Label(win,text='Registre LOCAL: no confirma recepció a Sonar ni l’estat del Mute. Canals: 1–16. Absència ArUco: 250 ms.',wraplength=900).pack(fill='x',padx=10,pady=8)
     holder=ttk.Frame(win);holder.pack(fill='both',expand=True,padx=10,pady=4)
-    self.diagnostics_text=tk.Text(holder,height=16,wrap='none',font=('Consolas',9),bg='#171411',fg='#f2dcc4',state='disabled')
+    self.diagnostics_text=tk.Text(holder,height=16,wrap='none',font=('Segoe UI',9),bg=SURFACE,fg=TEXT,state='disabled')
     scroll=ttk.Scrollbar(holder,orient='vertical',command=self.diagnostics_text.yview);scroll.pack(side='right',fill='y')
     self.diagnostics_text.configure(yscrollcommand=scroll.set);self.diagnostics_text.pack(fill='both',expand=True)
     tools=ttk.Frame(win);tools.pack(fill='x',padx=10,pady=5)
@@ -1477,10 +1508,10 @@ class App:
             for control in (64,120,123):
               try:self.midi.send(mido.Message('control_change',channel=channel,control=control,value=0))
               except Exception:failures+=1
-        self.panic_button.config(text='REPRENDRE MIDI',bg='#406c39')
+        self.panic_button.config(text='REPRENDRE MIDI',bg='#72dfa8',fg=BG)
         self.status.set('MIDI bloquejat. Prem REPRENDRE MIDI per continuar.' if not failures else 'MIDI bloquejat, però no s’ha pogut enviar tot el silenci al dispositiu. Comprova Cakewalk.')
       else:
-        self.panic_button.config(text='SILENCI ABSOLUT',bg='#a52626')
+        self.panic_button.config(text='SILENCI ABSOLUT',bg=DANGER)
         self.status.set('MIDI reprès. Torna a activar les targetes.')
  def toggle_simulation(self):
     self.simulation_release()
@@ -1543,8 +1574,8 @@ class App:
       self.projection.lift();return
     self.projection=tk.Toplevel(self.root);self.projection.title('PROJECCIÓ · ATMO ESFERA FX');self.projection.geometry('960x540');self.projection.configure(bg='black')
     self.proj_label=tk.Label(self.projection,bg='black');self.proj_label.pack(fill='both',expand=True)
-    self.projection.bind('<F11>',lambda e:self.projection.attributes('-fullscreen',not self.projection.attributes('-fullscreen')))
-    self.projection.bind('<Escape>',lambda e:self.projection.attributes('-fullscreen',False))
+    self.projection.bind('<F11>',lambda e=None:self.projection.attributes('-fullscreen',not self.projection.attributes('-fullscreen')))
+    self.projection.bind('<Escape>',lambda e=None:self.projection.attributes('-fullscreen',False))
     self.projection.protocol('WM_DELETE_WINDOW',self.projection.destroy)
  def toggle_record(self):
     if self.recording:
@@ -2291,7 +2322,7 @@ class App:
     factor=min(available_w/w,available_h/h)
     size=(max(1,int(w*factor)),max(1,int(h*factor)))
     if size!=(w,h):rgb=cv2.resize(rgb,size,interpolation=cv2.INTER_AREA if factor<1 else cv2.INTER_LINEAR)
-    photo=ImageTk.PhotoImage(Image.fromarray(rgb))
+    photo=ImageTk.PhotoImage(Image.fromarray(rgb),master=label)
     setattr(self,attr,photo);label.config(image=photo,text='')
  def close(self):
     if not self.confirm_rule_discard():return

@@ -92,12 +92,12 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
                 self.assertEqual(app.participants.states(app.marker_tracker.snapshot())['p4'].presence,'retired')
                 self.assertEqual({e.participant_id for e in app.common_events.snapshot() if e.kind=='marker_appeared'},
                                  {f'p{i}' for i in range(5)})
-            for timer in root.tk.call('after','info'):root.after_cancel(timer)
+            for timer in root.tk.call('after','info'):root.tk.call('after','cancel',timer)
             app.close()
             return [call.args[0] for call in port.send.call_args_list],outputs,snapshots,errors
         finally:
             if root.tk.call('info','commands','.'):
-                for timer in root.tk.call('after','info'):root.after_cancel(timer)
+                for timer in root.tk.call('after','info'):root.tk.call('after','cancel',timer)
                 app.close()
 
     def test_five_real_synthetic_markers_keep_midi_and_public_frames_identical(self):
@@ -157,7 +157,7 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
             self.assertIsNone(app.zone_projection.image)
             self.assertEqual(app.zone_projection.mode,'live')
         finally:
-            for timer in root.tk.call('after','info'):root.after_cancel(timer)
+            for timer in root.tk.call('after','info'):root.tk.call('after','cancel',timer)
             app.close()
 
     def test_common_zone_observer_preserves_exact_public_photographs_and_all_duration_modes(self):
@@ -187,7 +187,7 @@ class TrackingCameraIntegrationTests(unittest.TestCase):
                     outputs.append(app.last_frame.copy());modes.append(app.zone_projection.mode)
                 return outputs,modes,[call.args[0] for call in port.send.call_args_list]
             finally:
-                for timer in root.tk.call('after','info'):root.after_cancel(timer)
+                for timer in root.tk.call('after','info'):root.tk.call('after','cancel',timer)
                 app.close()
         with TemporaryDirectory() as folder:
             path=Path(folder)/'red.png';Image.new('RGB',(40,30),'red').save(path)

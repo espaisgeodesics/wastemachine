@@ -14,8 +14,8 @@ ENGINE=ROOT/'atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py'
 
 class TitlebarTests(unittest.TestCase):
     def test_colorref_uses_windows_bgr_byte_order(self):
-        self.assertEqual(colorref('#0b1224'),0x24120b)
-        self.assertEqual(colorref('#f5f7ff'),0xfff7f5)
+        self.assertEqual(colorref('#080e20'),0x200e08)
+        self.assertEqual(colorref('#f2f6ff'),0xfff6f2)
 
     def test_native_dark_caption_attributes_and_no_geometry_change(self):
         calls=[]
@@ -28,8 +28,8 @@ class TitlebarTests(unittest.TestCase):
         with patch('atmo_windows.sys.platform','win32'),patch.object(ctypes,'windll',SimpleNamespace(user32=user,dwmapi=dwm),create=True):
             self.assertTrue(dark_titlebar(window))
         self.assertIn((20,1),calls)
-        self.assertIn((35,colorref('#0b1224')),calls)
-        self.assertIn((36,colorref('#f5f7ff')),calls)
+        self.assertIn((35,colorref('#080e20')),calls)
+        self.assertIn((36,colorref('#f2f6ff')),calls)
         user.SetWindowPos.assert_called_once_with(123,None,0,0,0,0,0x0037)
         window.overrideredirect.assert_not_called()
 
@@ -81,7 +81,7 @@ class ModeAndFrameTests(unittest.TestCase):
         outer=tk.Frame.call_args_list[0].kwargs
         self.assertEqual(outer['highlightthickness'],0)
         self.assertEqual(outer['bd'],0)
-        self.assertEqual(outer['bg'],'#0b1224')
+        self.assertEqual(outer['bg'],'#080e20')
         self.assertEqual(tk.Label.call_count,1)
         self.assertEqual(tk.Label.call_args.kwargs['text'],'EDITOR DE TARGETES')
 

@@ -13,8 +13,7 @@ from atmo_runtime import adapt_engine, configure_theme, theme_widgets, reveal_wi
 
 BASE = Path(__file__).resolve().parent
 ENGINE = BASE / "atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py"
-BG="#0b1224"; PANEL="#16243d"; SURFACE="#203452"
-TEXT="#f5f7ff"; MUTED="#a8bad5"; CYAN="#45d4d2"; PURPLE="#9b8cff"
+from atmo_runtime import BG, PANEL, SURFACE, TEXT, MUTED, CYAN, PURPLE
 MODES=("Joc","Música","Exposició","Instal·lació immersiva")
 SECTIONS=("Espai","Targetes","Accions","Música i àudio","Visuals","Prova","Projectes")
 

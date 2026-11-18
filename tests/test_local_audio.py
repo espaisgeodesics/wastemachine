@@ -87,7 +87,7 @@ class AudioEngineTests(unittest.TestCase):
         with self.assertRaises(OSError):self.engine.dispatch(AudioCommand('play_sound','birds','camera:0',0,'missing.wav'),.1)
         self.assertEqual(self.engine.snapshot(),before)
         bad=Path(self.temp.name)/'bad.wav';bad.write_text('not a wave')
-        with self.assertRaises((wave.Error,EOFError)):self.engine.dispatch(AudioCommand('play_sound','birds','camera:0',0,str(bad)),.1)
+        with self.assertRaises((wave.Error,EOFError,RuntimeError)):self.engine.dispatch(AudioCommand('play_sound','birds','camera:0',0,str(bad)),.1)
         self.assertEqual(self.engine.snapshot(),before)
 
     def test_saturation_never_steals_an_existing_channel(self):
@@ -107,7 +107,8 @@ class AudioEngineTests(unittest.TestCase):
 
     def test_file_limits_checked_before_decode_and_nonfinite_commands_rejected(self):
         long=wav(Path(self.temp.name)/'long.wav',seconds=31,rate=8000)
-        with self.assertRaises(ValueError):inspect_clip(long)
+        self.assertEqual(inspect_clip(long)[2],31)
+        self.assertEqual(inspect_clip(long)[3],0)
         invalid=wav(Path(self.temp.name)/'three.wav',channels=3)
         with self.assertRaises(ValueError):inspect_clip(invalid)
         for kwargs in ({'gain':float('nan')},{'fade_s':float('inf')},{'gain':1.1},{'loop':'yes'},{'scope':'all'},{'marker_id':True}):

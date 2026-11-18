@@ -13,6 +13,7 @@ from test_camera import app_module as m
 @unittest.skipUnless(os.environ.get('DISPLAY') or os.name == 'nt', 'Requires a graphical display')
 class ParticipantEditorTests(unittest.TestCase):
     def setUp(self):
+        discard=patch.object(m.messagebox,'askyesnocancel',return_value=False);discard.start();self.addCleanup(discard.stop)
         self.root = m.tk.Tk()
         with patch.object(m.mido, 'get_output_names', return_value=[]):
             self.app = m.App(self.root)
@@ -29,7 +30,7 @@ class ParticipantEditorTests(unittest.TestCase):
             self.app.participant_window = None
             self.app.participant_editor = None
         for timer in self.root.tk.call('after', 'info'):
-            self.root.after_cancel(timer)
+            self.root.tk.call('after','cancel',timer)
         self.app.close()
 
     def add_person(self, name='Laia', marker='0', color='#00CC88'):

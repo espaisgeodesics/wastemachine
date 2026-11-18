@@ -120,7 +120,7 @@ class NativeApplyTests(unittest.TestCase):
             'arp_division':'1/2 temps','arp_gate':60,'harmony_root':'La','harmony_scale':'Menor natural (eòlica)',
             'harmony_velocity':85,'axis':'Horitzontal','note':60,'cc':74,'visual':'visual','status':''}
         for name,value in values.items():setattr(app,name,Value(value))
-        app.apply_all_volumes=Mock()
+        app.apply_all_volumes=Mock();app.refresh_mixer=Mock()
         app.live_kaoss=LiveKaoss(app)
         return app
 

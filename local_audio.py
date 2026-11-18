@@ -13,7 +13,9 @@ import wave
 MAX_CLIP_BYTES = 8 * 1024 * 1024
 MAX_CACHE_BYTES = 32 * 1024 * 1024
 MAX_CACHE_ITEMS = 32
-MAX_DURATION_S = 30
+MAX_DURATION_S = 7200
+SHORT_CLIP_S = 30
+STREAM_CHUNK_S = .5
 RATE = 48000
 
 
@@ -24,6 +26,7 @@ class AudioClip:
     duration_s: float
     size_bytes: int
     payload: object = None
+    streamed: bool = False
 
 
 @dataclass(frozen=True)
@@ -72,26 +75,25 @@ def command_from_request(request, project_file=None):
 def inspect_clip(path):
     path = Path(path).resolve()
     if path.suffix.lower() not in ('.wav', '.ogg'):
-        raise ValueError('Només WAV PCM i OGG per al prototip d’àudio')
+        raise ValueError('Tria un fitxer WAV o OGG')
     stat = path.stat()
-    if stat.st_size > 16 * 1024 * 1024:
-        raise ValueError('El fitxer supera el límit de 16 MiB')
-    if path.suffix.lower() == '.wav':
+    if stat.st_size > 2 * 1024 * 1024 * 1024:
+        raise ValueError('El fitxer supera el límit de 2 GiB')
+    try:
+        if path.suffix.lower() != '.wav':raise wave.Error('Use soundfile')
         with wave.open(str(path), 'rb') as stream:
             rate, channels, frames = stream.getframerate(), stream.getnchannels(), stream.getnframes()
-            if stream.getcomptype() != 'NONE' or stream.getsampwidth() not in (1, 2, 3, 4):
-                raise ValueError('Cal un WAV PCM')
-    else:
+            if stream.getcomptype() != 'NONE':raise wave.Error('Use soundfile')
+    except wave.Error:
         import soundfile as sf
         info = sf.info(str(path))
-        if info.format != 'OGG':
-            raise ValueError('El fitxer no és un OGG vàlid')
+        if info.format not in ('WAV','WAVEX','RF64','OGG'):raise ValueError('El fitxer no és WAV / OGG vàlid')
         rate, channels, frames = info.samplerate, info.channels, info.frames
     if not 8000 <= rate <= 96000 or channels not in (1, 2) or frames <= 0 or frames / rate > MAX_DURATION_S:
-        raise ValueError('Clips mono/estèreo de fins a 30 s, entre 8 i 96 kHz')
+        raise ValueError('Àudio mono/estèreo de fins a 2 hores, entre 8 i 96 kHz')
     size = max(1,round(frames * RATE / rate)) * 4  # 48 kHz, signed 16 bit stereo
-    if size > MAX_CLIP_BYTES:
-        raise ValueError('El clip descodificat supera 8 MiB')
+    # Songs are streamed in bounded chunks instead of decoded into the cache.
+    if size > MAX_CLIP_BYTES or frames / rate > SHORT_CLIP_S:size=0
     return path, (str(path), stat.st_mtime_ns, stat.st_size), frames / rate, size
 
 
@@ -133,7 +135,7 @@ class SilentAudioBackend:
         return clip
 
     def _decode(self, path, key, duration, size):
-        return AudioClip(key, path, duration, size)
+        return AudioClip(key, path, duration, size, streamed=size==0)
 
     def start(self, clip, slot, loop, now):
         if self.closed:raise RuntimeError('Backend d’àudio tancat')
@@ -159,7 +161,7 @@ class SilentAudioBackend:
 class PygameAudioBackend(SilentAudioBackend):
     """Exclusive optional SDL mixer. Channels are allocated explicitly, never stolen."""
     _mixer_lock = RLock()
-    description='Àudio local actiu · SDL · 48 kHz · clips curts'
+    description='Àudio local actiu · SDL · 48 kHz · clips i cançons'
 
     def __init__(self):
         super().__init__()
@@ -168,6 +170,7 @@ class PygameAudioBackend(SilentAudioBackend):
             import soundfile
         except ImportError as exc:
             raise RuntimeError('Instal·la requirements-audio.txt per activar l’àudio local') from exc
+        self.streams = {}
         self.pg = pygame
         self.sf = soundfile
         with self._mixer_lock:
@@ -189,10 +192,11 @@ class PygameAudioBackend(SilentAudioBackend):
     def _decode(self, path, key, duration, size):
         import numpy as np
         self._ready()
+        if size==0:return AudioClip(key,path,duration,0,str(path),True)
         with self.sf.SoundFile(str(path)) as stream:
             if stream.channels not in (1, 2) or not 8000 <= stream.samplerate <= 96000:
                 raise ValueError('Format d’àudio no admès')
-            limit = min(stream.samplerate * MAX_DURATION_S, MAX_CLIP_BYTES // (2 * stream.channels))
+            limit = min(stream.samplerate * SHORT_CLIP_S, MAX_CLIP_BYTES // (2 * stream.channels))
             data = stream.read(frames=limit+1, dtype='int16', always_2d=True)
             rate = stream.samplerate
         if not len(data) or len(data) > limit:
@@ -209,10 +213,37 @@ class PygameAudioBackend(SilentAudioBackend):
         sound = self.pg.sndarray.make_sound(data)
         return AudioClip(key, path, sound.get_length(), data.nbytes, sound)
 
+    def _chunk(self, state):
+        import numpy as np
+        stream=state['file']
+        data=stream.read(max(1,round(stream.samplerate*STREAM_CHUNK_S)),dtype='int16',always_2d=True)
+        if not len(data) and state['loop']:
+            stream.seek(0)
+            data=stream.read(max(1,round(stream.samplerate*STREAM_CHUNK_S)),dtype='int16',always_2d=True)
+        if not len(data):state['eof']=True;return None
+        if stream.channels==1:data=np.repeat(data,2,axis=1)
+        if stream.samplerate!=RATE:
+            count=max(1,round(len(data)*RATE/stream.samplerate))
+            indexes=np.arange(count)*stream.samplerate/RATE
+            original=np.arange(len(data))
+            data=np.column_stack([np.interp(indexes,original,data[:,c]) for c in range(2)]).astype(np.int16)
+        return self.pg.sndarray.make_sound(np.ascontiguousarray(data))
+
     def start(self, clip, slot, loop, now):
         self._ready()
+        state=None
+        if clip.streamed:
+            state=dict(file=self.sf.SoundFile(str(clip.path)),loop=loop,eof=False)
+            try:first=self._chunk(state)
+            except Exception:state['file'].close();raise
+            if first is None:state['file'].close();raise ValueError('El fitxer de so és buit')
+        self.stop(slot)
         channel=self.pg.mixer.Channel(slot);channel.set_volume(0.)
-        channel.play(clip.payload, loops=-1 if loop else 0)
+        if state is not None:
+            self.streams[slot]=state;channel.play(first)
+            second=self._chunk(state)
+            if second is not None:channel.queue(second)
+        else:channel.play(clip.payload, loops=-1 if loop else 0)
         super().start(clip, slot, loop, now)
 
     def volume(self, slot, gain):
@@ -220,17 +251,26 @@ class PygameAudioBackend(SilentAudioBackend):
         super().volume(slot, gain)
 
     def stop(self, slot):
+        state=self.streams.pop(slot,None)
+        if state is not None:state['file'].close()
         if not self.closed and self.pg.mixer.get_init() is not None:self.pg.mixer.Channel(slot).stop()
         super().stop(slot)
 
     def busy(self, slot, now):
-        self._ready()
-        result = self.pg.mixer.Channel(slot).get_busy()
-        if not result:super().stop(slot)
+        self._ready();channel=self.pg.mixer.Channel(slot)
+        state=self.streams.get(slot)
+        if state is not None and not state['eof'] and channel.get_queue() is None:
+            chunk=self._chunk(state)
+            if chunk is not None:
+                if channel.get_busy():channel.queue(chunk)
+                else:channel.play(chunk)
+        result=channel.get_busy()
+        if not result:self.stop(slot)
         return result
 
     def close(self):
         with self._mixer_lock:
+            for slot in list(self.streams):self.stop(slot)
             if not self.closed:self.pg.mixer.quit()
             super().close()
 

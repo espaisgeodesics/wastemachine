@@ -1,3 +1,7 @@
+## Versió actual: ATMO ESFERA FX 19 · Atmosfera viva
+
+Obre **OBRIR_ATMO.bat**. [Novetats, WAV i instruccions](ATMO_ESFERA_FX_INTEGRACIO_19.md). [Informe de proves](VALIDACIO/INFORME_PROVES.md).
+
 ## Versió actual: ATMO ESFERA FX 18
 
 Obre **OBRIR_ATMO.bat** amb Python 3.12. Consulta [les novetats de la integració 18](ATMO_ESFERA_FX_INTEGRACIO_18.md).

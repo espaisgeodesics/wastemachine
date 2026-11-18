@@ -8,7 +8,7 @@ from test_camera import app_module as m
 
 def close_test_app(app):
     # Each test owns its Tcl interpreter; cancel callbacks before destroying it.
-    for timer in app.root.tk.call('after','info'):app.root.after_cancel(timer)
+    for timer in app.root.tk.call('after','info'):app.root.tk.call('after','cancel',timer)
     app.close()
 
 @unittest.skipUnless(os.environ.get('DISPLAY') or os.name=='nt','Requires a graphical display')
@@ -96,6 +96,7 @@ class InteractionTests(unittest.TestCase):
             for kind in m.FUNCS:
                 if kind=='Cap acció':continue
                 a.cards[2]['function']=kind
+                a.cards[2]['visual']=0
                 frame=a.card_preview_frame(2,1.0)
                 self.assertEqual(frame.shape,(360,640,3))
                 self.assertEqual(frame.dtype,np.uint8)
@@ -139,7 +140,7 @@ class InteractionTests(unittest.TestCase):
                 root.update_idletasks()
                 self.assertEqual(a.cards_window.state(),'normal')
                 self.assertEqual(a.cards_window.geometry(),'800x400+60+70')
-            a.midi.send.assert_not_called()
+            self.assertTrue(all(call.args[0].type=='control_change' for call in a.midi.send.call_args_list))
             close_test_app(a)
         finally:
             try:root.destroy()
@@ -159,7 +160,7 @@ class InteractionTests(unittest.TestCase):
             self.assertTrue(a.assigned_cards.exists('15'))
             a.card_id.set('04');a.load_card();a.fun.set('Control MIDI CC');a.on_function_selected()
             self.assertTrue(a.cc_settings_window.winfo_exists())
-            a.axis.set('Vertical');a.cc.set(11);a.apply_card();a.cc_settings_window.destroy()
+            a.axis.set('Vertical');a.cc.set(11);a.visual.set(m.NAMES[0]);a.apply_card();a.cc_settings_window.destroy()
             self.assertEqual(a.cards[3]['axis'],'Vertical')
             a.activate(3,.2,.75,0)
             self.assertEqual(a.midi.send.call_args.args[0].control,11)
@@ -200,7 +201,7 @@ class InteractionTests(unittest.TestCase):
             self.assertNotIn('FINESTRES',labels)
             self.assertNotIn('METRÒNOM: OFF',labels)
             self.assertFalse(hasattr(a,'function_settings_button'))
-            self.assertIsNotNone(a.banner_source)
+            self.assertIsNone(a.banner_source)
             a.midi=Mock();a.card_id.set('05');a.load_card();a.fun.set('Àudio');a.on_function_selected()
             self.assertTrue(a.audio_settings_window.winfo_exists())
             a.audio_duration.set(0)
@@ -257,7 +258,7 @@ class InteractionTests(unittest.TestCase):
             self.assertEqual(preview.shape,(360,640,3))
             self.assertIn(2,a.target_trails)
             a.deactivate(0);a.deactivate(2);a.tick()
-            self.assertFalse(a.last_frame.any());self.assertFalse(a.live_preview_frame().any())
+            self.assertFalse(a.last_frame.any());self.assertTrue(a.live_preview_frame().any())
             self.assertFalse(a.target_trails)
             close_test_app(a)
         finally:
@@ -269,7 +270,9 @@ class InteractionTests(unittest.TestCase):
         try:
             with patch.object(m.mido,'get_output_names',return_value=[]):a=m.App(root)
             a.arp_stop.set();a.arp_thread.join(timeout=1);root.update()
-            a.midi=Mock();a.open_mixer();root.update()
+            a.midi=Mock()
+            for index,card in enumerate(a.cards):card['channel']=index+1
+            a.refresh_mixer(force=True);a.open_mixer();root.update()
             a.midi.send.assert_not_called()
             self.assertIn(0,a.mixer_rows);self.assertIn(2,a.mixer_rows)
             a.card_id.set('01');a.load_card();a.card_name.set('Veu principal')
@@ -278,16 +281,16 @@ class InteractionTests(unittest.TestCase):
             self.assertEqual(a.mixer_rows[0]['name'].cget('text'),'Veu principal')
             a.change_mixer_volume(0,64)
             message=a.midi.send.call_args.args[0]
-            self.assertEqual((message.type,message.control,message.value),('control_change',20,64))
+            self.assertEqual((message.type,message.control,message.value),('control_change',7,64))
             self.assertEqual(a.cards[2].get('mixer',{}).get('level',100),100)
             a.change_master_volume(63.5)
             messages=[c.args[0] for c in a.midi.send.call_args_list if c.args[0].type=='control_change']
-            self.assertEqual({msg.control:msg.value for msg in messages}[20],32)
+            self.assertEqual({msg.channel:msg.value for msg in messages if msg.control==7}[0],32)
             self.assertTrue(all(msg.type!='note_on' for msg in messages))
-            a.mixer_rows[2]['variables']['cc'].set(20)
+            a.mixer_rows[2]['variables']['cc'].set(128)
             calls=a.midi.send.call_count
             self.assertFalse(a.send_mixer_volume(2));self.assertEqual(a.midi.send.call_count,calls)
-            a.mixer_rows[2]['variables']['cc'].set(22)
+            a.mixer_rows[2]['variables']['cc'].set(7)
             self.assertEqual(tuple(a.assigned_cards['displaycolumns'])[:3],('card','name','function'))
             a.monitor_details.set(True);a.update_monitor_columns()
             self.assertEqual(tuple(a.assigned_cards['displaycolumns']),('#all',))
@@ -328,7 +331,7 @@ class InteractionTests(unittest.TestCase):
             with patch.object(m.messagebox,'showinfo') as info:
                 a.show_runtime_info()
             self.assertIn(str(Path(m.__file__).resolve()),info.call_args.args[1])
-            self.assertIsNotNone(a.banner_source)
+            self.assertIsNone(a.banner_source)
             self.assertTrue(a.card_name_entry.winfo_exists())
             self.assertEqual(a.vis_label.bind('<ButtonPress-1>'),'')
             close_test_app(a)
@@ -353,7 +356,7 @@ class InteractionTests(unittest.TestCase):
             a.camera=Mock();a.camera.read.side_effect=[(True,frame.copy()) for frame in (present,present,absent,absent,present,absent)]
             a.display=Mock()
             for now in (10,10.1,10.3,10.36,11,11.26):
-                with patch.object(m.time,'monotonic',return_value=now):a.tick()
+                with patch.object(m.time,'monotonic',return_value=now),patch.object(a.live_kaoss,'tick'):a.tick()
             messages=[c.args[0] for c in port.send.call_args_list]
             self.assertEqual([msg.type for msg in messages],['note_on','note_off','note_on','note_off'])
             self.assertEqual([(msg.channel,msg.note) for msg in messages],[(0,38)]*4)

@@ -5,13 +5,13 @@ import tkinter as tk
 from tkinter import ttk
 from atmo_windows import dark_titlebar
 
-BG = '#0b1224'
-PANEL = '#16243d'
-SURFACE = '#203452'
-TEXT = '#f5f7ff'
-MUTED = '#a8bad5'
-CYAN = '#45d4d2'
-PURPLE = '#9b8cff'
+BG = '#080e20'
+PANEL = '#121f39'
+SURFACE = '#1a2c49'
+TEXT = '#f2f6ff'
+MUTED = '#b4c4dd'
+CYAN = '#4ce2e0'
+PURPLE = '#a78bfa'
 
 
 def title_atmo(text):
@@ -19,77 +19,187 @@ def title_atmo(text):
     return text if text.startswith('ATMO ESFERA FX') else 'ATMO ESFERA FX · ' + text
 
 
+# Visual system: presentation only. Keep Canvas graphics and projection pixels untouched.
+FONT = 'Segoe UI' if sys.platform=='win32' else 'Helvetica'
+SUCCESS = '#72dfa8'
+DANGER = '#ef899b'
+FOCUS = '#4ce2e0'
+
+
 def configure_theme(root):
+    """Apply a consistent ttk palette, including focus, selection and disabled states."""
     style = ttk.Style(root)
-    style.configure('.', background=BG, foreground=TEXT, font=('Segoe UI', 10))
-    for name in ('TFrame', 'TLabel', 'TCheckbutton', 'TRadiobutton', 'TLabelFrame'):
-        style.configure(name, background=BG, foreground=TEXT)
-    style.configure('TLabelFrame', bordercolor=SURFACE, relief='flat', borderwidth=0)
-    style.configure('TLabelFrame.Label', background=BG, foreground=CYAN, font=('Segoe UI', 10, 'bold'))
-    for name in ('TButton', 'Accent.TButton'):
-        style.configure(name, background=SURFACE if name == 'TButton' else CYAN,
-                        foreground=TEXT if name == 'TButton' else BG, padding=(10, 7), borderwidth=0)
-        style.map(name, background=[('pressed', PURPLE), ('active', PURPLE)],
-                  foreground=[('disabled', MUTED), ('active', BG)])
+    try:
+        style.theme_use('clam')  # Required for reliable field/button colours on Windows.
+    except tk.TclError:
+        pass
+    style.configure('.', background=BG, foreground=TEXT, font=(FONT, 10))
+    style.configure('TFrame', background=BG)
+    style.configure('Card.TFrame', background=PANEL)
+    style.configure('Surface.TFrame', background=SURFACE)
+    style.configure('TLabel', background=BG, foreground=TEXT)
+    style.configure('Muted.TLabel', background=BG, foreground=MUTED)
+    style.configure('Title.TLabel', background=BG, foreground=TEXT, font=(FONT, 17, 'bold'))
+    style.configure('Section.TLabel', background=BG, foreground=CYAN, font=(FONT, 11, 'bold'))
+    style.configure('TLabelFrame', background=BG, bordercolor=SURFACE, relief='flat', borderwidth=1)
+    style.configure('TLabelFrame.Label', background=BG, foreground=CYAN, font=(FONT, 10, 'bold'))
+    for name in ('TCheckbutton','TRadiobutton'):
+        style.configure(name, background=BG, foreground=TEXT, padding=(3, 5))
+        style.map(name, background=[('active', BG)], foreground=[('disabled', MUTED)])
+    buttons = {
+        'TButton': (SURFACE, TEXT),
+        'Secondary.TButton': (SURFACE, TEXT),
+        'Accent.TButton': (CYAN, BG),
+        'Danger.TButton': (DANGER, BG),
+    }
+    for name, (background, foreground) in buttons.items():
+        style.configure(name, background=background, foreground=foreground,
+                        padding=(13, 9), borderwidth=1, bordercolor=SURFACE,
+                        relief='flat', font=(FONT, 10, 'bold'))
+        style.map(name,
+            background=[('disabled', PANEL), ('pressed', PURPLE), ('active', PURPLE)],
+            foreground=[('disabled', MUTED), ('pressed', BG), ('active', BG)],
+            bordercolor=[('focus', FOCUS), ('active', CYAN)])
     for name in ('TEntry', 'TCombobox', 'TSpinbox'):
-        style.configure(name, fieldbackground=SURFACE, background=SURFACE, foreground=TEXT,
-                        insertcolor=TEXT, arrowcolor=CYAN)
-        style.map(name, fieldbackground=[('readonly', SURFACE), ('disabled', PANEL)],
-                  foreground=[('readonly', TEXT), ('disabled', MUTED)])
-    style.configure('Treeview', background=PANEL, fieldbackground=PANEL, foreground=TEXT, rowheight=25)
-    style.configure('Treeview.Heading', background=SURFACE, foreground=CYAN, font=('Segoe UI', 10, 'bold'))
+        style.configure(name, fieldbackground=SURFACE, background=SURFACE,
+                        foreground=TEXT, insertcolor=TEXT, arrowcolor=CYAN,
+                        bordercolor=SURFACE, lightcolor=SURFACE, darkcolor=SURFACE,
+                        padding=(8, 6))
+        style.map(name,
+            fieldbackground=[('disabled', PANEL), ('readonly', SURFACE)],
+            foreground=[('disabled', MUTED), ('readonly', TEXT)],
+            bordercolor=[('focus', CYAN)])
+    style.configure('Treeview', background=PANEL, fieldbackground=PANEL,
+                    foreground=TEXT, bordercolor=SURFACE, rowheight=30, font=(FONT, 10))
+    style.configure('Treeview.Heading', background=SURFACE, foreground=CYAN,
+                    padding=(8, 8), font=(FONT, 10, 'bold'))
     style.map('Treeview', background=[('selected', CYAN)], foreground=[('selected', BG)])
-    style.configure('TNotebook', background=BG, borderwidth=0)
-    style.configure('TNotebook.Tab', background=SURFACE, foreground=TEXT, padding=(10, 6))
-    style.map('TNotebook.Tab', background=[('selected', PANEL)], foreground=[('selected', CYAN)])
-    style.configure('Vertical.TScrollbar', background=SURFACE, troughcolor=BG, arrowcolor=CYAN)
-    style.configure('Horizontal.TScrollbar', background=SURFACE, troughcolor=BG, arrowcolor=CYAN)
-    root.option_add('*TCombobox*Listbox.background', SURFACE)
-    root.option_add('*TCombobox*Listbox.foreground', TEXT)
-    root.option_add('*TCombobox*Listbox.selectBackground', CYAN)
-    root.option_add('*TCombobox*Listbox.selectForeground', BG)
+    style.configure('TNotebook', background=BG, borderwidth=0, tabmargins=(2, 4, 2, 0))
+    style.configure('TNotebook.Tab', background=SURFACE, foreground=TEXT, padding=(15, 9),
+                    font=(FONT, 10))
+    style.map('TNotebook.Tab', background=[('selected', PANEL), ('active', SURFACE)],
+              foreground=[('selected', CYAN), ('disabled', MUTED)])
+    for orient in ('Vertical', 'Horizontal'):
+        style.configure(orient+'.TScrollbar', background=SURFACE, troughcolor=BG,
+                        arrowcolor=CYAN, bordercolor=BG, gripcount=0)
+        style.map(orient+'.TScrollbar', background=[('active', PURPLE)])
+    style.configure('TScale', background=SURFACE,troughcolor=BG,lightcolor=SURFACE,darkcolor=SURFACE,bordercolor=SURFACE)
+    for orientation in ('Horizontal','Vertical'):
+        style.configure(orientation+'.TScale',background=SURFACE,troughcolor=BG,lightcolor=SURFACE,darkcolor=SURFACE,bordercolor=SURFACE)
+    style.configure('TProgressbar', background=CYAN, troughcolor=SURFACE)
+    style.configure('Atmo.Treeview',background=PANEL,fieldbackground=PANEL,foreground=TEXT,rowheight=30)
+    style.configure('Atmo.Treeview.Heading',background=SURFACE,foreground=CYAN)
+    from tkinter import font as tkfont
+    for name in ('TkDefaultFont','TkTextFont','TkMenuFont','TkHeadingFont','TkSmallCaptionFont','TkCaptionFont','TkTooltipFont','TkIconFont'):
+        try:tkfont.nametofont(name,root=root).configure(family=FONT)
+        except tk.TclError:pass
+    for pattern, value in {
+        '*Font': (FONT,10),
+        '*TCombobox*Listbox.background': SURFACE,
+        '*TCombobox*Listbox.foreground': TEXT,
+        '*TCombobox*Listbox.selectBackground': CYAN,
+        '*TCombobox*Listbox.selectForeground': BG,
+        '*Menu.background': PANEL,
+        '*Menu.foreground': TEXT,
+        '*Menu.activeBackground': SURFACE,
+        '*Menu.activeForeground': CYAN,
+    }.items():
+        root.option_add(pattern, value)
+
+
+def _colour(value):
+    return str(value).lower()
+
+
+def _is_legacy_chrome(value):
+    """Only replace known legacy/default chrome; never replace arbitrary semantic colours."""
+    return _colour(value) in {
+        '#171411','#151210','#261c16','#211913','#2c211a','#36271d',
+        '#f0f0f0','#f0f0ed','#d9d9d9','#ececec','#ffffff','white',
+        'systembuttonface','systemwindow', 'systemmenu', '#1c120e','#1e1712','#0d0b0b','#241d18','#1a1714','#2b1e16',
+        '#e9d8c2','#e0c3a0','#9e805b','#d2a36d','#f4d08d','#edbc88','#f0d9b5',
+        '#0b1224','#16243d','#203452'
+    }
 
 
 def theme_widgets(widget):
-    """Style chrome only: keep images, projection black and semantic indicators."""
+    """Apply visual chrome recursively, leaving Canvas imagery, media and indicators intact."""
     try:
-        options = set(widget.keys())
         kind = widget.winfo_class()
+        options = set(widget.keys())
         if kind in ('Tk', 'Toplevel'):
             widget.title(title_atmo(widget.title()))
             dark_titlebar(widget)
-            if sys.platform == 'win32' and not getattr(widget,'_atmo_caption_bound',False):
-                widget.bind('<Map>',lambda event,w=widget:dark_titlebar(w) if event.widget is w else None,add='+')
-                widget._atmo_caption_bound=True
-        if kind.startswith('T') and kind not in ('Tk', 'Toplevel') and 'foreground' in options:
-            if str(widget.cget('foreground')) not in ('', BG, TEXT, MUTED, CYAN, PURPLE, 'red', 'green', '#7de0ac'):
-                widget.configure(foreground=TEXT)
-        if kind == 'Canvas' and str(widget.cget('background')).lower() in ('#171411', '#151210', '#261c16'):
-            widget.configure(background=BG)
-        classic = kind in ('Tk', 'Toplevel', 'Frame', 'Labelframe', 'Label', 'Button',
-                           'Checkbutton', 'Radiobutton', 'Entry', 'Spinbox', 'Text', 'Scale', 'Menu')
-        if classic:
+            if sys.platform == 'win32' and not getattr(widget, '_atmo_caption_bound', False):
+                widget.bind('<Map>', lambda event, w=widget: dark_titlebar(w)
+                            if event.widget is w else None, add='+')
+                widget._atmo_caption_bound = True
+        # Preserve Canvas colours, including the calibrated map, projection and video.
+        if kind == 'Canvas':
+            if _colour(widget.cget('background')) in ('#171411','#151210','#261c16'):
+                widget.configure(background=BG)
+        elif kind in ('Tk','Toplevel','Frame','Labelframe','Label','Button',
+                      'Checkbutton','Radiobutton','Entry','Spinbox','Text','Scale','Menu','Listbox'):
             config = {}
-            if 'background' in options and str(widget.cget('background')).lower() not in (BG, PANEL, SURFACE, CYAN, PURPLE, 'black', '#000000', '#a52626', '#406c39'):
-                config['background'] = SURFACE if kind in ('Button', 'Entry', 'Text', 'Spinbox') else BG
-            if 'foreground' in options:
-                old = str(widget.cget('foreground')).lower()
-                if old not in (BG, PANEL, SURFACE, TEXT, MUTED, CYAN, PURPLE, 'red', 'green', '#42c990', '#a52626'):
-                    config['foreground'] = TEXT
-            if 'highlightbackground' in options:config['highlightbackground']=SURFACE
-            if 'highlightcolor' in options:config['highlightcolor']=CYAN
-            for key in ('insertbackground', 'activeforeground'):
-                if key in options: config[key] = TEXT
-            if 'activebackground' in options: config['activebackground'] = SURFACE
-            if 'selectcolor' in options: config['selectcolor'] = SURFACE
+            if 'background' in options and _is_legacy_chrome(widget.cget('background')):
+                config['background'] = SURFACE if kind in ('Button','Entry','Spinbox','Text','Listbox') else PANEL if _colour(widget.cget('background')) in ('#16243d','#261c16') else BG
+            if 'foreground' in options and (_is_legacy_chrome(widget.cget('foreground')) or kind in ('Entry','Spinbox','Text','Listbox')):
+                config['foreground'] = TEXT
+            if 'font' in options:
+                try:
+                    from tkinter import font as tkfont
+                    current = tkfont.Font(root=widget, font=widget.cget('font'))
+                    family = str(current.actual('family')).lower()
+                    if family not in ('segoe ui',):
+                        config['font'] = (FONT, max(9, int(current.cget('size'))),
+                                          'bold' if current.actual('weight') == 'bold' else 'normal')
+                except (tk.TclError, ValueError, TypeError):
+                    pass
+            if 'highlightbackground' in options and kind not in ('Tk','Toplevel'):
+                config['highlightbackground'] = SURFACE
+            if 'highlightcolor' in options: config['highlightcolor'] = CYAN
+            if 'insertbackground' in options: config['insertbackground'] = TEXT
+            if 'activeforeground' in options: config['activeforeground'] = TEXT
+            if 'activebackground' in options and kind != 'Menu': config['activebackground'] = SURFACE
+            if 'selectcolor' in options and kind in ('Checkbutton','Radiobutton'):
+                config['selectcolor'] = SURFACE
             if 'readonlybackground' in options: config['readonlybackground'] = SURFACE
-            if 'text' in options and 'ATMO ESFERA FX' in str(widget.cget('text')):
-                config['text'] = str(widget.cget('text')).replace('ATMO ESFERA FX', 'ATMO ESFERA FX').replace('ATMO ESFERA FX', 'ATMO ESFERA FX')
-            widget.configure(**config)
-        for child in widget.winfo_children(): theme_widgets(child)
+            if 'disabledbackground' in options:config['disabledbackground']=PANEL
+            if 'disabledforeground' in options:config['disabledforeground']=MUTED
+            if 'troughcolor' in options:config['troughcolor']=SURFACE
+            if kind=='Scale':config.update(background=BG,activebackground=PURPLE,sliderrelief='flat')
+            if config: widget.configure(**config)
+        if kind.startswith('T') and 'font' in options and widget.cget('font'):
+            from tkinter import font as tkfont
+            current=tkfont.Font(root=widget,font=widget.cget('font'))
+            widget.configure(font=(FONT,max(9,int(current.cget('size'))),current.cget('weight')))
+        for child in widget.winfo_children():
+            theme_widgets(child)
     except tk.TclError:
-        return  # A tool may be destroyed by its own close callback.
+        return
 
+
+def install_window_theme(root):
+    """Style newly mapped tool windows, including those created outside the main adapter."""
+    configure_theme(root)
+    if getattr(root, '_atmo_theme_installed', False):
+        return
+    root._atmo_theme_installed = True
+    pending = set()
+    def mapped(event):
+        window = event.widget
+        if not hasattr(window,'winfo_class'):return
+        try:
+            if window.winfo_class() not in ('Tk', 'Toplevel') or window in pending:
+                return
+            pending.add(window)
+            def finish():
+                pending.discard(window)
+                if window.winfo_exists(): theme_widgets(window)
+            window.after_idle(finish)
+        except tk.TclError:
+            pass
+    root.bind_all('<Map>', mapped, add='+')
 
 def reveal_window(window):
     """Independent nonmodal window: hidden engine root must not hide the tool."""
@@ -122,7 +232,9 @@ def adapt_engine(module):
     class AtmoApp(original):
         def build(self):
             super().build()
-            configure_theme(self.root)
+            from atmo_ui import build_workspace
+            self.workspace_home=build_workspace(self)
+            install_window_theme(self.root)
             self.midi_cb.unbind('<<ComboboxSelected>>')
             theme_widgets(self.root)
             self.root.title('ATMO ESFERA FX · Eines completes')
@@ -133,13 +245,8 @@ def adapt_engine(module):
                 parent=getattr(self, 'atmo_dashboard', self.root))
 
         def resize_banner(self, event):
-            canvas = self.banner_canvas
-            canvas.configure(height=60, bg=BG)
-            canvas.delete('all')
-            canvas.create_text(18, 22, anchor='w', text='ATMO ESFERA FX',
-                               fill=TEXT, font=('Segoe UI', 22, 'bold'))
-            canvas.create_text(20, 48, anchor='w', text='L’espai es converteix en instrument',
-                               fill=CYAN, font=('Segoe UI', 10))
+            from atmo_ui import draw_banner
+            draw_banner(self,event)
 
         def raise_all_panels(self):
             pass  # Explicit tool requests only; no delayed layout exposing root.

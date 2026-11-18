@@ -15,6 +15,7 @@ from test_camera import app_module as m
 @unittest.skipUnless(os.environ.get('DISPLAY') or os.name=='nt','Requires a graphical display')
 class CalibrationTests(unittest.TestCase):
     def setUp(self):
+        discard=patch.object(m.messagebox,'askyesnocancel',return_value=False);discard.start();self.addCleanup(discard.stop)
         self.root=m.tk.Tk();self.root.geometry('900x650')
         self.frame=np.full((480,640,3),(20,50,80),np.uint8)
         self.context=(0,1,0,(480,640));self.stamp=time.monotonic();self.saved=None;self.applied=Mock()
@@ -103,10 +104,11 @@ class CalibrationIntegrationTests(unittest.TestCase):
                 self.assertIsNotNone(SpatialMap.from_project(data).calibration)
                 with patch.object(m.filedialog,'askopenfilename',return_value=app.project):app.open_project()
                 self.assertIsNotNone(app.spatial_map.calibration)
-            app.midi.send.assert_not_called()
-            app.new_project();self.assertIsNone(app.spatial_map.calibration);self.assertFalse(editor.frozen)
+            self.assertTrue(all(call.args[0].type=='control_change' for call in app.midi.send.call_args_list))
+            with patch.object(m.messagebox,'askyesnocancel',return_value=False):app.new_project()
+            self.assertIsNone(app.spatial_map.calibration);self.assertFalse(editor.frozen)
         finally:
-            for timer in root.tk.call('after','info'):root.after_cancel(timer)
+            for timer in root.tk.call('after','info'):root.tk.call('after','cancel',timer)
             app.close()
 
 

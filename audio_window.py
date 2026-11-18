@@ -11,7 +11,7 @@ class AudioWindow(ttk.Frame):
         super().__init__(parent,padding=10)
         self.controller=controller;self.timer=None;self.lookup={}
         self.pack(fill='both',expand=True)
-        ttk.Label(self,text='ÀUDIO LOCAL · prototip opcional',font=('Segoe UI',12,'bold')).pack(anchor='w')
+        ttk.Label(self,text='ÀUDIO LOCAL · Clips i cançons',font=('Segoe UI',12,'bold')).pack(anchor='w')
         ttk.Label(self,text='Canals locals independents de MIDI i Sonar. Obrir un projecte no activa un dispositiu desactivat.',wraplength=850).pack(anchor='w')
         controls=ttk.Frame(self);controls.pack(fill='x',pady=8)
         for label,callback in (('ACTIVAR',controller.enable),('DESACTIVAR',controller.disable),('ATURAR ÀUDIO LOCAL',controller.stop_all),('ATURAR CAPA',self.stop_selected)):
@@ -26,7 +26,7 @@ class AudioWindow(ttk.Frame):
             self.table.heading(key,text=label);self.table.column(key,width=width)
         self.table.pack(fill='both',expand=True,pady=8)
         self.details=tk.StringVar();ttk.Label(self,textvariable=self.details,wraplength=850).pack(anchor='w')
-        ttk.Label(self,text='Tancar el panell manté la reproducció. ATURAR ÀUDIO LOCAL no controla Sonar. Complement opcional: INSTAL_LAR_AUDIO_LOCAL.bat; després OBRIR_ATMO_ESFERA_FX.bat. WAV PCM/OGG curts, fins a 30 s.',wraplength=850).pack(anchor='w',pady=8)
+        ttk.Label(self,text='Tancar el panell manté la reproducció. ATURAR ÀUDIO LOCAL no controla Sonar. Complement opcional: INSTAL_LAR_AUDIO_LOCAL.bat; després OBRIR_ATMO_ESFERA_FX.bat. WAV / OGG mono o estèreo, fins a 2 hores. Les cançons es llegeixen per fragments.',wraplength=850).pack(side='bottom',anchor='w',fill='x',pady=8,before=self.table)
         self.bind('<Destroy>',self.destroyed,add='+');self.refresh()
 
     def stop_selected(self):

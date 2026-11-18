@@ -15,6 +15,7 @@ from test_local_audio import wav,wait_until
 @unittest.skipUnless(os.environ.get('DISPLAY') or os.name=='nt','Requires a graphical display')
 class LocalAudioIntegrationTests(unittest.TestCase):
     def setUp(self):
+        discard=patch.object(m.messagebox,'askyesnocancel',return_value=False);discard.start();self.addCleanup(discard.stop)
         self.root=m.tk.Tk()
         with patch.object(m.mido,'get_output_names',return_value=[]):self.app=m.App(self.root)
         self.app.arp_stop.set();self.app.arp_thread.join(timeout=1)
@@ -26,7 +27,7 @@ class LocalAudioIntegrationTests(unittest.TestCase):
         for attr,view in (('audio_window','audio_view'),('rules_window','rules_editor'),('simulator_window','simulator_view')):
             window=getattr(self.app,attr)
             if window is not None:window.destroy();setattr(self.app,attr,None);setattr(self.app,view,None)
-        for timer in self.root.tk.call('after','info'):self.root.after_cancel(timer)
+        for timer in self.root.tk.call('after','info'):self.root.tk.call('after','cancel',timer)
         self.app.close()
 
     def enable(self):
