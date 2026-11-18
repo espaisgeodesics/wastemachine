@@ -36,7 +36,10 @@ Els recursos aprovats `atmo_joc.png`, `atmo_musica.png`, `atmo_exposicio.png` i 
 | `tests/test_atmosfera_audio.py` | nou |
 | `tests/test_atmosfera_ui.py` | nou |
 | `tests/test_audio_window.py` | modificat |
+| `tests/test_bosc_viu.py` | modificat |
 | `tests/test_card_functions.py` | modificat |
+| `tests/test_card_media.py` | modificat |
+| `tests/test_experience_rules.py` | modificat |
 | `tests/test_interaction.py` | modificat |
 | `tests/test_local_audio.py` | modificat |
 | `tests/test_participant_editor.py` | modificat |
@@ -44,6 +47,7 @@ Els recursos aprovats `atmo_joc.png`, `atmo_musica.png`, `atmo_exposicio.png` i 
 | `tests/test_simulator_window.py` | modificat |
 | `tests/test_spatial_calibration.py` | modificat |
 | `tests/test_tracking_bridge.py` | modificat |
+| `tests/test_zone_audio.py` | modificat |
 | `tests/test_zone_editor.py` | modificat |
 | `tools/capturar_atmo.py` | nou |
 

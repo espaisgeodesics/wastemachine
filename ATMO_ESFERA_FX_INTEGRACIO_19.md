@@ -33,3 +33,5 @@ L’àudio local va a la sortida d’àudio de Windows, independent de loopMIDI 
 Consulta **VALIDACIO/INFORME_PROVES.md**, els registres i les captures. Les captures es generen des de finestres Tk reals; no són maquetes. Les imatges de càmera/posicions de prova són sintètiques i l’àudio de prova utilitza SDL amb dispositiu simulat, sense certificar escolta per altaveus.
 
 `VALIDAR_ATMO_WINDOWS.bat` executa compilació, suite i captures a Windows i desa els resultats a `VALIDACIO/windows`. El repositori també inclou un workflow de Windows per a aquesta branca. No cal executar aquesta validació per obrir el programa.
+
+Validació final: **417 proves correctes a Linux i 417 a Windows**, sense omissions, amb 90 captures per entorn. L’escolta i els dispositius reals de l’usuari es mantenen pendents.

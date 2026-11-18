@@ -65,7 +65,9 @@ test_stream_loop_eof_and_float_wav_decode (test_atmosfera_audio.SongTests.test_s
 test_zone_presence_reaches_real_sdl_even_when_device_starts_later (test_atmosfera_audio.SongTests.test_zone_presence_reaches_real_sdl_even_when_device_starts_later) ... ok
 test_four_approved_artworks_are_unchanged (test_atmosfera_ui.ApprovedAssetsTests.test_four_approved_artworks_are_unchanged) ... ok
 test_calibration_apply_remains_visible_at_all_font_scales (test_atmosfera_ui.VisualRegressionTests.test_calibration_apply_remains_visible_at_all_font_scales) ... ok
+test_dark_menu_reuses_original_commands (test_atmosfera_ui.VisualRegressionTests.test_dark_menu_reuses_original_commands) ... ok
 test_inputs_remain_readable_and_projector_black_is_preserved (test_atmosfera_ui.VisualRegressionTests.test_inputs_remain_readable_and_projector_black_is_preserved) ... ok
+test_long_experience_action_wraps_at_high_dpi (test_atmosfera_ui.VisualRegressionTests.test_long_experience_action_wraps_at_high_dpi) ... ok
 test_window_theme_is_idempotent_and_combobox_popup_does_not_crash (test_atmosfera_ui.VisualRegressionTests.test_window_theme_is_idempotent_and_combobox_popup_does_not_crash) ... ok
 test_duplicate_clip_mapping_is_blocked_across_cards (test_audio.AudioTests.test_duplicate_clip_mapping_is_blocked_across_cards) ... ok
 test_independent_clips_can_play_and_short_clips_release_notes (test_audio.AudioTests.test_independent_clips_can_play_and_short_clips_release_notes) ... ok
@@ -415,7 +417,7 @@ test_preview_loading_missing_corrupt_and_no_reload_on_grid_changes (test_zone_ed
 test_project_roundtrip_relative_assets_and_legacy_project (test_zone_editor.ZoneEditorTests.test_project_roundtrip_relative_assets_and_legacy_project) ... ok
 
 ----------------------------------------------------------------------
-Ran 415 tests in 35.199s
+Ran 417 tests in 31.379s
 
 OK
 pygame-ce 2.5.8 (SDL 2.32.10, Python 3.12.14)
