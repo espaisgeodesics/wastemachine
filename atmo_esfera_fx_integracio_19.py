@@ -9,6 +9,7 @@ from atmo_primary import primary_engine
 from atmo_windows import maximize_window
 from atmo_runtime import theme_widgets, configure_theme, install_window_theme, SURFACE
 from PIL import Image, ImageTk, ImageOps
+from atmo_ui import wrap_card_text
 
 BASE = Path(__file__).resolve().parent
 ENGINE = BASE / 'atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py'
@@ -128,6 +129,7 @@ def main():
             label(footer,mode,16,bold=True,wraplength=260).pack(pady=(0,3))
             label(footer,subtitle,10,MUTED,wraplength=250).pack(pady=(0,8))
             btn(footer,'Entrar a '+mode,lambda m=mode:choose(m),True).pack(fill='x',pady=(0,2))
+            wrap_card_text(footer)
         row.grid_rowconfigure(0,weight=1)
     show_start();splash.mainloop()
     if selected['mode']:open_engine(selected['mode'],selected['game_action'])

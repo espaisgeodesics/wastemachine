@@ -127,3 +127,17 @@ def install_menu_bar(app):
             return 'break'
         if title:app.root.bind('<Alt-'+title[0].lower()+'>',post,add='+')
     app.atmo_menu_bar=bar
+
+
+def wrap_card_text(container):
+    """Keep long experience names and entry actions within each approved artwork card."""
+    state={'width':None}
+    def reflow(event=None):
+        width=container.winfo_width()
+        if width<2 or width==state['width']:return
+        state['width']=width
+        for child in container.winfo_children():
+            if 'wraplength' in child.keys():child.configure(wraplength=max(80,width-34),justify='center')
+    for child in container.winfo_children():
+        if 'wraplength' in child.keys():child.configure(wraplength=140,justify='center')
+    container.bind('<Configure>',reflow,add='+')

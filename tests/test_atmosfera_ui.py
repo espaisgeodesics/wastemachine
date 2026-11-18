@@ -54,6 +54,15 @@ class VisualRegressionTests(unittest.TestCase):
         self.assertEqual(str(button.cget('menu')),str(sub))
         sub.invoke(0);command.assert_called_once()
 
+    def test_long_experience_action_wraps_at_high_dpi(self):
+        from atmo_ui import wrap_card_text
+        self.root.tk.call('tk','scaling',2.)
+        card=tk.Frame(self.root,width=210,height=180);card.pack();card.pack_propagate(False)
+        button=tk.Button(card,text='Entrar a Instal·lació immersiva',font=('Segoe UI',15),padx=12)
+        button.pack(fill='x');wrap_card_text(card);self.root.update()
+        self.assertLessEqual(button.winfo_reqwidth(),card.winfo_width())
+        self.assertGreater(button.winfo_reqheight(),30)
+
     def test_calibration_apply_remains_visible_at_all_font_scales(self):
         for scale in (1.,1.25,1.5):
             self.root.tk.call('tk','scaling',96/72*scale)
