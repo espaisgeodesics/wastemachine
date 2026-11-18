@@ -9,6 +9,9 @@ from test_atmo_runtime import Window
 
 
 class Tool(Window):
+    def state(self,value=None):
+        if value is not None:self.current_state=value
+        return self.current_state
     def withdraw(self): self.current_state='withdrawn'
 
 
@@ -32,7 +35,7 @@ class PrimaryTests(unittest.TestCase):
         self.assertEqual(app.visual_window.current_state,'withdrawn')
         app.new_project();app.finish_startup()
         self.assertEqual(app.visual_window.current_state,'withdrawn')
-        self.assertEqual(app.root.current_state,'normal')
+        self.assertEqual(app.root.current_state,'zoomed')
         self.assertFalse(app.atmo_starting)
 
     def test_explicit_preview_request_is_owned_by_main_window(self):
@@ -67,7 +70,7 @@ class PrimaryTests(unittest.TestCase):
 class EntryTests(unittest.TestCase):
     def test_entry_has_no_dashboard_or_provisional_copy(self):
         root=Path(__file__).resolve().parents[1]
-        path=root/'atmo_esfera_fx_integracio_16.py'
+        path=root/'atmo_esfera_fx_integracio_17.py'
         source=path.read_text(encoding='utf-8')
         tree=ast.parse(source)
         self.assertNotIn('Workspace(',source)
@@ -83,7 +86,7 @@ class EntryTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         for name in ('OBRIR_ATMO.bat','OBRIR_ATMO_12.bat','OBRIR_ATMO_13.bat'):
             s=(root/name).read_text()
-            self.assertIn('py -3.12 atmo_esfera_fx_integracio_16.py',s)
+            self.assertIn('py -3.12 atmo_esfera_fx_integracio_17.py',s)
         self.assertIn('py -3.12', (root/'DIAGNOSI_MIDI_ATMO.bat').read_text())
 
 

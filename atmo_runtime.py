@@ -190,6 +190,7 @@ def adapt_engine(module):
                     parent=getattr(self, 'atmo_dashboard', self.root))
                 return False
             super().connect_midi()
+            if self.midi is not None and hasattr(self,'apply_all_volumes'):self.apply_all_volumes()
             return self.midi is not None
 
     # Direct engine callbacks as well as dashboard buttons use these wrappers.

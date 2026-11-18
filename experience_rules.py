@@ -142,9 +142,9 @@ class RulesConfig:
             raise ValueError('Configuració de regles no vàlida') from exc
 
     def validate_channels(self, cards):
-        legacy = {int(c.get('channel', 1)) for c in cards if c.get('function') in MIDI_FUNCTIONS}
+        legacy = {int(c.get('channel', 1)) for c in cards if c.get('function') in MIDI_FUNCTIONS and not (c.get('function')=='Chaos Oscillator (Kaoss XY)' and c.get('kaoss',{}).get('mode')=='Efectes')}
         legacy.update(int(c['mixer'].get('channel',c.get('channel',1))) for c in cards
-                      if c.get('function') in MIDI_FUNCTIONS and isinstance(c.get('mixer'),dict))
+                      if c.get('function') in MIDI_FUNCTIONS and not (c.get('function')=='Chaos Oscillator (Kaoss XY)' and c.get('kaoss',{}).get('mode')=='Efectes') and isinstance(c.get('mixer'),dict))
         reserved = {a.channel for r in self.rules if r.enabled for a in r.actions if a.kind in ('note', 'cc')}
         conflict = legacy & reserved
         if conflict:

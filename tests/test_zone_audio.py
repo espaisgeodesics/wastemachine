@@ -43,6 +43,16 @@ class ZoneAudioTests(unittest.TestCase):
     def update(self,points,now,normalized=True):
         self.sink.now=now;self.audio.update(points,now,normalized)
 
+    def test_card_mixer_updates_active_sound_and_shared_zone_uses_loudest_owner(self):
+        levels={0:.5,1:.8};self.audio.card_gain=lambda card:levels[card]
+        self.audio.configure(self.config(self.zone(audio_gain=.5,audio_fade_in_s=0)))
+        self.update({0:(.45,.45),1:(.45,.45)},0)
+        self.assertAlmostEqual(self.engine.snapshot()[0].gain,.4)
+        levels[1]=.2;self.audio.refresh_gains()
+        self.assertAlmostEqual(self.engine.snapshot()[0].gain,.25)
+        levels[0]=0;levels[1]=0;self.audio.refresh_gains()
+        self.assertEqual(self.engine.snapshot()[0].gain,0)
+
     def test_same_zone_starts_image_and_audio_on_the_same_observation(self):
         zone=self.zone(image_path=str(self.image))
         config=self.config(zone);projection=ZoneProjection(config)

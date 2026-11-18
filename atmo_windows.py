@@ -39,3 +39,10 @@ def dark_titlebar(window):
         return dark or caption
     except (AttributeError, OSError, TypeError, ValueError):
         return False
+
+
+def maximize_window(window):
+    try:
+        window.state('zoomed')
+    except Exception:
+        window.geometry(f'{window.winfo_screenwidth()}x{window.winfo_screenheight()}+0+0')

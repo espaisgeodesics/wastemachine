@@ -1,4 +1,4 @@
 @echo off
 cd /d "%~dp0"
-py -3.12 atmo_esfera_fx_integracio_16.py
+py -3.12 atmo_esfera_fx_integracio_17.py
 pause

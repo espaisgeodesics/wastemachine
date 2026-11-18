@@ -4,6 +4,11 @@ from pathlib import Path
 from collections import deque
 from dataclasses import replace
 from marker_tracking import MarkerTracker, ObservationFrame
+from card_media import CardMediaPlayer, MEDIA_VISUAL, MEDIA_LABEL, media_settings, rebase_card_media, fit_frame
+from card_media_editor import CardMediaEditor
+from atmo_ambience import ambience_preset, ambience_settings, normalise_ambience_card
+from atmo_music import music_zone, arp_settings, arp_pitches, note_label, sequence_notes, DIRECTIONS, ARP_MAPS, ARP_SOURCES, arpeggio_note as configured_arpeggio_note
+from atmo_mixer import mixer_config as card_mixer_config, sound_kind, shared_route, midi_level, note_velocity, independent_channels
 from atmo_preview import NO_VISUAL, SURFACES, visual_index, assigned_visuals, mix_frames, map_frame, map_pointer
 from zone_audio import ZoneAudioPlayer
 from atmo_card_functions import CHAOS_FUNCTION, LiveKaoss, CardKaossEditor, default_config
@@ -44,12 +49,13 @@ ROOT=Path(__file__).resolve().parent
 W,H=640,360
 NAMES=['Motor de ferro','Tempesta de pols','Vapor tòxic','Reactor elèctric','Túnel mecànic','Forja de foc','Fantasma digital','Ones mecàniques','Ferralla orbital','Nucli radioactiu','Ull de la màquina','Sol terminal','Cercle cromàtic 360°']
 NAMES.append('Cap')
+NAMES.append(MEDIA_LABEL)
 ZONE_FUNCTION='Activar zona espacial'
 MUTE_FUNCTION='Control d’àudio / Mute'
 FUNCS=['Nota MIDI','Harmonia espacial','Arpegiador espacial','Control MIDI CC','Canviar visual','Tempo','Patró rítmic','Ritme de bateria','Àudio',MUTE_FUNCTION,ZONE_FUNCTION,CHAOS_FUNCTION,'Cap acció']
 DEFAULTS=[]
 for i in range(16):
-    DEFAULTS.append({'name':f'Targeta {i+1:02d}','function':'Nota MIDI' if i<4 else ('Control MIDI CC' if i<12 else 'Canviar visual'), 'channel':1,'note':36+i,'cc':20+i,'visual':NO_VISUAL,'axis':'Rotació','min':0,'max':127,'harmony_key':'La menor','harmony_root':9,'harmony_scale':'Menor natural (eòlica)','harmony_velocity':85,'arp_division':'1/2 temps','arp_gate':60})
+    DEFAULTS.append({'name':f'Targeta {i+1:02d}','function':'Nota MIDI' if i<4 else ('Control MIDI CC' if i<12 else 'Canviar visual'), 'channel':1,'note':36+i,'cc':20+i,'visual':NO_VISUAL,'axis':'Rotació','min':0,'max':127,'harmony_key':'La menor','harmony_root':9,'harmony_scale':'Menor natural (eòlica)','harmony_velocity':85,'arp_division':'1/2 temps','arp_gate':60,'arp_note_count':5,'arp_octaves':2,'arp_source':'Acord','arp_notes':[60,64,67,72,76],'arp_map':'grid'})
 
 NOTE_NAMES=['Do','Do#','Re','Re#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si']
 SCALE_INTERVALS={
@@ -93,7 +99,7 @@ AUDIO_CONTROLS={
 }
 AUDIO_AXES=['Horitzontal','Vertical','Rotació','Distància al centre']
 
-ARP_DIRECTIONS=['Ascendent','Descendent','Pujada i baixada','Aleatori']
+ARP_DIRECTIONS=list(DIRECTIONS)
 
 def write_project_file(path,data):
     # Keep the existing project intact if validation or writing fails.
@@ -108,12 +114,7 @@ def write_project_file(path,data):
       if temporary is not None:temporary.unlink(missing_ok=True)
 
 def arpeggio_note(pitches,index,direction):
-    notes=sorted(pitches)
-    if not notes:return None
-    if direction=='Aleatori':return random.choice(notes)
-    if direction=='Descendent':notes.reverse()
-    elif direction=='Pujada i baixada' and len(notes)>1:notes=notes+notes[-2:0:-1]
-    return notes[index%len(notes)]
+    return configured_arpeggio_note(pitches,index,direction)
 
 class TracedMidiOutput:
     """Report local send outcomes; this is not acknowledgement from the receiver."""
@@ -132,7 +133,8 @@ class TracedMidiOutput:
 
 class App:
  def __init__(self,root):
-    self.live_kaoss=LiveKaoss(self);self.kaoss_draft=None;self.kaoss_window=None;self.basic_function_window=None
+    self.card_media=CardMediaPlayer();self.media_draft=None;self.media_window=None;self.media_revision=-1;self.media_warning=''
+    self.live_kaoss=LiveKaoss(self);self.kaoss_draft=None;self.kaoss_effect_draft=None;self.kaoss_window=None;self.basic_function_window=None
     self.root=root; root.title('ATMO ESFERA FX · '+APP_VERSION); root.geometry('790x265'); root.minsize(570,205)
     self.preview_surface=tk.StringVar(value='Cercle');self.card_name=tk.StringVar();self.master_volume=tk.DoubleVar(value=127);self.mixer_rows={};self.mixer_signature=None;self.monitor_details=tk.BooleanVar(value=False)
     self.midi_log=deque(maxlen=1000);self.midi_log_lock=threading.Lock();self.midi_log_revision=0;self.diagnostics_window=None;self.diagnostics_seen=-1
@@ -142,11 +144,11 @@ class App:
     self.spatial_map=SpatialMap();self.zone_projection=ZoneProjection(self.spatial_map);self.spatial_warning=None;self.zone_editor=None;self.zone_window=None
     self.common_spatial=CommonSpatialObserver(self.spatial_map)
     self.rule_config=RulesConfig();self.rule_engine=RuleEngine();self.rule_outputs=RuleOutputs();self.rule_queue=[];self.rules_window=None;self.rules_editor=None
-    self.local_audio=AudioController();self.zone_audio=ZoneAudioPlayer(self.local_audio);self.zone_audio_warning=None;self.audio_window=None;self.audio_view=None
+    self.local_audio=AudioController();self.zone_audio=ZoneAudioPlayer(self.local_audio);self.zone_audio_warning=None;self.zone_audio.card_gain=lambda i:self.mixer_config(i)['level']/127;self.audio_window=None;self.audio_view=None
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
-    self.show_only_assigned=tk.BooleanVar(value=True); self.visual_dirty=True; self.preview_card=None; self.preview_dirty=True; self.preview_caption=tk.StringVar(value='Previsualització en directe'); self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
+    self.show_only_assigned=tk.BooleanVar(value=True); self.visual_dirty=True; self.preview_card=None; self.preview_dirty=True; self.preview_caption=tk.StringVar(value='Previsualització en directe'); self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent');self.arp_note_count=tk.StringVar(value='5');self.arp_octaves=tk.IntVar(value=2);self.arp_source=tk.StringVar(value='Acord');self.arp_custom_notes=tk.StringVar(value='60 64 67 72 76');self.arp_map=tk.StringVar(value='Quadrícula 8 × 3'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
     self.mute_audible=tk.IntVar(value=0);self.mute_silent=tk.IntVar(value=127);self.mute_sent={};self.mute_retry_after={}
     self.audio_states={}; self.audio_error=None; self.audio_duration=tk.DoubleVar(value=0);self.audio_cc_values={}
     self.audio_control_vars={}
@@ -248,7 +250,8 @@ class App:
     self.cards_window.withdraw()
     self.mixer_window=self.make_panel_window('mixer','TAULA DE VOLUMS','950x500+100+120')
     self.mixer_window.minsize(650,400)
-    ttk.Label(self.mixer_window,text='Assigna cada CC al volum corresponent a Sonar amb MIDI Learn / ACT. El màster escala tots els volums.',wraplength=900).pack(fill='x',padx=10,pady=8)
+    ttk.Label(self.mixer_window,text='Volum MIDI estàndard CC7 i àudio local. Per a pistes independents a Cakewalk, filtra cada pista pel canal de la seva targeta.',wraplength=900).pack(fill='x',padx=10,pady=8)
+    ttk.Button(self.mixer_window,text='Preparar canals MIDI independents',command=self.prepare_mixer_channels).pack(anchor='w',padx=10,pady=3)
     master=ttk.Frame(self.mixer_window);master.pack(fill='x',padx=10)
     ttk.Label(master,text='MÀSTER').pack(side='left',padx=5)
     ttk.Scale(master,from_=0,to=127,variable=self.master_volume,command=self.change_master_volume).pack(side='left',fill='x',expand=True,padx=10)
@@ -318,7 +321,8 @@ class App:
       tk.Spinbox(frame,textvariable=var,from_=from_,to=to,width=8,bg='#e9d8c2').pack(anchor='w',padx=8)
     ttk.Button(frame,text='CONFIGURAR FUNCIÓ…',command=self.open_function_settings).pack(fill='x',padx=8,pady=6)
     ttk.Label(frame,text='Visual assignat').pack(anchor='w',padx=8,pady=(5,0))
-    ttk.Combobox(frame,textvariable=self.visual,values=(NAMES[-1],*NAMES[:-1]),state='readonly',width=25).pack(fill='x',padx=8)
+    visual_choice=ttk.Combobox(frame,textvariable=self.visual,values=('Cap',MEDIA_LABEL,*NAMES[:13]),state='readonly',width=25);visual_choice.pack(fill='x',padx=8)
+    visual_choice.bind('<<ComboboxSelected>>',lambda event:self.open_card_media_settings() if self.visual.get()==MEDIA_LABEL else None)
     ttk.Button(frame,text='APLICAR / CREAR TARGETA',command=self.apply_card,style='Accent.TButton').pack(fill='x',padx=8,pady=9)
     statusbar=tk.Frame(self.root,bg='#1a1714',highlightbackground='#203452',highlightthickness=1)
     statusbar.pack(fill='x',padx=8,pady=(1,4))
@@ -456,42 +460,52 @@ class App:
  def update_monitor_columns(self):
     self.assigned_cards.configure(displaycolumns='#all' if self.monitor_details.get() else ('card','name','function','state','channel','note','cc','value'))
  def mixer_config(self,i):
-    c=self.cards[i]
-    return dict({'channel':c['channel'],'cc':20+i,'level':100},**c.get('mixer',{}))
+    return card_mixer_config(self.cards[i])
+ def mixer_kind(self,i):
+    return sound_kind(self.cards,i,getattr(self,'spatial_map',None))
+ def output_velocity(self,i,velocity):
+    return note_velocity(self.cards,i,velocity)
+ def prepare_mixer_channels(self):
+    try:
+      cards=independent_channels(self.cards,self.rule_config)
+      self.live_kaoss.prepare(cards,self.rule_config)
+      self.all_notes_off()
+      for index in list(self.active):self.deactivate(index)
+      self.cards=cards
+      self.live_kaoss.configure(self.cards,self.rule_config)
+      self.load_card();self.refresh_mixer(force=True);self.apply_all_volumes()
+      self.status.set('Canals independents preparats. A Cakewalk, filtra cada pista pel canal indicat a la targeta. Desa el projecte.')
+    except (ValueError,tk.TclError) as exc:messagebox.showerror('Canals MIDI',str(exc),parent=self.mixer_window)
  def open_mixer(self):
     self.refresh_mixer();self.show_panel('mixer')
  def refresh_mixer(self,force=False):
     if not hasattr(self,'mixer_body'):return
     self.master_label.config(text=f'{round(self.master_volume.get()*100/127)} %')
-    sources=[i for i,c in enumerate(self.cards) if c['function'] in ('Nota MIDI','Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria','Àudio')]
-    signature=tuple(sources)
+    signature=tuple((i,self.mixer_kind(i),c['function'],c['channel'],self.mixer_config(i)['channel'],self.mixer_config(i)['cc']) for i,c in enumerate(self.cards))
     if force or signature!=self.mixer_signature:
       for child in self.mixer_body.winfo_children():child.destroy()
       self.mixer_rows={};self.mixer_signature=signature
-      if not sources:ttk.Label(self.mixer_body,text='Assigna una funció amb so a alguna targeta per veure’n el volum.').pack(padx=20,pady=40)
-      for column,i in enumerate(sources):
-        config=self.mixer_config(i);strip=ttk.LabelFrame(self.mixer_body,text=f'Targeta {i+1:02d}',padding=8);strip.grid(row=0,column=column,sticky='ns',padx=4,pady=4)
-        name=ttk.Label(strip,text=self.cards[i].get('name',''),width=18,wraplength=135);name.pack(pady=4)
+      for i,c in enumerate(self.cards):
+        kind=self.mixer_kind(i);config=self.mixer_config(i)
+        strip=ttk.LabelFrame(self.mixer_body,text=f'Targeta {i+1:02d}',padding=8);strip.grid(row=0,column=i,sticky='ns',padx=4,pady=4)
+        name=ttk.Label(strip,text=c.get('name',''),width=18,wraplength=135);name.pack(pady=4)
+        status='Àudio local' if kind=='local' else ('MIDI · canal compartit' if kind=='midi' and shared_route(self.cards,i) else ('So MIDI' if kind=='midi' else 'Sense so propi'))
+        ttk.Label(strip,text=status,foreground='#a8bad5' if kind=='none' else '#45d4d2',wraplength=140).pack(pady=3)
         variables={key:tk.DoubleVar(value=config[key]) if key=='level' else tk.IntVar(value=config[key]) for key in ('channel','cc','level')}
-        level_label=ttk.Label(strip,text=f'{round(config["level"]*100/127)} %');level_label.pack()
-        slider=tk.Scale(strip,from_=127,to=0,orient='vertical',variable=variables['level'],showvalue=False,length=175,bg='#261c16',fg='#edbc88',highlightthickness=0,command=lambda value,index=i:self.change_mixer_volume(index,value));slider.pack(pady=4)
-        route=ttk.Frame(strip);route.pack()
-        for title,key,minimum,maximum in [('Canal','channel',1,16),('CC','cc',0,127)]:
-          line=ttk.Frame(route);line.pack(fill='x',pady=2);ttk.Label(line,text=title,width=6).pack(side='left')
-          tk.Spinbox(line,from_=minimum,to=maximum,width=4,textvariable=variables[key]).pack(side='left')
-        ttk.Button(strip,text='Enviar / Learn',command=lambda index=i:self.send_mixer_volume(index)).pack(fill='x',pady=(6,0))
-        self.mixer_rows[i]={'variables':variables,'name':name,'label':level_label}
+        level_label=ttk.Label(strip,text='Sense so' if kind=='none' else f'{round(config["level"]*100/127)} %');level_label.pack()
+        slider=tk.Scale(strip,from_=127,to=0,orient='vertical',variable=variables['level'],showvalue=False,length=175,bg='#0b1224',fg='#f5f7ff',highlightthickness=0,state='disabled' if kind=='none' else 'normal',command=lambda value,index=i:self.change_mixer_volume(index,value));slider.pack(pady=4)
+        if kind=='midi':
+          for title,key,minimum,maximum in [('Canal','channel',1,16),('CC','cc',0,127)]:
+            line=ttk.Frame(strip);line.pack(fill='x',pady=2);ttk.Label(line,text=title,width=6).pack(side='left')
+            tk.Spinbox(line,from_=minimum,to=maximum,width=4,textvariable=variables[key]).pack(side='left')
+          ttk.Button(strip,text='Enviar volum',command=lambda index=i:self.send_mixer_volume(index)).pack(fill='x',pady=(6,0))
+        self.mixer_rows[i]={'variables':variables,'name':name,'label':level_label,'kind':kind}
     for i,row in self.mixer_rows.items():row['name'].config(text=self.cards[i].get('name',f'Targeta {i+1:02d}'))
  def read_mixer_route(self,i):
-    config=self.mixer_config(i)
-    row=self.mixer_rows.get(i)
+    config=self.mixer_config(i);row=self.mixer_rows.get(i)
     if row:config={key:var.get() for key,var in row['variables'].items()}
-    config={'channel':int(config['channel']),'cc':int(config['cc']),'level':max(0,min(127,float(config['level'])))}
-    if not 1<=config['channel']<=16 or not 0<=config['cc']<=127:raise ValueError('Canal: 1–16; CC: 0–127.')
-    for other,c in enumerate(self.cards):
-      if other==i or c['function'] not in ('Nota MIDI','Harmonia espacial','Arpegiador espacial','Patró rítmic','Ritme de bateria','Àudio'):continue
-      route=self.mixer_config(other)
-      if (route['channel'],route['cc'])==(config['channel'],config['cc']):raise ValueError(f'La ruta coincideix amb la targeta {other+1:02d}. Assigna un altre canal o CC per controlar-les per separat.')
+    config=card_mixer_config(dict(self.cards[i],mixer=config))
+    if self.mixer_kind(i)=='none':return config
     prospective=list(self.cards);prospective[i]=dict(self.cards[i],mixer=config)
     self.rule_config.validate_channels(prospective)
     self.cards[i]['mixer']=config
@@ -499,27 +513,45 @@ class App:
  def send_mixer_volume(self,i):
     try:config=self.read_mixer_route(i)
     except (ValueError,tk.TclError) as exc:self.status.set('Taula de volums: '+str(exc));return False
+    kind=self.mixer_kind(i)
+    if kind=='none':return False
+    if kind=='local':
+      self.zone_audio.refresh_gains();self.status.set(f'Volum local T{i+1:02d} actualitzat. Desa el projecte.');return True
     if self.muted or not self.midi:
-      self.status.set('Taula de volums: connecta la sortida MIDI i comprova que no estigui en silenci.');return False
-    value=round(config['level']*self.master_volume.get()/127)
+      self.status.set('Volum MIDI: connecta la sortida i desactiva el silenci. El volum local és independent.');return False
+    value=midi_level(self.cards,i,self.master_volume.get())
     try:self.midi.send(mido.Message('control_change',channel=config['channel']-1,control=config['cc'],value=value))
     except Exception as exc:self.status.set('Error de volum MIDI: '+str(exc));return False
-    self.status.set(f'Volum T{i+1:02d}: CC{config["cc"]}, canal {config["channel"]}, valor {value}. Desa el projecte per conservar-lo.')
+    if config['cc']==7 and shared_route(self.cards,i):
+      self.status.set(f'T{i+1:02d}: canal compartit. El nivell individual afecta les notes següents; prepara canals independents per a notes sostingudes.')
+    else:self.status.set(f'Volum T{i+1:02d}: CC{config["cc"]}, canal {config["channel"]}, valor {value}.')
     return True
  def change_mixer_volume(self,i,value):
     row=self.mixer_rows.get(i)
-    if not row:return
+    if not row or self.mixer_kind(i)=='none':return
     level=max(0,min(127,float(value)));row['variables']['level'].set(level);row['label'].config(text=f'{round(level*100/127)} %')
     self.send_mixer_volume(i)
+ def apply_all_volumes(self):
+    self.local_audio.set_master(self.master_volume.get()/127)
+    if hasattr(self,'zone_audio'):self.zone_audio.refresh_gains()
+    sent=set()
+    for i in range(len(self.cards)):
+      if self.mixer_kind(i)!='midi':continue
+      route=self.mixer_config(i);key=route['channel'],route['cc']
+      if key not in sent:self.send_mixer_volume(i);sent.add(key)
+    if self.midi and not self.muted:
+      channels={action.channel for rule in self.rule_config.rules if rule.enabled for action in rule.actions if action.kind=='note'}
+      for channel in channels:
+        if (channel,7) not in sent:self.midi.send(mido.Message('control_change',channel=channel-1,control=7,value=round(self.master_volume.get())))
  def change_master_volume(self,value):
     if not hasattr(self,'master_label'):return
     self.master_volume.set(max(0,min(127,float(value))))
+    self.last_cc.clear();self.card2_cc_values.clear();self.audio_cc_values.clear()
     self.master_label.config(text=f'{round(self.master_volume.get()*100/127)} %')
     try:
       for i in self.mixer_rows:self.read_mixer_route(i)
-    except (ValueError,tk.TclError) as exc:
-      self.status.set('Taula de volums: '+str(exc));return
-    for i in self.mixer_rows:self.send_mixer_volume(i)
+      self.apply_all_volumes()
+    except (ValueError,tk.TclError) as exc:self.status.set('Taula de volums: '+str(exc))
  def sidebar_panel(self,parent,title,pady=3):
     outer=tk.Frame(parent,bg='#0b1224',bd=0,highlightthickness=0)
     outer.pack(fill='x',pady=pady,padx=2)
@@ -614,7 +646,7 @@ class App:
     self.update_assigned_cards()
  def card_preview_frame(self,i,t):
     c=self.cards[i];kind=c['function']
-    if visual_index(c.get('visual',NO_VISUAL))==NO_VISUAL:return np.zeros((H,W,3),np.uint8)
+    if visual_index(c.get('visual',NO_VISUAL)) in (NO_VISUAL,MEDIA_VISUAL):return np.zeros((H,W,3),np.uint8)
     if kind in ('Harmonia espacial','Arpegiador espacial'):
       return self.harmony_map_preview(chromatic=c.get('visual')==12,card_index=i)
     if kind in ('Patró rítmic','Ritme de bateria'):
@@ -712,11 +744,17 @@ class App:
     else:self.open_basic_function_settings()
  def open_kaoss_settings(self):
     if self.kaoss_window is not None and self.kaoss_window.winfo_exists():self.kaoss_window.destroy()
-    win=self.kaoss_window=self.make_panel_window('chaos','CHAOS OSCILLATOR · TARGETA '+self.card_id.get(),'880x700+80+60')
+    win=self.kaoss_window=self.make_panel_window('chaos','AMBIENTS XY · TARGETA '+self.card_id.get(),'880x700+80+60')
     win.geometry(f'880x{min(700,max(600,self.root.winfo_screenheight()-120))}+60+40');win.minsize(820,600)
     self.kaoss_editor=CardKaossEditor(win,self)
     self.show_panel('chaos')
+ def open_card_media_settings(self):
+    if self.media_window is not None and self.media_window.winfo_exists():self.media_window.destroy()
+    win=self.media_window=self.make_panel_window('card_media','VISUAL DE TARGETA · '+self.card_id.get(),'560x650+90+60')
+    self.card_media_editor=CardMediaEditor(win,self,NAMES)
+    self.show_panel('card_media')
  def open_basic_function_settings(self):
+    if self.fun.get()=='Canviar visual':return self.open_card_media_settings()
     if self.basic_function_window is not None and self.basic_function_window.winfo_exists():self.basic_function_window.destroy()
     kind=self.fun.get();selected=self.card_id.get()
     win=self.basic_function_window=self.make_panel_window('function','CONFIGURACIÓ · '+kind+' · TARGETA '+selected,'440x340+90+80')
@@ -779,6 +817,7 @@ class App:
     self.zone_projection.configure(self.spatial_map,self.zone_project_path(),keep_scene=keep_scene)
     if hasattr(self,'zone_audio'):self.zone_audio.configure(self.spatial_map,self.zone_project_path())
     self.common_spatial.configure(self.spatial_map,reset=not keep_scene)
+    self.refresh_mixer(force=True)
     self.spatial_warning=None;self.visual_dirty=True;self.preview_dirty=True
     self.update_spatial_editor_runtime()
  def update_spatial_editor_runtime(self):
@@ -806,24 +845,47 @@ class App:
     if player.last_error and player.last_error!=self.spatial_warning:
       self.status.set(player.last_error);self.spatial_warning=player.last_error
     self.update_spatial_editor_runtime()
+ def process_card_media(self):
+    candidates=[i for i in self.active if not self.muted and self.cards[i].get('visual')==MEDIA_VISUAL and self.cards[i].get('function')!='Cap acció']
+    winner=min(candidates,key=lambda i:(-self.cards[i].get('media_priority',10),i)) if candidates else None
+    key=None;settings=None
+    if winner is not None:
+      settings=media_settings(self.cards[winner],required=True);path=Path(settings['media_path'])
+      if not path.is_absolute():
+        project=self.zone_project_path()
+        if project is None:raise ValueError('Desa el projecte per resoldre el fitxer de la targeta.')
+        path=Path(project).resolve().parent/path
+      key=(str(path.resolve()),settings['media_loop'],winner)
+    previous=self.card_media.key
+    self.card_media.request(key,settings)
+    self.card_media.decoder.set_paused(self.visual_paused)
+    frame,error,revision=self.card_media.decoder.snapshot()
+    if revision!=self.media_revision or key!=previous or self.card_media.needs_update():self.visual_dirty=True;self.preview_dirty=True
+    self.media_revision=revision
+    if error and error!=self.media_warning:self.status.set('Imatge/vídeo de targeta: '+error)
+    self.media_warning=error
  def compose_output_frame(self,t):
     self._atmo_output_t=t
     rule_frame=self.rule_outputs.frame((W,H))
     if rule_frame is not None:return rule_frame
-    image=self.zone_projection.image_frame((W,H))
-    if image is not None:return image
-    return self.compose_live_visuals(t)
+    base=self.zone_projection.image_frame((W,H))
+    if base is None:base=self.compose_live_visuals(t)
+    self._atmo_clean_frame=base
+    return self.card_media.apply(base)
  def preview_content_frame(self,t):
     rule_frame=self.rule_outputs.frame((W,H))
     if rule_frame is not None:return rule_frame
-    image=self.zone_projection.image_frame((W,H))
-    if image is not None:return image
-    return self.compose_live_visuals(t,include_chromatic=False)
+    base=self.zone_projection.image_frame((W,H))
+    if base is None:base=self.compose_live_visuals(t,include_chromatic=False)
+    return self.card_media.apply(base)
  def projector_frame(self):
     width=max(1,self.proj_label.winfo_width());height=max(1,self.proj_label.winfo_height())
     rule_frame=self.rule_outputs.frame((width,height))
     if rule_frame is not None:return rule_frame
     image=self.zone_projection.image_frame((width,height))
+    if self.card_media.key is not None or self.card_media.tail is not None:
+      base=image if image is not None else fit_frame(self._atmo_clean_frame,width,height)
+      return self.card_media.apply(base)
     if image is not None:return image
     if assigned_visuals(self.cards,self.active,ZONE_FUNCTION)==[12]:
       return np.full((height,width,3),self.last_frame[0,0],np.uint8)
@@ -953,7 +1015,15 @@ class App:
     win.configure(bg='#151210')
     win.transient(self.root)
     win.lift(self.root)
-    pane=ttk.Frame(win);pane.pack(fill='both',expand=True,padx=16,pady=12)
+    selected=self.card_id.get()
+    apply_button=ttk.Button(win,text='APLICAR A LA TARGETA I TANCAR',style='Accent.TButton');apply_button.pack(side='bottom',fill='x',padx=16,pady=10)
+    holder=ttk.Frame(win);holder.pack(fill='both',expand=True)
+    canvas=tk.Canvas(holder,bg='#0b1224',highlightthickness=0)
+    scroll=ttk.Scrollbar(holder,orient='vertical',command=canvas.yview);scroll.pack(side='right',fill='y')
+    canvas.pack(fill='both',expand=True);canvas.configure(yscrollcommand=scroll.set)
+    pane=ttk.Frame(canvas,padding=16);item=canvas.create_window((0,0),window=pane,anchor='nw')
+    pane.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
+    canvas.bind('<Configure>',lambda event:canvas.itemconfigure(item,width=event.width))
     ttk.Label(pane,text=kind.upper(),foreground='#e7ae70',font=('Segoe UI',12,'bold')).pack(anchor='w',pady=(0,12))
     if kind not in ('Patró rítmic','Ritme de bateria'):
       ttk.Label(pane,text='Nota fonamental').pack(anchor='w',pady=(4,2))
@@ -964,12 +1034,17 @@ class App:
     tk.Spinbox(pane,textvariable=self.harmony_velocity,from_=1,to=127,bg='#e9d8c2').pack(anchor='w')
     if kind in ('Arpegiador espacial','Patró rítmic'):
       ttk.Label(pane,text='Divisió rítmica').pack(anchor='w',pady=(10,2))
-      ttk.Combobox(pane,textvariable=self.arp_division,values=['1 temps','1/2 temps','1/4 temps'],state='readonly').pack(fill='x')
+      ttk.Combobox(pane,textvariable=self.arp_division,values=['1 temps','1/2 temps','1/4 temps','1/8 temps','1/16 temps'],state='readonly').pack(fill='x')
       ttk.Label(pane,text='Durada de les notes (%)').pack(anchor='w',pady=(10,2))
       tk.Spinbox(pane,textvariable=self.arp_gate,from_=10,to=95,increment=5,bg='#e9d8c2').pack(anchor='w')
     if kind=='Arpegiador espacial':
       ttk.Label(pane,text='Direcció de les notes').pack(anchor='w',pady=(10,2))
       ttk.Combobox(pane,textvariable=self.arp_direction,values=ARP_DIRECTIONS,state='readonly').pack(fill='x')
+      for title,variable,values in [('Mapa',self.arp_map,tuple(ARP_MAPS)),('Notes de base',self.arp_note_count,('Auto',)+tuple(str(n) for n in range(1,33))),('Origen de les notes',self.arp_source,ARP_SOURCES),('Octaves',self.arp_octaves,tuple(range(1,7)))]:
+        ttk.Label(pane,text=title).pack(anchor='w',pady=(8,2));ttk.Combobox(pane,textvariable=variable,values=values,state='readonly').pack(fill='x')
+      ttk.Label(pane,text='Files/anells: octava aguda, central i greu.',wraplength=360).pack(anchor='w',pady=6)
+      ttk.Label(pane,text='Notes triades · MIDI 0–127 (ex.: 60 64 67 72 76)').pack(anchor='w',pady=(8,2))
+      ttk.Entry(pane,textvariable=self.arp_custom_notes).pack(fill='x')
     if kind=='Patró rítmic':
       ttk.Label(pane,text='16 passos · activa els cops que han de sonar').pack(anchor='w',pady=(12,4))
       steps=ttk.Frame(pane);steps.pack(fill='x')
@@ -987,12 +1062,23 @@ class App:
         ttk.Label(mapping,text=name).grid(row=row,column=0,sticky='w',padx=4,pady=3)
         tk.Spinbox(mapping,textvariable=var,from_=0,to=127,width=6,bg='#e9d8c2').grid(row=row,column=1,padx=8,pady=3)
       ttk.Label(pane,text='Ensenya la targeta: sona el ritme. Retira-la: s’atura. Un compàs 4/4 al tempo del ATMO ESFERA FX. Ruta la sortida MIDI a MT Power Drum Kit dins de Sonar.',wraplength=390).pack(anchor='w',pady=10)
-    ttk.Button(pane,text='APLICAR A LA TARGETA I TANCAR',command=lambda:(self.apply_card(),win.destroy())).pack(fill='x',pady=(16,4))
+    def apply():
+      if self.card_id.get()!=selected or self.fun.get()!=kind:
+        messagebox.showwarning('Configuració musical','La targeta ha canviat. Torna a obrir la configuració.',parent=win);return
+      if self.apply_card():win.destroy()
+    apply_button.configure(command=apply)
     ttk.Label(pane,text='Per conservar els canvis en disc: Projecte → Desar projecte.',wraplength=320).pack(anchor='w',pady=(5,0))
  def load_card(self):
     card=self.cards[int(self.card_id.get())-1]
+    normalise_ambience_card(card)
+    self.kaoss_effect_draft=ambience_settings(card) if card.get('function')==CHAOS_FUNCTION else None
+    self.media_draft=media_settings(card)
     self.kaoss_draft=KaossConfig.from_dict(card['kaoss']) if 'kaoss' in card else None
     c=self.cards[int(self.card_id.get())-1]; self.fun.set(c['function']); self.axis.set(c['axis']); self.note.set(c['note']); self.cc.set(c['cc']); self.channel.set(c['channel']); self.visual.set(NAMES[c['visual']]); self.harmony_key.set(c.get('harmony_key','La menor')); self.harmony_root.set(NOTE_NAMES[int(c.get('harmony_root',9))%12]); self.harmony_scale.set(c.get('harmony_scale','Menor natural (eòlica)')); self.harmony_velocity.set(c.get('harmony_velocity',85)); self.arp_division.set(c.get('arp_division','1/2 temps')); self.arp_gate.set(c.get('arp_gate',60)); self.arp_direction.set(c.get('arp_direction','Ascendent'))
+    settings=arp_settings(c)
+    self.arp_note_count.set(str(settings['arp_note_count']) if settings['arp_note_count'] else 'Auto')
+    self.arp_octaves.set(settings['arp_octaves']);self.arp_source.set(settings['arp_source']);self.arp_custom_notes.set(' '.join(map(str,settings['arp_notes'])))
+    self.arp_map.set(next(label for label,value in ARP_MAPS.items() if value==settings['arp_map']))
     self.card_name.set(c.get('name',f'Targeta {int(self.card_id.get()):02d}'))
     self.mute_audible.set(c.get('mute_audible',0));self.mute_silent.set(c.get('mute_silent',127))
     self.audio_duration.set(c.get('audio_duration',0))
@@ -1005,6 +1091,13 @@ class App:
  def apply_card(self):
     try:
       card_index=int(self.card_id.get())-1
+      media=media_settings(dict(self.cards[card_index],**(getattr(self,'media_draft',None) or {})),required=self.visual.get()==MEDIA_LABEL)
+      new_arp=None;new_fx=None
+      if self.fun.get()=='Arpegiador espacial':
+        new_arp=arp_settings(dict(self.cards[card_index],arp_note_count=0 if self.arp_note_count.get()=='Auto' else int(self.arp_note_count.get()),arp_octaves=int(self.arp_octaves.get()),arp_source=self.arp_source.get(),arp_notes=self.arp_custom_notes.get(),arp_map=ARP_MAPS[self.arp_map.get()],arp_direction=self.arp_direction.get()))
+        candidate=dict(self.cards[card_index],**new_arp,harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get())
+        for sector in range(8):
+          for ring in range(3):arp_pitches(candidate,sector,ring,harmony_pitches(candidate,sector)[0],SCALE_INTERVALS)
       duration=float(self.audio_duration.get())
       if not math.isfinite(duration) or duration<0 or (self.fun.get()=='Àudio' and duration<=0):raise ValueError('Indica la durada real del clip d’àudio en segons, superior a zero.')
       control_configs={role:{key:var.get() for key,var in variables.items()} for role,variables in self.audio_control_vars.items()}
@@ -1024,6 +1117,12 @@ class App:
         config=self.kaoss_draft or default_config(self,card_index)
         if self.kaoss_draft is None:self.channel.set(config.channel)
         config=config_replace(config,channel=int(self.channel.get()))
+        if config.mode!='Efectes':config=ambience_preset('Obert / aire',config.channel)[0]
+        fx_base=dict(prospective[card_index],kaoss=config.to_dict())
+        if getattr(self,'kaoss_effect_draft',None) is not None:fx_base.update(self.kaoss_effect_draft)
+        elif 'kaoss_ranges' not in fx_base:fx_base.update(ambience_preset('Obert / aire',config.channel)[1])
+        new_fx=ambience_settings(fx_base)
+        prospective[card_index].update(new_fx)
         prospective[card_index]['channel']=config.channel
         prospective[card_index]['kaoss']=config.to_dict()
       self.rule_config.validate_channels(prospective)
@@ -1035,12 +1134,16 @@ class App:
         self.deactivate(card_index)
         self.mute_sent.pop(card_index,None);self.mute_retry_after.pop(card_index,None)
       c=self.cards[card_index]; c.update(mute_audible=mute_values[0],mute_silent=mute_values[1],name=self.card_name.get().strip(),audio_controls=control_configs,audio_duration=duration,drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
+      c.update(media);self.media_draft=media
+      if new_arp is not None:c.update(new_arp)
       if c['function']==CHAOS_FUNCTION:
         c['kaoss']=config.to_dict();self.kaoss_draft=config
+        c.update(new_fx);self.kaoss_effect_draft=new_fx
       self.live_kaoss.configure(self.cards,self.rule_config)
       if c['visual']==12 and int(self.card_id.get())-1 in self.active:self.select_visual(12)
       self.select_card_preview(card_index)
       self.sync_mute_controls()
+      self.apply_all_volumes()
       self.status.set(f'Targeta {self.card_id.get()} configurada. Desa el projecte per conservar els canvis.');self.update_cards_table()
       return True
     except Exception as e:
@@ -1082,7 +1185,7 @@ class App:
  def send_rule_midi(self,command):
     if not self.midi or mido is None:return False
     args={'channel':command.channel-1}
-    if command.kind=='cc':message=mido.Message('control_change',control=command.number,value=command.value,**args)
+    if command.kind=='cc':message=mido.Message('control_change',control=command.number,value=round(command.value*self.master_volume.get()/127) if command.number==7 else command.value,**args)
     else:message=mido.Message(command.kind,note=command.number,velocity=command.value,**args)
     self.midi.send(message);return True
  def process_rule_actions(self,now):
@@ -1131,12 +1234,13 @@ class App:
     if not self.live_kaoss.stop():
       self.status.set('Reconnecta MIDI per alliberar les notes Chaos abans de crear un projecte.');return
     self.live_kaoss.invalidate_editors()
+    self.card_media.reset()
     self.preview_surface.set('Cercle')
     self.configure_rules(RulesConfig())
     if self.rules_editor is not None:self.rules_editor.reload()
     self.replace_participants(ParticipantRegistry())
     self.spatial_map=SpatialMap()
-    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS));self.select_visual(NO_VISUAL); self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table();self.reset_spatial_projection();self.refresh_zone_editor(); self.status.set('Projecte nou');self.live_kaoss.configure(self.cards,self.rule_config)
+    self.all_notes_off(); self.cards=json.loads(json.dumps(DEFAULTS));self.select_visual(NO_VISUAL); self.cards[1].update(function='Control MIDI CC',cc=7,axis='Horitzontal'); self.project='Sense títol';self.reset_mute_controls();self.master_volume.set(127);self.refresh_mixer(force=True); self.load_card();self.update_cards_table();self.reset_spatial_projection();self.refresh_zone_editor(); self.status.set('Projecte nou');self.live_kaoss.configure(self.cards,self.rule_config);self.apply_all_volumes()
  def update_bpm(self):
     try:
       with self.arp_lock:
@@ -1167,11 +1271,13 @@ class App:
     try:
       spatial=rebase_map_images(self.spatial_map,old_project,path)
       rules=rebase_rule_images(self.rule_config,old_project,path)
-      data={'version':4,'preview_surface':SURFACES[self.preview_surface.get()],'master_volume':self.master_volume.get(),'cards':self.cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual}
+      media_cards=rebase_card_media(self.cards,old_project,path)
+      data={'version':4,'preview_surface':SURFACES[self.preview_surface.get()],'master_volume':self.master_volume.get(),'cards':media_cards,'bpm':self.bpm,'quantize_harmony':self.quantize_harmony.get(),'visual':self.current_visual}
       data=spatial.into_project(data)
       data['participants']=self.participants.to_dict()
       data['experience_rules']=rules.to_dict()
       write_project_file(path,data)
+      self.cards=media_cards
       self.project=path;self.spatial_map=spatial;self.reset_spatial_projection(keep_scene=True);self.refresh_zone_editor()
       self.rule_config=rules;self.rule_engine.config=rules
       if self.rules_editor is not None:self.rules_editor.reload()
@@ -1199,17 +1305,27 @@ class App:
       with open(path,encoding='utf-8') as f:d=json.load(f)
       spatial=SpatialMap.from_project(d)
       participants=ParticipantRegistry.from_project(d)
-      rules=RulesConfig.from_project(d);rules.validate_channels(d['cards'])
+      rules=RulesConfig.from_project(d)
       if len(d['cards'])!=16:raise ValueError('El projecte no conté 16 targetes')
-      for card in d['cards']:card['visual']=visual_index(card.get('visual',NO_VISUAL))
+      for card in d['cards']:
+        card['visual']=visual_index(card.get('visual',NO_VISUAL))
+        media_settings(card,required=card['visual']==MEDIA_VISUAL)
+        normalise_ambience_card(card)
+        if card.get('function')=='Arpegiador espacial':
+          card.update(arp_settings(card))
+          for sector in range(8):
+            for ring in range(3):arp_pitches(card,sector,ring,harmony_pitches(card,sector)[0],SCALE_INTERVALS)
+      rules.validate_channels(d['cards'])
       shape=d.get('preview_surface','circle')
       if shape not in SURFACES.values():raise ValueError('Forma del mapa no vàlida')
       self.live_kaoss.prepare(d['cards'],rules)
+      self.card_media.reset()
       self.all_notes_off(); self.cards=d['cards'];self.reset_mute_controls();self.master_volume.set(max(0,min(127,float(d.get('master_volume',127)))));self.refresh_mixer(force=True); self.bpm=d.get('bpm',120); self.bpm_var.set(self.bpm); self.quantize_harmony.set(d.get('quantize_harmony',True)); self.select_visual(int(d.get('visual',0))%len(NAMES)); self.project=path;self.spatial_map=spatial;self.reset_spatial_projection();self.refresh_zone_editor(); self.load_card();self.update_cards_table(); self.status.set('Projecte obert: '+Path(path).name)
       self.replace_participants(participants)
       self.configure_rules(rules)
       self.live_kaoss.configure(self.cards,rules);self.live_kaoss.invalidate_editors()
       self.preview_surface.set(next(label for label,value in SURFACES.items() if value==shape))
+      self.apply_all_volumes()
       if self.rules_editor is not None:self.rules_editor.reload()
       return True
     except Exception as e:messagebox.showerror('Obrir',str(e));return False
@@ -1335,7 +1451,7 @@ class App:
         self.simulation_release()
         for i in list(self.active):self.deactivate(i)
         self.all_notes_off()
-        self.harmony_pending.clear();self.last_cc.clear();self.card2_cc_values.clear()
+        self.harmony_pending.clear();self.last_cc.clear();self.card2_cc_values.clear();self.audio_cc_values.clear()
         failures=0
         if self.midi:
           for channel in range(16):
@@ -1353,7 +1469,7 @@ class App:
     self.status.set('Simulació: tria una targeta a l’editor i mantén el clic sobre la previsualització.' if self.simulation.get() else 'Simulació desactivada.')
  def simulation_position(self,event):
     return map_pointer(event.x,event.y,self.vis_label.winfo_width(),self.vis_label.winfo_height(),
-                       W,H,SURFACES[self.preview_surface.get()],self.spatial_map.calibration)
+                       W,H,SURFACES[self.preview_surface.get()],self.spatial_map.calibration,180 if self.preview_music_layers() else 0)
  def simulation_press(self,event):
     if not self.simulation.get() or self.muted:return
     self.simulation_release()
@@ -1461,7 +1577,7 @@ class App:
           except Exception:pass
         state['playing']=None
       c=self.cards[i]
-      division={'1 temps':1,'1/2 temps':2,'1/4 temps':4}.get(c.get('arp_division','1/2 temps'),2)
+      division={'1 temps':1,'1/2 temps':2,'1/4 temps':4,'1/8 temps':8,'1/16 temps':16}.get(c.get('arp_division','1/2 temps'),2)
       interval=60.0/max(1,self.bpm)/division
       step=math.floor((now-self.clock_start)/interval)
       if step<0 or step==state.get('last_step'):continue
@@ -1479,12 +1595,13 @@ class App:
         if not pattern[step%16]:continue
         note=c['note']
       else:note=arpeggio_note(notes,state['index'],c.get('arp_direction','Ascendent'))
-      state['index']+=1
+      state['sequence_step']=state['index'];state['index']+=1
       ch=max(0,min(15,int(c['channel'])-1))
-      if self.midi:
+      velocity=self.output_velocity(i,max(1,min(127,int(c.get('harmony_velocity',85)))))
+      if self.midi and velocity>0:
         try:
-          self.midi.send(mido.Message('note_on',channel=ch,note=note,velocity=max(1,min(127,int(c.get('harmony_velocity',85))))))
-          state['playing']=(ch,note)
+          self.midi.send(mido.Message('note_on',channel=ch,note=note,velocity=velocity))
+          state['playing']=(ch,note);state['last_note']=note;self.preview_dirty=True
           # La durada també es calcula des de la graella absoluta.
           state['off_at']=self.clock_start+(step+max(.1,min(.95,int(c.get('arp_gate',60))/100)))*interval
         except Exception:pass
@@ -1505,40 +1622,37 @@ class App:
     c=self.cards[i]
     pattern=DRUM_PRESETS.get(c.get('drum_preset'),DRUM_PRESETS['Rock bàsic'])
     channel=max(0,min(15,int(c['channel'])-1))
-    velocity=max(1,min(127,int(c.get('harmony_velocity',85))))
+    velocity=self.output_velocity(i,max(1,min(127,int(c.get('harmony_velocity',85)))))
     played=[]
     for name,steps in pattern.items():
       if step not in steps:continue
       note=max(0,min(127,int(c.get('drum_notes',{}).get(name,DRUM_NOTES[name]))))
-      if self.midi:
+      if self.midi and velocity>0:
         try:
           self.midi.send(mido.Message('note_on',channel=channel,note=note,velocity=velocity))
           played.append((channel,note))
         except Exception:pass
     state['playing_notes']=played
     state['off_at']=self.clock_start+(absolute_step+.4)*interval
+ def musical_position(self,x,y):
+    calibration=getattr(getattr(self,'spatial_map',None),'calibration',None)
+    point=calibration.project((x,y)) if calibration is not None else (x,y)
+    return point if point is not None and all(0<=value<=1 for value in point) else None
  def spatial_arpeggio(self,i,x,y):
-    c=self.cards[i]
-    dx=x-.5;dy=.5-y
-    sector=int(((math.atan2(dy,dx)+2*math.pi)%(2*math.pi)+math.pi/8)//(math.pi/4))%8
-    radius=min(1.,math.hypot(dx,dy)*2)
-    ring=0 if radius<1/3 else (1 if radius<2/3 else 2)
-    zone=(sector,ring,c.get('harmony_root',9),c.get('harmony_scale','Menor natural (eòlica)'),c['channel'])
+    c=self.cards[i];point=self.musical_position(x,y)
+    if point is None:self.stop_arpeggio(i);return
+    sector,ring=music_zone(c,*point)
+    settings=arp_settings(c)
+    zone=(sector,ring,c.get('harmony_root',9),c.get('harmony_scale','Menor natural (eòlica)'),c['channel'],tuple((key,tuple(value) if isinstance(value,list) else value) for key,value in settings.items()))
     with self.arp_lock:
       state=self.arp_states.get(i)
       if state and state['zone']==zone:return
-    # 220 ms d'estabilització per evitar salts de nota en els límits.
-    now=time.monotonic()
-    candidate,since=self.harmony_pending.get(i,(None,now))
-    if candidate!=zone:
-      self.harmony_pending[i]=(zone,now);return
+    now=time.monotonic();candidate,since=self.harmony_pending.get(i,(None,now))
+    if candidate!=zone:self.harmony_pending[i]=(zone,now);return
     if now-since<.22:return
-    pitches=list(harmony_pitches(c,sector)[0])
-    if ring==2:pitches=pitches[:2]
-    elif ring==0:pitches.append(min(127,pitches[0]+12))
+    pitches=arp_pitches(c,sector,ring,harmony_pitches(c,sector)[0],SCALE_INTERVALS)
     self.stop_arpeggio(i)
-    with self.arp_lock:
-      self.arp_states[i]={'zone':zone,'pitches':pitches,'index':0,'last_step':None,'playing':None,'off_at':0}
+    with self.arp_lock:self.arp_states[i]={'zone':zone,'pitches':pitches,'index':0,'last_step':None,'playing':None,'off_at':0}
     self.harmony_pending.pop(i,None)
  def stop_harmony(self,i):
     notes=self.harmony_notes.pop(i,[])
@@ -1548,14 +1662,9 @@ class App:
         except Exception:pass
     self.harmony_zones.pop(i,None);self.harmony_pending.pop(i,None);self.queued_harmony.pop(i,None)
  def spatial_harmony(self,i,x,y):
-    # 8 sectors i 3 anells. Sense notes fins que es detecta la targeta.
-    # Es manté el mateix acord mentre no es consolida un canvi de sector.
-    c=self.cards[i]
-    dx=x-.5;dy=.5-y
-    angle=(math.atan2(dy,dx)+2*math.pi)%(2*math.pi)
-    sector=int((angle+math.pi/8)//(math.pi/4))%8
-    radius=min(1.,math.hypot(dx,dy)*2)
-    ring=0 if radius<1/3 else (1 if radius<2/3 else 2)
+    c=self.cards[i];point=self.musical_position(x,y)
+    if point is None:self.stop_harmony(i);return
+    sector,ring=music_zone(c,*point)
     zone=(sector,ring,c.get('harmony_root',9),c.get('harmony_scale','Menor natural (eòlica)'),c['channel'])
     if self.harmony_zones.get(i)==zone or self.queued_harmony.get(i)==zone:
       self.harmony_pending.pop(i,None)
@@ -1581,8 +1690,8 @@ class App:
     pitches=triad[:2] if ring==2 else (triad if ring==1 else triad+[triad[0]+12])
     ch=max(0,min(15,int(c['channel'])-1))
     self.stop_harmony(i)
-    velocity=max(1,min(127,int(c.get('harmony_velocity',85))))
-    if self.midi:
+    velocity=self.output_velocity(i,max(1,min(127,int(c.get('harmony_velocity',85)))))
+    if self.midi and velocity>0:
       played=[]
       for note in pitches:
         try:
@@ -1605,6 +1714,7 @@ class App:
       if config['inverted']:value=1-value
       value=round(config['min']+(config['max']-config['min'])*value)
       key=(channel,int(config['cc']))
+      if key[1]==7:value=round(value*self.master_volume.get()/127)
       if cache.get(key)==value:continue
       try:
         self.midi.send(mido.Message('control_change',channel=channel,control=key[1],value=value))
@@ -1631,7 +1741,7 @@ class App:
       if any(state['ends_at']>now and (key==i or (state['channel'],state['note'])==(channel,note)) for key,state in self.audio_states.items()):return
       old=self.audio_states.pop(i,None)
       if old:self.release_audio_trigger(old)
-      try:self.midi.send(mido.Message('note_on',channel=channel,note=note,velocity=100))
+      try:self.midi.send(mido.Message('note_on',channel=channel,note=note,velocity=self.output_velocity(i,100)))
       except Exception as exc:
         self.status.set('No s’ha pogut enviar el dispar d’àudio: '+str(exc));return
       self.audio_states[i]={'channel':channel,'note':note,'ends_at':now+duration,'release_at':now+min(.08,duration),'trigger_down':True}
@@ -1683,6 +1793,34 @@ class App:
     dx=(x-.5)*2;dy=(y-.5)*2;length=max(1,math.hypot(dx,dy))
     rr=int(min(H*.425,W*.32))
     return (round(W/2+dx/length*rr),round(H/2+dy/length*rr))
+ def preview_music_layers(self):
+    ids={i for i in self.active if self.cards[i]['function'] in ('Harmonia espacial','Arpegiador espacial')}
+    if self.preview_card is not None and self.cards[self.preview_card]['function'] in ('Harmonia espacial','Arpegiador espacial'):ids.add(self.preview_card)
+    layers=[]
+    with self.arp_lock:
+      for i in sorted(ids):
+        c=self.cards[i];position=self.active.get(i);point=self.musical_position(*position[:2]) if position is not None else None
+        sector,ring=music_zone(c,*point) if point is not None else (0,0)
+        chord=list(harmony_pitches(c,sector)[0])
+        if c['function']=='Arpegiador espacial':
+          state=self.arp_states.get(i,{})
+          notes=list(state.get('pitches') or arp_pitches(c,sector,ring,chord,SCALE_INTERVALS))
+          playing=state.get('playing');cycle=sequence_notes(notes,c.get('arp_direction','Ascendent'))
+          step=state.get('sequence_step',0)%max(1,len(cycle))+1
+          lines=[f'{len(notes)} notes · pas {step}/{len(cycle)}',
+                 'Sona: '+note_label(playing[1])+f' ({playing[1]})' if playing else ('Pausa · '+note_label(state['last_note']) if 'last_note' in state else 'En repòs / MIDI pendent'),
+                 'Base: '+' '.join(note_label(n) for n in notes)]
+          cell=state.get('zone',(sector,ring))[:2] if point is not None else None
+          layers.append(dict(id=i,kind='Arpegiador',layout=c.get('arp_map','radial'),cell=cell,confirmed=bool(state),lines=lines))
+        else:
+          zone=self.harmony_zones.get(i)
+          notes=[note for channel,note in self.harmony_notes.get(i,[])]
+          expected=chord[:2] if ring==2 else (chord if ring==1 else chord+[chord[0]+12])
+          shown_sector,shown_ring=zone[:2] if zone else (sector,ring)
+          lines=[f'Sector {shown_sector+1} · anell {shown_ring+1}',('Sona: ' if notes else 'Notes: ')+' '.join(note_label(n) for n in (notes or expected)),
+                 'Activa' if notes else 'En repòs / canvi pendent']
+          layers.append(dict(id=i,kind='Harmonia',layout='radial',cell=zone[:2] if zone else ((sector,ring) if point is not None else None),confirmed=bool(zone),lines=lines))
+    return layers
  def change_preview_surface(self):
     self.preview_dirty=True
     self.status.set('Forma del mapa actualitzada. Desa el projecte per conservar-la.')
@@ -1694,7 +1832,7 @@ class App:
     color=self.projection_color_frame()[0,0] if chromatic else None
     icons={key:value for key,value in getattr(self,'_atmo_layers',{}).items() if key!=12}
     return map_frame(content,self.cards,self.active,self.target_trails,self.spatial_map,
-                     SURFACES[self.preview_surface.get()],color,now,icons)
+                     SURFACES[self.preview_surface.get()],color,now,icons,self.preview_music_layers())
  def activate(self,i,x,y,angle):
     if self.muted:return
     c=self.cards[i];v={'Rotació':angle,'Horitzontal':x,'Vertical':y}.get(c['axis'],angle);v=max(0,min(1,v))
@@ -1723,15 +1861,16 @@ class App:
     elif c['function']=='Arpegiador espacial':
       self.spatial_arpeggio(i,x,y)
     elif c['function']=='Canviar visual' and not was and visual_index(c.get('visual',NO_VISUAL))!=NO_VISUAL:
-      if c['visual']!=12:self.zone_projection.request_live()
+      if c['visual'] not in (12,MEDIA_VISUAL):self.zone_projection.request_live()
       self.select_visual(c['visual'])
     elif c['function']=='Tempo':
       self.bpm=int(60+v*120)
       if self.bpm_var.get()!=self.bpm:self.bpm_var.set(self.bpm)
     elif c['function']=='Nota MIDI' and not was and self.midi:
-      ch=c['channel']-1; note=c['note'];self.midi.send(mido.Message('note_on',channel=ch,note=note,velocity=100));self.notes[i]=(ch,note)
+      ch=c['channel']-1; note=c['note'];self.midi.send(mido.Message('note_on',channel=ch,note=note,velocity=self.output_velocity(i,100)));self.notes[i]=(ch,note)
     elif c['function']=='Control MIDI CC' and self.midi:
       val=round(v*127)
+      if c['cc']==7:val=round(val*self.master_volume.get()/127)
       if self.last_cc.get(i)!=val:
         self.midi.send(mido.Message('control_change',channel=c['channel']-1,control=c['cc'],value=val));self.last_cc[i]=val
  def activate_card2(self,x,y,angle):
@@ -1749,6 +1888,7 @@ class App:
     self.card2_filter=int(round(max(0,min(127,64-63*self.card2_rotation_total/.25))))
     if self.midi:
       for cc,value in ((7,self.card2_volume),(74,self.card2_filter)):
+        if cc==7:value=round(value*self.master_volume.get()/127)
         key=(channel,cc)
         if self.card2_cc_values.get(key)!=value:
           try:
@@ -1783,7 +1923,7 @@ class App:
  def render(self,t,visual=None):
     # Camps continus en coordenades precalculades: animació sense soroll aleatori.
     n=self.current_visual if visual is None else visual
-    if n==NO_VISUAL:return np.zeros((H,W,3),np.uint8)
+    if n in (NO_VISUAL,MEDIA_VISUAL):return np.zeros((H,W,3),np.uint8)
     if n==12:return self.projection_color_frame()
     if not hasattr(self,'_render_coords'):self._render_coords=tuple(np.ascontiguousarray(coord[::2,::2]) for coord in self._visual_coords)
     u,v,r,a=self._render_coords
@@ -2101,6 +2241,7 @@ class App:
       self.live_kaoss.tick()
       now_vis=time.monotonic();frame_changed=False
       self.process_spatial_frame(zone_observations,color_observations,now_vis)
+      self.process_card_media()
       self.process_rule_actions(now_vis)
       if self.last_frame is None or self.visual_dirty or (not self.visual_paused and now_vis-self.last_visual_update>=self.visual_interval):
         t=now_vis-self.t0
@@ -2137,6 +2278,7 @@ class App:
     if not self.confirm_rule_discard():return
     if not self.confirm_zone_discard():return
     self._closing=True
+    self.card_media.close()
     self.arp_stop.set()
     self.arp_thread.join(timeout=1.0)
     self.all_notes_off()

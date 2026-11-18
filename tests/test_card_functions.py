@@ -11,6 +11,8 @@ from unittest.mock import Mock, patch
 from atmo_card_functions import CHAOS_FUNCTION, LiveKaoss, live_configs, default_config, CardKaossEditor
 from kaoss_xy import KaossConfig
 from atmo_preview import NO_VISUAL, visual_index
+from card_media import media_settings, MEDIA_LABEL, MEDIA_VISUAL
+from atmo_ambience import ambience_preset, ambience_settings
 from experience_rules import RulesConfig, RuleAction, ExperienceRule
 
 
@@ -26,6 +28,8 @@ def method(name):
            'MUTE_FUNCTION':'Control d’àudio / Mute','time':time,'CARD_LOST_TIMEOUT':.25,
            'math':math,'config_replace':replace,'default_config':default_config,
            'NOTE_NAMES':['Do','Do#','Re','Re#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si'],
+           'media_settings':media_settings,'MEDIA_LABEL':MEDIA_LABEL,'MEDIA_VISUAL':MEDIA_VISUAL,
+           'ambience_preset':ambience_preset,'ambience_settings':ambience_settings,
            'NAMES':['visual'],'messagebox':Mock(),'NO_VISUAL':NO_VISUAL,'visual_index':visual_index}
     exec(compile(ast.Module(body=[function],type_ignores=[]),str(SOURCE),'exec'),scope)
     return scope[name]
@@ -116,6 +120,7 @@ class NativeApplyTests(unittest.TestCase):
             'arp_division':'1/2 temps','arp_gate':60,'harmony_root':'La','harmony_scale':'Menor natural (eòlica)',
             'harmony_velocity':85,'axis':'Horitzontal','note':60,'cc':74,'visual':'visual','status':''}
         for name,value in values.items():setattr(app,name,Value(value))
+        app.apply_all_volumes=Mock()
         app.live_kaoss=LiveKaoss(app)
         return app
 
@@ -126,17 +131,18 @@ class NativeApplyTests(unittest.TestCase):
         saved=json.loads(json.dumps({'cards':app.cards}))
         self.assertEqual(live_configs(saved['cards'],RulesConfig()),app.live_kaoss.engine.configs)
 
-    def test_native_apply_rejects_channel_conflict_before_mutating_card(self):
-        app=self.app();app.channel.set(1);original=dict(app.cards[0])
-        self.assertFalse(method('apply_card')(app))
-        self.assertEqual(app.cards[0],original);self.assertFalse(app.live_kaoss.engine.configs)
+    def test_native_effects_can_share_instrument_channel(self):
+        app=self.app();app.channel.set(1)
+        self.assertTrue(method('apply_card')(app))
+        self.assertEqual(app.cards[0]['kaoss']['mode'],'Efectes')
 
     def test_native_apply_switching_function_releases_chaos_and_removes_live_config(self):
         app=self.app();apply=method('apply_card');self.assertTrue(apply(app))
         app.live_kaoss.observe(0,.5,.5,0);app.live_kaoss.tick()
         app.fun.set('Nota MIDI');self.assertTrue(apply(app))
         self.assertFalse(app.live_kaoss.engine.configs);self.assertFalse(app.live_kaoss.engine.voices)
-        self.assertTrue(any(call.args[0].kind=='note_off' for call in app.send_rule_midi.call_args_list))
+        self.assertTrue(any(call.args[0].kind=='cc' for call in app.send_rule_midi.call_args_list))
+        self.assertFalse(any(call.args[0].kind.startswith('note_') for call in app.send_rule_midi.call_args_list))
 
     def test_reserved_rule_channel_is_rejected(self):
         rules=SimpleNamespace(rules=[SimpleNamespace(enabled=True,actions=[SimpleNamespace(kind='note',channel=2)])])

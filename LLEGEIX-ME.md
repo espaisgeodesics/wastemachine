@@ -1,3 +1,7 @@
+## Versió actual: ATMO ESFERA FX 17
+
+Obre **OBRIR_ATMO.bat** amb Python 3.12. Consulta [les novetats i proves de la integració 17](ATMO_ESFERA_FX_INTEGRACIO_17.md).
+
 # ATMO ESFERA FX
 
 **Versió actual: 4.8.1.** Mantén junts tots els fitxers del repositori; el principal importa els mòduls de seguiment, participants, zones, regles, àudio i simulació. Les dependències base continuen a `requirements.txt`; l’àudio local és un complement opcional.

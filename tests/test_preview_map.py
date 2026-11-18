@@ -9,6 +9,7 @@ import numpy as np
 from atmo_preview import (NO_VISUAL, SURFACES, visual_index, assigned_visuals, mix_frames,
                           map_frame, bounds, floor_point, map_pointer)
 from spatial_zones import SpatialMap, Calibration
+from card_media import MEDIA_VISUAL, fit_frame
 
 ROOT=Path(__file__).resolve().parents[1]
 ENGINE=ROOT/'atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py'
@@ -18,7 +19,7 @@ def method(name):
     tree=ast.parse(ENGINE.read_text(encoding='utf-8'))
     app=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=='App')
     function=next(node for node in app.body if isinstance(node,ast.FunctionDef) and node.name==name)
-    scope=dict(np=np,math=math,NO_VISUAL=NO_VISUAL,assigned_visuals=assigned_visuals,
+    scope=dict(np=np,math=math,MEDIA_VISUAL=MEDIA_VISUAL,fit_frame=fit_frame,NO_VISUAL=NO_VISUAL,assigned_visuals=assigned_visuals,
                mix_frames=mix_frames,visual_index=visual_index,W=640,H=360,
                ZONE_FUNCTION='Activar zona espacial',MUTE_FUNCTION='Control d’àudio / Mute',CHAOS_FUNCTION='Chaos Oscillator (Kaoss XY)',
                mido=SimpleNamespace(Message=lambda kind,**values:SimpleNamespace(type=kind,**values)))
@@ -34,7 +35,7 @@ class AssignedVisualTests(unittest.TestCase):
     def test_existing_visual_indices_unchanged_and_none_supported(self):
         for index in range(13):self.assertEqual(visual_index(index),index)
         for value in (NO_VISUAL,None,-1):self.assertEqual(visual_index(value),NO_VISUAL)
-        for value in (True,'Cap',14,-2):
+        for value in (True,'Cap',15,-2):
             with self.assertRaises(ValueError):visual_index(value)
 
     def test_cap_cards_do_not_render_but_other_cards_still_do(self):
@@ -70,6 +71,7 @@ class AssignedVisualTests(unittest.TestCase):
 class SeparationTests(unittest.TestCase):
     def app(self,cards):
         app=SimpleNamespace(cards=cards,active={i:(.5,.5,0) for i in range(len(cards))})
+        app.card_media=SimpleNamespace(key=None,tail=None,apply=lambda frame:frame)
         app.rule_outputs=Mock();app.rule_outputs.frame.return_value=None
         app.zone_projection=Mock();app.zone_projection.image_frame.return_value=None
         app.render=Mock(return_value=np.full((360,640,3),(0,90,20),np.uint8))

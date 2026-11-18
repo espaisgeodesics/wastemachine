@@ -6,6 +6,7 @@ from test_camera import app_module as m
 class AudioTests(unittest.TestCase):
     def app(self):
         a=m.App.__new__(m.App)
+        a.master_volume=Mock();a.master_volume.get.return_value=127
         a.cards=[dict(m.DEFAULTS[i],function='Àudio',audio_duration=10) for i in range(16)]
         a.midi=Mock();a.status=Mock();a.muted=False;a.audio_states={};a.audio_error=None;a.arp_lock=threading.RLock()
         a.target_trails={};a.audio_cc_values={};a.active={};a.last_cc={};a.notes={};a.harmony_notes={};a.harmony_zones={};a.harmony_pending={};a.queued_harmony={};a.arp_states={}

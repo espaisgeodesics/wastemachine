@@ -21,8 +21,11 @@ class ZoneAudioPlayer:
         self.occupants = {}
         self.pending_starts = set()
         self.deadlines = {}
+        self.card_gain = lambda marker:1.
+        self.gains = {}
+        self.last_cards = {}
 
-    def command(self, kind, zone, fade=0):
+    def command(self, kind, zone, fade=0, gain=None):
         path = ''
         if kind == 'play_sound':
             asset = Path(zone.audio_path)
@@ -31,7 +34,7 @@ class ZoneAudioPlayer:
                 asset = Path(self.project).resolve().parent / asset
             path = str(asset.resolve())
         return AudioCommand(kind, 'zone:' + zone.id, SOURCE, None, path,
-                            zone.audio_gain, fade, zone.audio_loop and zone.audio_mode != 'once',
+                            zone.audio_gain if gain is None else gain, fade, zone.audio_loop and zone.audio_mode != 'once',
                             'marker', zone.priority)
 
     def submit(self, command):
@@ -50,6 +53,7 @@ class ZoneAudioPlayer:
             if self.submit(self.command('stop_sound', zone, fade)):
                 self.pending_stops.pop(id, None)
                 self.playing.pop(id, None)
+                self.gains.pop(id,None);self.last_cards.pop(id,None)
 
     def stop(self, immediate=True):
         self.pending_starts.clear()
@@ -90,6 +94,7 @@ class ZoneAudioPlayer:
                 if event.kind == 'enter':occupied.add(event.card_id)
                 elif event.kind == 'exit':occupied.discard(event.card_id)
             after = bool(occupied)
+            if occupied:self.last_cards[id]=set(occupied)
             if after and not before:
                 self.pending_stops.pop(id, None)
                 self.deadlines.pop(id, None)
@@ -106,15 +111,29 @@ class ZoneAudioPlayer:
         self.flush_stops()
         for id in list(self.pending_starts):
             zone = self.zones[id]
-            try: command = self.command('play_sound', zone, zone.audio_fade_in_s)
+            gain=self.zone_gain(id)
+            try: command = self.command('play_sound', zone, zone.audio_fade_in_s, gain)
             except (ValueError, OSError) as exc:
                 self.last_error = str(exc);continue
             if self.submit(command):
                 self.playing[id] = zone
+                self.gains[id] = gain
                 self.pending_starts.discard(id)
+        self.refresh_gains()
         status = self.controller.snapshot()
         if status.state == 'error':self.last_error = 'Àudio local: ' + status.detail
         elif status.log:
             _, kind, detail = status.log[-1]
             if kind == 'play_sound' and not detail.startswith(('acceptada:', 'cancel·lada')):
                 self.last_error = 'Àudio local: ' + detail
+
+    def zone_gain(self,id):
+        cards=self.occupants.get(id) or self.last_cards.get(id,set())
+        return self.zones[id].audio_gain*max((max(0,min(1,float(self.card_gain(card)))) for card in cards),default=1.)
+
+    def refresh_gains(self):
+        for id,zone in list(self.playing.items()):
+            if id not in self.zones or id in self.pending_stops:continue
+            gain=self.zone_gain(id)
+            if self.gains.get(id)!=gain and self.submit(self.command('audio_volume',zone,0,gain)):
+                self.gains[id]=gain

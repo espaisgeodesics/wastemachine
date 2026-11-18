@@ -2,8 +2,9 @@
 import functools
 import tkinter as tk
 from atmo_runtime import adapt_engine, theme_widgets
+from atmo_windows import maximize_window
 
-TOOLS = {'open_kaoss_settings': 'kaoss_window', 'open_basic_function_settings': 'basic_function_window', 'open_zone_editor': 'zone_window', 'open_calibration_editor': 'calibration_window',
+TOOLS = {'open_card_media_settings': 'media_window', 'open_kaoss_settings': 'kaoss_window', 'open_basic_function_settings': 'basic_function_window', 'open_zone_editor': 'zone_window', 'open_calibration_editor': 'calibration_window',
          'open_local_audio': 'audio_window', 'open_rules': 'rules_window',
          'open_participants': 'participant_window', 'open_simulator': 'simulator_window',
          'open_projection': 'projection', 'open_midi_diagnostics': 'diagnostics_window',
@@ -41,6 +42,7 @@ def primary_engine(module, mode='Joc'):
             self.hide_startup_tools()
             self.atmo_starting = False
             self.root.deiconify()
+            maximize_window(self.root)
             self.root.lift()
             self.root.focus_set()
 

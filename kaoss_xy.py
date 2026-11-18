@@ -97,8 +97,9 @@ def validate_assignments(configs, reserved_channels=()):
     for marker, config in configs.items():
         _int(marker, 0, 49, 'Marcador')
         if not isinstance(config, KaossConfig):raise ValueError('Configuració Kaoss no vàlida')
-        if config.channel in used:raise ValueError(f'Canal {config.channel} ocupat; cada Kaoss necessita un canal exclusiu, separat de les regles')
-        used.add(config.channel)
+        if config.mode=='Instrument':
+            if config.channel in used:raise ValueError(f'Canal {config.channel} ocupat; cada instrument Kaoss necessita un canal exclusiu')
+            used.add(config.channel)
 
 
 def pack_configs(configs):
@@ -188,15 +189,16 @@ class KaossEngine:
             # Velocity changes apply on the next NoteOn, never retrigger a held pitch.
             state.desired = (note, velocity)
 
-    def tick(self, now, send, bpm=120):
+    def tick(self, now, send, bpm=120, send_for_marker=None):
         _real(bpm, 1, 999, 'Tempo')
         self._time(now)
         for marker, state in list(self.voices.items()):
             config = self.configs[marker]
+            sink = (lambda command, id=marker:send_for_marker(id,command)) if send_for_marker is not None else send
             if state.cancelled or now-state.last_seen >= config.lost_timeout_s:
                 state.desired = None
                 state.due = None
-                if self._off(config, state, send):del self.voices[marker]
+                if self._off(config, state, sink):del self.voices[marker]
                 continue
             if config.mode == 'Instrument':
                 wanted = state.desired[0] if state.desired else None
@@ -205,9 +207,9 @@ class KaossEngine:
                     interval = config.quantize_beats*60/bpm
                     state.due = ceil((now-1e-9)/interval)*interval if interval else now
                 if state.due is not None and now+1e-9 >= state.due:
-                    if self._off(config, state, send):
+                    if self._off(config, state, sink):
                         note, velocity = state.desired
-                        if self._send(send, MidiCommand('note_on', config.channel, note, velocity)):
+                        if self._send(sink, MidiCommand('note_on', config.channel, note, velocity)):
                             state.playing = note
                         else:state.desired = None
                         state.due = None
@@ -219,7 +221,7 @@ class KaossEngine:
                 if config.rotation_enabled:controls.append((config.rotation_cc, rotation))
                 for number, value in controls:
                     value = round(value*127)
-                    if state.cc.get(number) != value and self._send(send, MidiCommand('cc', config.channel, number, value)):
+                    if state.cc.get(number) != value and self._send(sink, MidiCommand('cc', config.channel, number, value)):
                         state.cc[number] = value
                 state.last_cc_time = now
 
@@ -230,11 +232,12 @@ class KaossEngine:
             return True
         return False
 
-    def stop(self, send):
+    def stop(self, send, send_for_marker=None):
         """Cancel pending notes and release owned voices; False means retry required."""
         for marker, state in list(self.voices.items()):
             state.desired = None
             state.due = None
             state.cancelled = True
-            if self._off(self.configs[marker], state, send):del self.voices[marker]
+            sink = (lambda command, id=marker:send_for_marker(id,command)) if send_for_marker is not None else send
+            if self._off(self.configs[marker], state, sink):del self.voices[marker]
         return not self.voices

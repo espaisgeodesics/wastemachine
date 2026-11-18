@@ -6,12 +6,13 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 NO_VISUAL = 13
+MEDIA_VISUAL = 14
 SURFACES = {'Cercle': 'circle', 'Quadrat': 'square', 'Rectangle': 'rectangle'}
 
 
 def visual_index(value):
     if value is None or value == -1:return NO_VISUAL
-    if type(value) is not int or not 0 <= value <= NO_VISUAL:
+    if type(value) is not int or not 0 <= value <= MEDIA_VISUAL:
         raise ValueError('Visual assignat no vàlid')
     return value
 
@@ -19,7 +20,7 @@ def visual_index(value):
 def assigned_visuals(cards, active, zone_function):
     return sorted({visual_index(cards[i].get('visual',NO_VISUAL)) for i in active
                    if cards[i].get('function') not in ('Cap acció',zone_function)
-                   and visual_index(cards[i].get('visual',NO_VISUAL)) != NO_VISUAL})
+                   and visual_index(cards[i].get('visual',NO_VISUAL)) not in (NO_VISUAL,MEDIA_VISUAL)})
 
 
 def mix_frames(layers, width, height):
@@ -39,12 +40,12 @@ def font(size):
     return ImageFont.load_default()
 
 
-def bounds(width,height,surface):
+def bounds(width,height,surface,panel_width=0):
     available_h=max(1,height-96)
-    available_w=max(1,width-64)
+    available_w=max(1,width-64-panel_width)
     ratio=width/height if surface=='rectangle' else 1
     h=min(available_h,available_w/ratio);w=h*ratio
-    return ((width-w)/2,54+(available_h-h)/2,(width+w)/2,54+(available_h+h)/2)
+    return ((width-panel_width-w)/2,54+(available_h-h)/2,(width-panel_width+w)/2,54+(available_h+h)/2)
 
 
 def floor_point(position, calibration):
@@ -53,12 +54,12 @@ def floor_point(position, calibration):
     return point if all(0<=v<=1 for v in point) else None
 
 
-def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=None,now=0,icons=None):
+def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=None,now=0,icons=None,music_layers=None):
     if surface not in SURFACES.values():raise ValueError('Forma del mapa no vàlida')
     height,width=content_bgr.shape[:2]
     canvas=Image.new('RGB',(width,height),'#0b1224')
     draw=ImageDraw.Draw(canvas)
-    box=bounds(width,height,surface);left,top,right,bottom=box
+    box=bounds(width,height,surface,180 if music_layers else 0);left,top,right,bottom=box
     w,h=right-left,bottom-top
     shape='ellipse' if surface=='circle' else 'rectangle'
     rgb_color=tuple(int(v) for v in color_bgr[::-1]) if color_bgr is not None else (69,212,210)
@@ -80,6 +81,8 @@ def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=
     alpha[np.asarray(mask)==0]=0
     overlay.putalpha(Image.fromarray(alpha))
     canvas=Image.alpha_composite(canvas.convert('RGBA'),overlay).convert('RGB');draw=ImageDraw.Draw(canvas)
+    if music_layers:
+        canvas=draw_music_layers(canvas,box,mask,music_layers);draw=ImageDraw.Draw(canvas)
     draw.text((12,7),'MAPA DE L’ESPAI · '+next(k for k,v in SURFACES.items() if v==surface),fill='#f5f7ff',font=font(13))
     calibration=config.calibration
     caption='Coordenades calibrades' if calibration is not None else 'Coordenades de càmera · sense calibrar'
@@ -110,7 +113,7 @@ def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=
             draw.ellipse((px-7,py-7,px+7,py+7),fill='#0b1224',outline=color,width=2)
         angle=position[2]*math.tau
         draw.line((px,py,px+19*math.cos(angle),py+19*math.sin(angle)),fill=color,width=2)
-        label=f'T{index+1:02d} · '+str(cards[index].get('function',''))
+        label=f'T{index+1:02d}' if any(layer['id']==index for layer in (music_layers or [])) else f'T{index+1:02d} · '+str(cards[index].get('function',''))
         if visual==NO_VISUAL:label+=' · Cap visual'
         if not inside:label+=' · fora'
         label=label[:62]
@@ -125,14 +128,60 @@ def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=
     return np.asarray(canvas)[:,:,::-1].copy()
 
 
-def map_pointer(x,y,widget_width,widget_height,frame_width,frame_height,surface,calibration=None):
+def map_pointer(x,y,widget_width,widget_height,frame_width,frame_height,surface,calibration=None,panel_width=0):
     factor=min(max(1,widget_width-8)/frame_width,max(1,widget_height-8)/frame_height)
     image_w=max(1,int(frame_width*factor));image_h=max(1,int(frame_height*factor))
     frame_x=(x-(widget_width-image_w)/2)/image_w*frame_width
     frame_y=(y-(widget_height-image_h)/2)/image_h*frame_height
-    left,top,right,bottom=bounds(frame_width,frame_height,surface)
+    left,top,right,bottom=bounds(frame_width,frame_height,surface,panel_width)
     point=((frame_x-left)/(right-left),(frame_y-top)/(bottom-top))
     if not all(0<=value<=1 for value in point):return None
     if surface=='circle' and math.hypot(point[0]-.5,point[1]-.5)>.5:return None
     result=calibration.unproject(point) if calibration is not None else point
     return result if result is not None and all(0<=value<=1 for value in result) else None
+
+
+def draw_music_layers(canvas,box,mask,layers):
+    from atmo_music import note_label
+    width,height=canvas.size;left,top,right,bottom=box;w,h=right-left,bottom-top
+    yy,xx=np.ogrid[:height,:width]
+    x=(xx-left)/w;y=(yy-top)/h
+    theta=(np.arctan2(.5-y,x-.5)+math.tau)%math.tau
+    radial_sector=((theta+math.pi/8)//(math.pi/4)).astype(int)%8
+    radius=np.sqrt((x-.5)**2+(y-.5)**2)*2
+    radial_ring=np.where(radius<1/3,0,np.where(radius<2/3,1,2))
+    grid_col=np.clip(((xx-left)/w*8).astype(int),0,7)
+    grid_row=np.clip(((yy-top)/h*3).astype(int),0,2)
+    palette=((69,212,210),(155,140,255),(247,194,122),(128,197,247))
+    overlay=Image.new('RGBA',canvas.size);draw=ImageDraw.Draw(overlay)
+    for layer in layers:
+        color=palette[layer['id']%len(palette)]
+        cell=layer.get('cell')
+        if cell is not None:
+            sector,ring=cell
+            selected=((grid_col==sector)&(grid_row==ring)) if layer['layout']=='grid' else ((radial_sector==sector)&(radial_ring==ring))
+            fill=np.zeros((height,width,4),np.uint8);fill[selected]=(color[0],color[1],color[2],60 if layer.get('confirmed') else 28)
+            overlay=Image.alpha_composite(overlay,Image.fromarray(fill));draw=ImageDraw.Draw(overlay)
+        line=color+(130,)
+        if layer['layout']=='grid':
+            for col in range(1,8):draw.line((left+col*w/8,top,left+col*w/8,bottom),fill=line,width=1)
+            for row in range(1,3):draw.line((left,top+row*h/3,right,top+row*h/3),fill=line,width=1)
+        else:
+            for fraction in (1/3,2/3):
+                draw.ellipse((left+w*(1-fraction)/2,top+h*(1-fraction)/2,left+w*(1+fraction)/2,top+h*(1+fraction)/2),outline=line,width=1)
+            for sector in range(8):
+                angle=(sector+.5)*math.pi/4
+                draw.line(((left+right)/2,(top+bottom)/2,(left+right)/2+w*math.cos(angle),(top+bottom)/2-h*math.sin(angle)),fill=line,width=1)
+    alpha=np.asarray(overlay.getchannel('A')).copy();alpha[np.asarray(mask)==0]=0;overlay.putalpha(Image.fromarray(alpha))
+    canvas=Image.alpha_composite(canvas.convert('RGBA'),overlay).convert('RGB');draw=ImageDraw.Draw(canvas)
+    x_text=width-176;y_text=56
+    for position,layer in enumerate(layers):
+        if y_text+54>height-25:
+            draw.text((x_text,y_text),f'+ {len(layers)-position} mapes actius',fill='#a8bad5',font=font(10));break
+        color=palette[layer['id']%len(palette)]
+        draw.text((x_text,y_text),f'T{layer["id"]+1:02d} · '+layer['kind'],fill=color,font=font(11))
+        y_text+=15
+        for line in layer['lines'][:3]:
+            draw.text((x_text,y_text),line[:28],fill=color,font=font(9));y_text+=12
+        y_text+=8
+    return canvas
