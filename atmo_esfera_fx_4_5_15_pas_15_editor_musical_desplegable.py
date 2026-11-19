@@ -1498,6 +1498,7 @@ class App:
     with self.arp_lock:
       self.muted=not self.muted
       if self.muted:
+        if self.simulator_view is not None:self.simulator_view.stop_listening()
         self.stop_local_audio()
         self.simulation_release()
         for i in list(self.active):self.deactivate(i)

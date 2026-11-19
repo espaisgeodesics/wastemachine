@@ -124,7 +124,7 @@ class LocalAudioIntegrationTests(unittest.TestCase):
         self.assertIsNone(self.app.local_audio.thread)
         controller=view.listen_controller
         thread=controller.thread
-        view.stop_listening()
+        self.app.toggle_panic()
         self.assertIsNone(s.audio_listener)
         self.assertFalse(thread.is_alive())
         self.assertFalse(controller.snapshot().voices)
