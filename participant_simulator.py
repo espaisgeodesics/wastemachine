@@ -55,6 +55,7 @@ class SimulatorSession:
         self.rule_outputs = RuleOutputs()
         self.midi_commands = deque(maxlen=200)
         self.rule_project = None
+        self.audio_listener = None
         self.kaoss = KaossEngine()
         self.audio=AudioEngine(SilentAudioBackend());self.audio_commands=deque(maxlen=100);self.audio_time=0.
 
@@ -98,7 +99,9 @@ class SimulatorSession:
         self.rule_outputs.apply(self.rule_engine.manual(rule_id, now), now, self.send_rule_midi, self.rule_project,audio=self.send_audio)
 
     def send_audio(self,command):
-        self.audio.dispatch(command,self.audio_time);self.audio_commands.append(command);return True
+        self.audio.dispatch(command,self.audio_time);self.audio_commands.append(command)
+        if self.audio_listener is not None:self.audio_listener(command)
+        return True
 
     def configure_spatial(self, config):
         if not isinstance(config, SpatialMap):

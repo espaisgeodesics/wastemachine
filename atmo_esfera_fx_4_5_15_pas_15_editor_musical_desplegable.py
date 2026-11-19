@@ -1240,7 +1240,7 @@ class App:
       self.simulator_window.deiconify();self.simulator_window.lift();return
     if self.simulator_session is None:self.simulator_session=SimulatorSession()
     window=self.simulator_window=tk.Toplevel(self.root)
-    window.title('ATMO ESFERA FX · Simulador · Fase 2');window.geometry('960x720');window.minsize(900,660)
+    window.title('ATMO ESFERA FX · Simulador de prova');window.geometry(f'960x{min(720,max(400,self.root.winfo_screenheight()-100))}');window.minsize(600,400)
     self.simulator_view=SimulatorWindow(window,self.simulator_session,lambda:self.spatial_map,
       lambda:self.rule_config,self.zone_project_path,lambda:self.participants)
     def close():
@@ -1348,7 +1348,9 @@ class App:
     while destination.exists():destination=Path(folder)/f'BOSC_VIU_PROVA_{index}';index+=1
     try:path=create_bosc_viu(destination,DEFAULTS)
     except Exception as exc:messagebox.showerror('BOSC VIU',str(exc),parent=self.root);return
-    if self.load_project_file(path):self.open_simulator();self.simulator_view.load_zones()
+    if self.load_project_file(path):
+      self.open_simulator();self.simulator_view.load_zones()
+      self.simulator_view.status.set('BOSC VIU preparat: arrossega els participants per les zones. Prem ESCOLTAR PROVA per sentir els sons.')
  def load_project_file(self,path):
     try:
       with open(path,encoding='utf-8') as f:d=json.load(f)

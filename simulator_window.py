@@ -18,6 +18,9 @@ class SimulatorWindow(ttk.Frame):
     def __init__(self, parent, session, spatial_config=None, rules_config=None, project_file=None, participants=None):
         super().__init__(parent, padding=8)
         self.session = session
+        self.listen_controller = None
+        self.listen_pending = False
+        self.listen_status = tk.StringVar(value="Escolta desactivada · la prova és virtual")
         self.spatial_config = spatial_config
         self.rules_config = rules_config
         self.project_file = project_file or (lambda:None)
@@ -34,10 +37,12 @@ class SimulatorWindow(ttk.Frame):
         self.status = tk.StringVar(value='Tria una persona a la taula o al mapa; arrossega-la per moure-la.')
         self.zone_summary = tk.StringVar(value=f'Zones de prova: {len(session.spatial.config.zones)} · calibració virtual')
         self.pack(fill='both', expand=True)
-        ttk.Label(self, text='SIMULADOR · cinc participants · sessió de proves independent',
+        from atmo_ui import scrollable_form, wrap_controls
+        body=self.scroll_body=scrollable_form(self,padding=0)
+        ttk.Label(body, text='SIMULADOR · cinc participants · sessió de proves independent',
                   font=('Segoe UI', 12, 'bold')).pack(anchor='w')
-        ttk.Label(self, text='Coordenades virtuals de càmera. No modifica el projecte, la càmera real, MIDI ni la projecció.').pack(anchor='w')
-        controls = ttk.Frame(self)
+        ttk.Label(body, text='Coordenades virtuals de càmera. No modifica el projecte, la càmera real, MIDI ni la projecció.').pack(anchor='w')
+        controls = ttk.Frame(body)
         controls.pack(fill='x', pady=5)
         ttk.Checkbutton(controls, text='Font disponible', variable=self.available, command=self.change_source).pack(side='left')
         ttk.Label(controls, text='Gir (graus)').pack(side='left', padx=(12, 2))
@@ -45,12 +50,20 @@ class SimulatorWindow(ttk.Frame):
         for label, command in (('APLICAR GIR', self.rotate), ('OCULTAR', lambda:self.visibility(False)),
                                ('MOSTRAR', lambda:self.visibility(True)), ('REINICIAR PROVA', self.reset)):
             ttk.Button(controls, text=label, command=command).pack(side='left', padx=3)
-        zone_controls = ttk.Frame(self)
+        zone_controls = ttk.Frame(body)
         zone_controls.pack(fill='x', pady=(0, 4))
         ttk.Button(zone_controls, text='CARREGAR ZONES I REGLES DEL PROJECTE', command=self.load_zones).pack(side='left')
         ttk.Button(zone_controls, text='REGLES DE PROVA...', command=self.open_rules).pack(side='left', padx=4)
         ttk.Label(zone_controls, textvariable=self.zone_summary).pack(side='left', padx=8)
-        notebook = ttk.Notebook(self)
+        wrap_controls(controls);wrap_controls(zone_controls)
+        sound_controls=ttk.Frame(body);sound_controls.pack(fill='x',pady=4)
+        for title,command in (('ESCOLTAR PROVA',self.listen),('ATURAR SO DE PROVA',self.stop_listening),
+                              ('INICIAR AMBIENT',lambda:self.manual_demo('ambient')),
+                              ('RECUPERAR BOSC',lambda:self.manual_demo('restore'))):
+            ttk.Button(sound_controls,text=title,command=command).pack(side='left',padx=3)
+        wrap_controls(sound_controls)
+        ttk.Label(body,textvariable=self.listen_status,wraplength=760).pack(anchor='w',pady=(0,6))
+        notebook = ttk.Notebook(body)
         notebook.pack(fill='both', expand=True)
         map_tab = ttk.Frame(notebook)
         registry_tab = ttk.Frame(notebook)
@@ -85,6 +98,40 @@ class SimulatorWindow(ttk.Frame):
         self.editor.table.bind('<<TreeviewSelect>>', self.selection_changed, add='+')
         self.bind('<Destroy>', self.destroyed, add='+')
         self.pulse()
+
+    def listen(self):
+        from audio_controller import AudioController
+        if self.listen_controller is None:self.listen_controller=AudioController()
+        self.listen_pending=True
+        self.listen_controller.enable()
+        self.listen_status.set('Activant l’escolta local de la prova…')
+
+    def stop_listening(self):
+        self.session.audio_listener=None
+        self.listen_pending=False
+        if self.listen_controller is not None:
+            self.listen_controller.close()
+            self.listen_controller=None
+        self.listen_status.set('Escolta aturada · la simulació continua sense so')
+
+    def manual_demo(self, rule_id):
+        if not any(rule.rule_id==rule_id for rule in self.session.rule_engine.config.rules):
+            self.status.set('Aquesta ordre només està disponible amb BOSC VIU carregat.');return
+        self.session.manual_rule(rule_id,time.monotonic())
+        self.status.set('Ambient iniciat.' if rule_id=='ambient' else 'Bosc recuperat.')
+
+    def refresh_listening(self):
+        if self.listen_controller is None:return
+        snapshot=self.listen_controller.snapshot()
+        if self.listen_pending and snapshot.state=='ready':
+            from local_audio import AudioCommand
+            self.listen_pending=False
+            self.session.audio_listener=self.listen_controller.submit
+            for voice in self.session.audio.snapshot():
+                self.listen_controller.submit(AudioCommand('play_sound',group=voice.group,
+                    source_id=voice.source_id,marker_id=voice.marker_id,path=voice.path,
+                    gain=voice.gain,loop=voice.loop,fade_s=.2))
+        self.listen_status.set('Escoltant la prova pels altaveus · '+str(len(snapshot.voices))+' sons' if snapshot.state=='ready' else snapshot.detail)
 
     def selected(self):
         pid = self.editor.selected_id
@@ -129,6 +176,7 @@ class SimulatorWindow(ttk.Frame):
         try:validate_assignments(self.session.kaoss.configs, self.session.midi_channels(RulesConfig(tuple(mapped))))
         except ValueError as exc:
             messagebox.showerror('Regles de prova', str(exc), parent=self);return
+        self.stop_listening()
         self.session.configure_spatial(self.spatial_config())
         self.session.configure_rules(RulesConfig(tuple(mapped)),self.project_file())
         if self.rules_editor is not None:self.rules_editor.reload()
@@ -137,11 +185,15 @@ class SimulatorWindow(ttk.Frame):
         self.editor.refresh_rows()
         self.draw()
 
+    def apply_test_rules(self, config):
+        self.stop_listening()
+        return self.session.configure_rules(config,self.session.rule_project)
+
     def open_rules(self):
         if self.rules_window is not None and self.rules_window.winfo_exists():self.rules_window.lift();return
         window=self.rules_window=tk.Toplevel(self);window.title('REGLES DE PROVA · sessió virtual');window.geometry(f'940x{min(840,max(500,self.winfo_screenheight()-100))}')
         self.rules_editor=RuleEditor(window,lambda:self.session.rule_engine.config,
-          lambda config:self.session.configure_rules(config,self.session.rule_project),
+          self.apply_test_rules,
           lambda rid:self.session.manual_rule(rid,time.monotonic()),lambda:self.session.rule_outputs.clear_visuals(),
           lambda:self.session.rule_outputs.log_snapshot(),session_only=True,
           zones=lambda:self.session.spatial.config.zones,participants=lambda:self.session.registry.snapshot().values())
@@ -155,6 +207,7 @@ class SimulatorWindow(ttk.Frame):
         if self.rules_editor is not None and not self.rules_editor.discard():return
         if not messagebox.askyesno('Simulador', 'Reiniciar la prova amb cinc participants nous i buidar el registre virtual?', parent=self):
             return
+        self.stop_listening()
         self.session.reset()
         self.available.set(True)
         self.angle.set(0)
@@ -265,6 +318,7 @@ class SimulatorWindow(ttk.Frame):
         if self.closed:
             return
         try:
+            self.refresh_listening()
             self.session.advance(time.monotonic())
             self.draw()
             winner=self.session.rule_outputs.winner()
@@ -302,6 +356,7 @@ class SimulatorWindow(ttk.Frame):
     def destroyed(self, event):
         if event.widget is self:
             self.closed = True
+            self.stop_listening()
             self.session.rule_outputs.stop_midi(self.session.send_rule_midi)
             self.session.kaoss.stop(self.session.send_rule_midi)
             self.session.audio.stop_all()

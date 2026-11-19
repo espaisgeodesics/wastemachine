@@ -107,6 +107,28 @@ class LocalAudioIntegrationTests(unittest.TestCase):
         port.send.assert_not_called()
         self.assertFalse(self.app.rule_outputs.claims)
 
+    def test_bosc_listening_plays_local_voices_only_after_click_and_stops(self):
+        port=self.app.midi=Mock()
+        with patch.object(m.messagebox,'askyesno',return_value=True),patch.object(m.filedialog,'askdirectory',return_value=self.temp.name):
+            self.app.create_bosc_demo()
+        view=self.app.simulator_view;s=self.app.simulator_session
+        self.assertIsNone(view.listen_controller)
+        view.listen()
+        self.assertTrue(wait_until(lambda:view.listen_controller.snapshot().state in ('ready','error')))
+        self.assertEqual(view.listen_controller.snapshot().state,'ready')
+        view.refresh_listening();view.manual_demo('ambient')
+        self.assertTrue(wait_until(lambda:bool(view.listen_controller.snapshot().voices)))
+        groups={voice.group for voice in view.listen_controller.snapshot().voices}
+        self.assertTrue(groups.intersection({'vent','fulles'}))
+        port.send.assert_not_called()
+        self.assertIsNone(self.app.local_audio.thread)
+        controller=view.listen_controller
+        thread=controller.thread
+        view.stop_listening()
+        self.assertIsNone(s.audio_listener)
+        self.assertFalse(thread.is_alive())
+        self.assertFalse(controller.snapshot().voices)
+
     def test_invalid_audio_rules_do_not_stop_current_playback_or_mutate_project(self):
         self.start();before=self.app.rule_config
         data={'cards':self.app.cards,'experience_rules':{'schema_version':99,'rules':[]}}

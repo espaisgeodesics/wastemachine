@@ -36,6 +36,16 @@ class SimulatorWindowTests(unittest.TestCase):
             self.root.tk.call('after','cancel',timer)
         self.app.close()
 
+    def test_short_window_can_scroll_to_all_simulator_content(self):
+        self.root.tk.call('tk','scaling',1.5)
+        self.app.simulator_window.geometry('700x400')
+        self.root.update()
+        canvas=self.view.scroll_body.atmo_canvas
+        canvas.yview_moveto(1)
+        self.root.update_idletasks()
+        self.assertAlmostEqual(canvas.yview()[1],1,places=2)
+        self.assertGreater(float(canvas.cget('scrollregion').split()[3]),canvas.winfo_height())
+
     def select(self, pid='virtual-1'):
         self.view.editor.table.selection_set(pid)
         self.view.editor.select()

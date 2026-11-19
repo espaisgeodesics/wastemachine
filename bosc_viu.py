@@ -80,6 +80,6 @@ def create_bosc_viu(destination,cards_template):
         'BOSC VIU DE PROVA\nSons sintètics generats; no són gravacions de natura.\n'
         'Obre el projecte, el simulador i carrega zones i regles. Prova OCELLS, RIU, VENT, CLARIANA i ALARMA.\n'
         'INICIAR AMBIENT i RECUPERAR BOSC són regles manuals.\n'
-        'La sortida virtual no fa so. Per escoltar, instal·la el complement opcional i activa Àudio local.\n'
+        'Prem ESCOLTAR PROVA al simulador per sentir els sons locals. INICIAR AMBIENT activa vent i fulles. ATURAR SO DE PROVA atura l’escolta. Cal requirements-audio.txt.\n'
         'No hi ha calibració física; no substitueix les proves Windows, càmera o altaveus.\n',encoding='utf-8')
     return path
