@@ -60,7 +60,7 @@ def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=
     height,width=content_bgr.shape[:2]
     canvas=Image.new('RGB',(width,height),'#0b1224')
     draw=ImageDraw.Draw(canvas)
-    box=bounds(width,height,surface,180 if music_layers else 0,getattr(config.calibration,'aspect_ratio',None));left,top,right,bottom=box
+    box=bounds(width,height,surface,180 if (active or music_layers) else 0,getattr(config.calibration,'aspect_ratio',None));left,top,right,bottom=box
     w,h=right-left,bottom-top
     shape='ellipse' if surface=='circle' else 'rectangle'
     rgb_color=tuple(int(v) for v in color_bgr[::-1]) if color_bgr is not None else (69,212,210)
@@ -114,15 +114,14 @@ def map_frame(content_bgr,cards,active,trails,config,surface='circle',color_bgr=
             draw.ellipse((px-7,py-7,px+7,py+7),fill='#0b1224',outline=color,width=2)
         angle=position[2]*math.tau
         draw.line((px,py,px+19*math.cos(angle),py+19*math.sin(angle)),fill=color,width=2)
-        label=f'T{index+1:02d}' if any(layer['id']==index for layer in (music_layers or [])) else f'T{index+1:02d} · '+str(cards[index].get('function',''))
-        if visual==NO_VISUAL:label+=' · Cap visual'
-        if not inside:label+=' · fora'
-        label=label[:62]
+        # Full function descriptions belong in the legend, not over the map.
+        label=f'T{index+1:02d}' + (' · fora' if not inside else '')
         tx=min(max(4,round(px+18)),max(4,width-round(draw.textlength(label,font=font(10)))-5))
         ty=min(max(46,round(py-20)),height-38)
         text_box=draw.textbbox((tx,ty),label,font=font(10))
         draw.rectangle((text_box[0]-3,text_box[1]-2,text_box[2]+3,text_box[3]+2),fill='#0b1224')
         draw.text((tx,ty),label,fill=color,font=font(10))
+    draw_card_legend(draw, width, height, cards, active, music_layers or [])
     footer=f'{len(active)} targetes actives · Marques només aquí'
     if outside:footer+=f' · {outside} fora del mapa'
     draw.text((12,height-20),footer,fill='#a8bad5',font=font(10))
@@ -156,6 +155,7 @@ def draw_music_layers(canvas,box,mask,layers):
     grid_row=np.clip(((yy-top)/h*3).astype(int),0,2)
     palette=((69,212,210),(155,140,255),(247,194,122),(128,197,247))
     overlay=Image.new('RGBA',canvas.size);draw=ImageDraw.Draw(overlay)
+    drawn_layouts=set()
     for layer in layers:
         color=palette[layer['id']%len(palette)]
         cell=layer.get('cell')
@@ -164,7 +164,9 @@ def draw_music_layers(canvas,box,mask,layers):
             selected=((grid_col==sector)&(grid_row==ring)) if layer['layout']=='grid' else ((radial_sector==sector)&(radial_ring==ring))
             fill=np.zeros((height,width,4),np.uint8);fill[selected]=(color[0],color[1],color[2],60 if layer.get('confirmed') else 28)
             overlay=Image.alpha_composite(overlay,Image.fromarray(fill));draw=ImageDraw.Draw(overlay)
-        line=color+(130,)
+        if layer['layout'] in drawn_layouts:continue
+        drawn_layouts.add(layer['layout'])
+        line=(168,186,213,65)
         if layer['layout']=='grid':
             for col in range(1,8):draw.line((left+col*w/8,top,left+col*w/8,bottom),fill=line,width=1)
             for row in range(1,3):draw.line((left,top+row*h/3,right,top+row*h/3),fill=line,width=1)
@@ -176,14 +178,32 @@ def draw_music_layers(canvas,box,mask,layers):
                 draw.line(((left+right)/2,(top+bottom)/2,(left+right)/2+w*math.cos(angle),(top+bottom)/2-h*math.sin(angle)),fill=line,width=1)
     alpha=np.asarray(overlay.getchannel('A')).copy();alpha[np.asarray(mask)==0]=0;overlay.putalpha(Image.fromarray(alpha))
     canvas=Image.alpha_composite(canvas.convert('RGBA'),overlay).convert('RGB');draw=ImageDraw.Draw(canvas)
-    x_text=width-176;y_text=56
-    for position,layer in enumerate(layers):
-        if y_text+54>height-25:
-            draw.text((x_text,y_text),f'+ {len(layers)-position} mapes actius',fill='#a8bad5',font=font(10));break
-        color=palette[layer['id']%len(palette)]
-        draw.text((x_text,y_text),f'T{layer["id"]+1:02d} · '+layer['kind'],fill=color,font=font(11))
-        y_text+=15
-        for line in layer['lines'][:3]:
-            draw.text((x_text,y_text),line[:28],fill=color,font=font(9));y_text+=12
-        y_text+=8
     return canvas
+
+
+def draw_card_legend(draw, width, height, cards, active, music_layers):
+    """One colour per card; keep note/activity details outside the spatial map."""
+    palette=((69,212,210),(155,140,255),(247,194,122),(128,197,247))
+    layers={layer['id']:layer for layer in music_layers}
+    ids=sorted(set(active)|set(layers))
+    if not ids:return
+    x=width-174;y=56
+    draw.text((x,y),'TARGETES I FUNCIONS',fill='#a8bad5',font=font(10));y+=22
+    for position,index in enumerate(ids):
+        layer=layers.get(index)
+        details=layer['lines'][:3] if layer else [str(cards[index].get('function','Cap acció'))]
+        if y+30+12*len(details)>height-25:
+            draw.text((x,y),f'+ {len(ids)-position} targetes actives',fill='#a8bad5',font=font(10));break
+        color=palette[index%len(palette)]
+        title=f'T{index+1:02d} · '+(layer['kind'] if layer else 'Activa')
+        draw.text((x,y),title,fill=color,font=font(11));y+=17
+        for line in details:
+            # Split descriptions by measured width rather than cutting words.
+            words=str(line).split();text=''
+            for word in words:
+                candidate=(text+' '+word).strip()
+                if draw.textlength(candidate,font=font(9))>166 and text:
+                    draw.text((x,y),text,fill='#d2deee',font=font(9));y+=12;text=word
+                else:text=candidate
+            draw.text((x,y),text,fill='#d2deee',font=font(9));y+=12
+        y+=12

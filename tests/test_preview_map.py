@@ -142,6 +142,34 @@ class MapTests(unittest.TestCase):
         np.testing.assert_array_equal(icon,original_icon)
         self.assertFalse(np.array_equal(preview,content))
 
+
+    def test_shared_music_grid_does_not_grow_brighter_with_more_cards(self):
+        from PIL import Image, ImageDraw
+        from atmo_preview import draw_music_layers
+        canvas=Image.new('RGB',(640,360),'black')
+        box=bounds(640,360,'circle',180)
+        mask=Image.new('L',canvas.size);ImageDraw.Draw(mask).ellipse(box,fill=255)
+        for layout in ('grid','radial'):
+            first=dict(id=0,layout=layout,cell=None)
+            second=dict(id=1,layout=layout,cell=None)
+            one=draw_music_layers(canvas.copy(),box,mask,[first])
+            two=draw_music_layers(canvas.copy(),box,mask,[first,second])
+            np.testing.assert_array_equal(np.asarray(one),np.asarray(two))
+
+    def test_radial_and_grid_maps_remain_visible_together(self):
+        from PIL import Image, ImageDraw
+        from atmo_preview import draw_music_layers
+        canvas=Image.new('RGB',(640,360),'black')
+        box=bounds(640,360,'circle',180)
+        mask=Image.new('L',canvas.size);ImageDraw.Draw(mask).ellipse(box,fill=255)
+        radial=dict(id=0,layout='radial',cell=(0,0),confirmed=True)
+        grid=dict(id=1,layout='grid',cell=(5,2),confirmed=True)
+        first=np.asarray(draw_music_layers(canvas.copy(),box,mask,[radial]))
+        second=np.asarray(draw_music_layers(canvas.copy(),box,mask,[grid]))
+        both=np.asarray(draw_music_layers(canvas.copy(),box,mask,[radial,grid]))
+        self.assertGreater(np.count_nonzero(both),max(np.count_nonzero(first),np.count_nonzero(second)))
+        self.assertFalse(np.any(both[np.asarray(mask)==0]))
+
     def test_calibrated_positions_are_projected_without_clamping(self):
         calibration=Calibration(((.5,.1),(.9,.5),(.5,.9),(.1,.5)))
         point=floor_point((.7,.5),calibration)

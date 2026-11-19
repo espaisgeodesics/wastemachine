@@ -78,33 +78,14 @@ def wrap_controls(frame):
 
 
 def build_workspace(app):
-    from atmo_runtime import BG,PANEL,TEXT,MUTED,CYAN,PURPLE,FONT
-    area=ttk.Frame(app.root);area.pack(fill='both',expand=True,padx=22,pady=(20,16))
-    body=scrollable_form(area,padding=0)
-    ttk.Label(body,text='El teu espai, en directe',style='Title.TLabel').pack(anchor='w')
-    ttk.Label(body,text='Prepara la captura, defineix les targetes i dona vida a l’escena.',style='Muted.TLabel').pack(anchor='w',pady=(5,20))
-    grid=ttk.Frame(body);grid.pack(fill='both',expand=True)
-    sections=(('01','Captura i espai','Situa les targetes en el terra real.',( ('Càmera',lambda:app.show_panel('camera')),('Calibrar el terra',app.open_calibration_editor),('Mapa de previsualització',lambda:app.show_panel('visual')))),
-              ('02','Composició','Defineix què activa cada targeta.',(('Editor de targetes',lambda:app.show_panel('editor')),('Targetes en funció',lambda:app.show_panel('cards')),('Connexió MIDI',lambda:app.show_panel('midi')))),
-              ('03','Escena i so','Combina imatges, cançons i projecció.',(('Zones espacials',app.open_zone_editor),('Àudio local',app.open_local_audio),('Taula de volums',app.open_mixer),('Projecció',app.open_projection))))
-    cards=[]
-    for number,title,subtitle,actions in sections:
-        card=ttk.Frame(grid,style='Card.TFrame',padding=18);cards.append(card)
-        tk.Label(card,text=number,bg=PANEL,fg=PURPLE,font=(FONT,11,'bold')).pack(anchor='w',pady=(0,12))
-        tk.Label(card,text=title,bg=PANEL,fg=TEXT,font=(FONT,16,'bold')).pack(anchor='w')
-        tk.Label(card,text=subtitle,bg=PANEL,fg=MUTED,font=(FONT,10),wraplength=300,justify='left').pack(anchor='w',pady=(8,20))
-        for label,callback in actions:ttk.Button(card,text=label,command=callback).pack(fill='x',pady=5)
-    def layout(event):
-        cols=3 if event.width>=1050 else 2 if event.width>=700 else 1
-        for index,card in enumerate(cards):card.grid(row=index//cols,column=index%cols,sticky='nsew',padx=7,pady=7)
-        for i in range(3):grid.columnconfigure(i,weight=1 if i<cols else 0)
-    grid.bind('<Configure>',layout,add='+')
-    # The dashboard is supplementary; compact layouts keep the full toolbar available.
-    def visible(event):
-        if event.widget is app.root:
-            if event.height<560:area.pack_forget()
-            elif not area.winfo_manager():area.pack(fill='both',expand=True,padx=22,pady=(20,16))
-    app.root.bind('<Configure>',visible,add='+')
+    from pathlib import Path
+    from atmo_project_background import ProjectBackground
+    names={'Joc':'joc','Música':'musica','Exposició':'exposicio',
+           'Instal·lació immersiva':'immersiva'}
+    mode=getattr(app,'atmo_experience_mode','Instal·lació immersiva')
+    image=Path(__file__).resolve().parent/'atmo_assets'/('atmo_'+names.get(mode,'immersiva')+'.png')
+    area=ProjectBackground(app.root,image,with_panel=False)
+    area.pack(fill='both',expand=True,pady=(8,0))
     return area
 
 
@@ -119,6 +100,7 @@ def install_menu_bar(app):
     for index in range((menu.index('end') or 0)+1):
         if menu.type(index)!='cascade':continue
         title=menu.entrycget(index,'label');submenu=menu.entrycget(index,'menu')
+        if title=='Àudio':continue
         button=ttk.Menubutton(bar,text=title,menu=submenu,underline=0,takefocus=True)
         button.pack(side='left',padx=3,pady=3)
         def post(event,widget=button,path=submenu):

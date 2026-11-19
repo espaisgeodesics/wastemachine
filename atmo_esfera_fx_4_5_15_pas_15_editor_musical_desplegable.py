@@ -262,7 +262,6 @@ class App:
     map_controls=ttk.Frame(visual_content);map_controls.pack(fill='x',padx=6,pady=3,before=self.vis_label)
     ttk.Label(map_controls,text='Mapa de previsualització').pack(side='left')
     ttk.Label(map_controls,text='Contorn automàtic segons la calibració').pack(side='left',padx=6)
-    ttk.Button(map_controls,text='CALIBRAR EL TERRA',command=self.open_calibration_editor).pack(side='right',padx=3)
     self.midi_window=self.make_panel_window('midi','CONNEXIÓ MIDI → CAKEWALK','315x210+815+65')
     midi_box=ttk.Frame(self.midi_window);midi_box.pack(fill='both',expand=True,padx=6,pady=6)
     self.editor_window=self.make_panel_window('editor','EDITOR DE TARGETES','350x650+1430+80')
@@ -1519,7 +1518,7 @@ class App:
     self.status.set('Simulació: tria una targeta a l’editor i mantén el clic sobre la previsualització.' if self.simulation.get() else 'Simulació desactivada.')
  def simulation_position(self,event):
     return map_pointer(event.x,event.y,self.vis_label.winfo_width(),self.vis_label.winfo_height(),
-                       W,H,SURFACES[self.preview_surface.get()],self.spatial_map.calibration,180 if self.preview_music_layers() else 0)
+                       W,H,SURFACES[self.preview_surface.get()],self.spatial_map.calibration,180 if (self.active or self.preview_music_layers()) else 0)
  def simulation_press(self,event):
     if not self.simulation.get() or self.muted:return
     self.simulation_release()
