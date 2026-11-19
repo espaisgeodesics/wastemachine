@@ -37,11 +37,27 @@ jobs:
               throw 'Defender is not active. No antivirus result can be claimed.'
             }
             $pref = Get-MpPreference
+            $report.initial_archive_scanning_disabled = $pref.DisableArchiveScanning
+            $report.initial_excluded_paths = @($pref.ExclusionPath)
+            # Only this disposable runner is changed, to ENABLE actual inspection.
+            # No application or file from the archive is executed.
+            if ($pref.DisableArchiveScanning) { Set-MpPreference -DisableArchiveScanning $false }
+            $scanDirectory = 'C:\ATMO_Defender_Inspection_' + $env:GITHUB_RUN_ID
+            $removed = @()
+            foreach ($excluded in @($pref.ExclusionPath)) {
+              $prefix = ([string]$excluded).TrimEnd('\')
+              if ($prefix -and ($scanDirectory -like ($prefix + '*'))) {
+                Remove-MpPreference -ExclusionPath ([string]$excluded)
+                $removed += [string]$excluded
+              }
+            }
+            $report.removed_exclusions_for_isolated_scan = $removed
+            $pref = Get-MpPreference
             $report.archive_scanning_disabled = $pref.DisableArchiveScanning
             $report.excluded_paths = @($pref.ExclusionPath)
             if ($pref.DisableArchiveScanning) {
               $report.result = 'blocked_archive_scanning_disabled'
-              throw 'Archive inspection is disabled. Protection settings will not be changed.'
+              throw 'Archive inspection could not be enabled on the disposable runner.'
             }
             try {
               Update-MpSignature
