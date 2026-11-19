@@ -10,6 +10,7 @@ from atmo_windows import maximize_window
 from atmo_runtime import theme_widgets, configure_theme, install_window_theme, SURFACE
 from PIL import Image, ImageTk, ImageOps
 from atmo_ui import wrap_card_text
+from atmo_project_background import ProjectBackground
 
 BASE = Path(__file__).resolve().parent
 ENGINE = BASE / 'atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py'
@@ -70,14 +71,21 @@ def main():
     def choose(mode):
         clear();splash.title('ATMO ESFERA FX · '+mode+' · Projecte')
         header('Una experiència comença amb un projecte')
-        label(splash,mode.upper()+' · TRIA EL PROJECTE',20,CYAN,True).pack(pady=(35,10))
-        label(splash,'Selecciona com vols començar. Després s’obrirà l’editor.',11,MUTED).pack(pady=(0,18))
-        options=tk.Frame(splash,bg=PANEL,padx=30,pady=20);options.pack(pady=8)
+        artwork_name = dict(zip(MODES, ('joc', 'musica', 'exposicio', 'immersiva')))[mode]
+        background = ProjectBackground(splash, BASE/'atmo_assets'/('atmo_'+artwork_name+'.png'))
+        background.pack(fill='both', expand=True, pady=(10,0))
+        scrollbar = tk.Scrollbar(background, orient='vertical', command=background.yview)
+        scrollbar.place(relx=1, rely=0, relheight=1, anchor='ne')
+        background.configure(yscrollcommand=scrollbar.set)
+        options = background.panel
+        label(options,mode.upper(),11,CYAN,True).pack(pady=(0,6))
+        label(options,'Tria el teu projecte',22,TEXT,True).pack(pady=(0,8))
+        label(options,'Un nou espai per crear, explorar i transformar.',11,MUTED).pack(pady=(0,18))
         def proceed(action):
             selected['mode']=mode;selected['game_action']=action;splash.destroy()
         for title,action,primary in (('+  Projecte nou','new',True),('Obrir un projecte existent','open',False),('Triar una plantilla','template',False),('Entrar a l’editor sense carregar cap projecte',None,False)):
             btn(options,title,lambda a=action:proceed(a),primary).pack(fill='x',pady=6)
-        btn(splash,'← Tornar a les experiències',show_start).pack(pady=15)
+        btn(options,'← Tornar a les experiències',show_start).pack(fill='x',pady=(14,0))
     def show_start():
         clear(); splash.title('ATMO ESFERA FX · Inici')
         header('L’espai es converteix en instrument')
