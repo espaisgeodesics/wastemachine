@@ -176,7 +176,6 @@ class App:
     fm.add_command(label='Obrir projecte...',command=self.open_project)
     fm.add_command(label='Desar projecte',command=self.save_project)
     fm.add_command(label='Desar com...',command=lambda:self.save_project(True))
-    fm.add_command(label='Crear BOSC VIU de prova...',command=self.create_bosc_demo)
     fm.add_separator()
     fm.add_command(label='Desar distribució de finestres',command=self.save_window_layout)
     fm.add_command(label='Recuperar distribució desada',command=self.restore_window_layout)
