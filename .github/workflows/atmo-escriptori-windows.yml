@@ -55,14 +55,14 @@ jobs:
           if ($install.ExitCode -ne 0) { throw "Instal·lació fallida: $($install.ExitCode)" }
           $desktop = [Environment]::GetFolderPath('Desktop')
           $shortcutPath = Join-Path $desktop 'ATMO ESFERA FX.lnk'
-          if (-not (Test-Path $shortcutPath)) { throw 'Falta l’accés directe' }
+          if (-not (Test-Path $shortcutPath)) { throw "Falta l’accés directe" }
           $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcutPath)
-          if ($shortcut.TargetPath -ne (Join-Path $target 'ATMO_ESFERA_FX.exe')) { throw 'Destí incorrecte de l’accés directe' }
+          if ($shortcut.TargetPath -ne (Join-Path $target "ATMO_ESFERA_FX.exe")) { throw "Destí incorrecte de l’accés directe" }
           $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'ATMO Test Profile'
           $report = Join-Path $env:GITHUB_WORKSPACE 'VALIDACIO/escriptori/aplicacio.json'
           $process = Start-Process (Join-Path $target 'ATMO_ESFERA_FX.exe') -ArgumentList @('--atmo-self-test', "`"$report`"") -PassThru
           if (-not $process.WaitForExit(120000)) { $process.Kill(); throw 'Temps exhaurit en provar el programa' }
-          if (-not (Test-Path $report)) { throw 'El programa no ha generat l’informe' }
+          if (-not (Test-Path $report)) { throw "El programa no ha generat l’informe" }
           Get-Content $report
           if ($process.ExitCode -ne 0) { throw "Prova fallida: $($process.ExitCode)" }
           $data = Join-Path $env:LOCALAPPDATA 'ATMO ESFERA FX/PROJECTES'
@@ -71,7 +71,7 @@ jobs:
           $uninstall = Start-Process (Join-Path $target 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw 'Desinstal·lació fallida' }
           if (-not (Test-Path (Join-Path $data 'CONSERVAR.txt'))) { throw 'La desinstal·lació ha eliminat dades' }
-          if (Test-Path $shortcutPath) { throw 'L’accés directe no s’ha eliminat' }
+          if (Test-Path $shortcutPath) { throw "L’accés directe no s’ha eliminat" }
           'Instal·lació, icona, navegació, àudio, desinstal·lació i conservació de dades: OK' | Set-Content VALIDACIO/escriptori/installacio.txt
       - name: Preparar els fitxers de lliurament
         run: |
