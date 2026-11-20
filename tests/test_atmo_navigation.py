@@ -71,7 +71,7 @@ class NavigationTests(unittest.TestCase):
         self.assertTrue(self.app.return_to_start)
         self.assertTrue(self.app._closing)
         self.assertFalse(self.app.arp_thread.is_alive())
-        self.assertEqual(self.root.tk.call('after','info'),())
+        self.assertFalse(self.root.tk.call('after','info'))
 
 
 if __name__=='__main__':unittest.main()
