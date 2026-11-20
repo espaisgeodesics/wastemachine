@@ -31,12 +31,22 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\ATMO_ESFERA_FX.exe"; Working
 Filename: "{app}\ATMO_ESFERA_FX.exe"; Description: "Obrir ATMO ESFERA FX"; Flags: nowait postinstall skipifsilent
 [Code]
 var PreviousFolder: TInputDirWizardPage;
+    PreviousChoice: TInputOptionWizardPage;
 procedure InitializeWizard;
 begin
-  PreviousFolder := CreateInputDirPage(wpSelectDir, 'Conservar els projectes anteriors',
+  PreviousChoice := CreateInputOptionPage(wpSelectDir, 'Conservar el treball anterior',
+    'Vols copiar els projectes i la distribucio de finestres de l''ATMO anterior?',
+    'Marca l''opcio si vols importar-los. Pots continuar sense importar res.', False, False);
+  PreviousChoice.Add('Copiar PROJECTES i GRAVACIONS de la carpeta anterior');
+  PreviousChoice.Values[0] := False;
+  PreviousFolder := CreateInputDirPage(PreviousChoice.ID, 'Conservar els projectes anteriors',
     'Opcional: tria la carpeta on utilitzaves ATMO fins ara.',
     'Es copiaran PROJECTES i GRAVACIONS, inclosa la distribucio de finestres. No se sobreescriuran fitxers existents. Deixa-ho buit si no vols copiar res.', False, '');
   PreviousFolder.Add('Carpeta anterior d''ATMO (opcional):');
+end;
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = PreviousFolder.ID) and (not PreviousChoice.Values[0]);
 end;
 procedure CopyMissing(const Source, Destination: String);
 var Entry: TFindRec; FromPath, ToPath: String;
@@ -63,7 +73,8 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var Folder, Target: String;
 begin
   if CurStep = ssPostInstall then begin
-    Folder := Trim(PreviousFolder.Values[0]);
+    Folder := '';
+    if PreviousChoice.Values[0] then Folder := Trim(PreviousFolder.Values[0]);
     if Folder <> '' then begin
       Target := ExpandConstant('{localappdata}\ATMO ESFERA FX');
       if CompareText(RemoveBackslashUnlessRoot(Folder), RemoveBackslashUnlessRoot(Target)) <> 0 then begin

@@ -34,7 +34,7 @@ jobs:
             build/clean
             build/ATMO_ESFERA_FX_Codi_net.zip
             dist
-          key: atmo-desktop-${{ hashFiles('*.py', 'packaging/**', 'atmo_assets/**', 'requirements*.txt') }}
+          key: atmo-desktop-${{ hashFiles('*.py', 'packaging/build_clean.py', 'packaging/LLEGEIX_ME.txt', 'atmo_assets/**', 'requirements*.txt') }}
       - name: Paquet de codi net i icona
         if: steps.cached.outputs.cache-hit != 'true' 
         run: python packaging/build_clean.py build/clean
@@ -49,7 +49,6 @@ jobs:
           Get-Content VALIDACIO/escriptori/pyinstaller.log | Select-Object -Last 30
           exit $result
       - name: Crear instal·lador i accessos directes
-        if: steps.cached.outputs.cache-hit != 'true'
         run: |
           $compiler = Get-ChildItem "${env:ProgramFiles(x86)}/Inno Setup */ISCC.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
           if (-not $compiler) {
