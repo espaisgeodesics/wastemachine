@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox
-from atmo_esfera_fx_integracio_12 import AtmoZoneEditor, label, btn, BG, PANEL, TEXT, MUTED, CYAN, PURPLE, MODES
+from atmo_entry_ui import AtmoZoneEditor, label, btn, BG, PANEL, TEXT, MUTED, CYAN, PURPLE, MODES
 from atmo_primary import primary_engine
 from atmo_windows import maximize_window
 from atmo_runtime import theme_widgets, configure_theme, install_window_theme, SURFACE
@@ -152,5 +152,9 @@ def main():
         if not selected['mode']:return
         if not open_engine(selected['mode'],selected['game_action']):return
 
-if __name__=="__main__":main()
+if __name__=="__main__":
+    if '--atmo-self-test' in sys.argv:
+        from atmo_frozen_check import run
+        raise SystemExit(run(choose_experience,open_engine,Path(sys.argv[sys.argv.index('--atmo-self-test')+1])))
+    main()
 

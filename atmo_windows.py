@@ -46,3 +46,20 @@ def maximize_window(window):
         window.state('zoomed')
     except Exception:
         window.geometry(f'{window.winfo_screenwidth()}x{window.winfo_screenheight()}+0+0')
+
+
+def install_app_icon(root):
+    """Use the approved eclipse for windows and Windows taskbar grouping."""
+    if getattr(root,'_atmo_app_icon',None) is not None:return
+    try:
+        if sys.platform=='win32':
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('ATMO.ESFERA.FX')
+        from pathlib import Path
+        from PIL import Image,ImageTk
+        with Image.open(Path(__file__).resolve().parent/'atmo_assets'/'atmo_logo.png') as source:
+            root._atmo_app_icon=ImageTk.PhotoImage(source.resize((64,64),Image.Resampling.LANCZOS),master=root)
+        root.iconphoto(True,root._atmo_app_icon)
+    except Exception:
+        # A missing icon must not prevent an existing project from opening.
+        pass

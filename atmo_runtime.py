@@ -189,6 +189,8 @@ def install_window_theme(root):
     if getattr(root, '_atmo_theme_installed', False):
         return
     root._atmo_theme_installed = True
+    from atmo_windows import install_app_icon
+    install_app_icon(root)
     pending = set()
     def mapped(event):
         window = event.widget

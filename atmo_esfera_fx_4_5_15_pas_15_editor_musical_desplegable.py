@@ -47,9 +47,8 @@ except ImportError:
 
 APP_VERSION='4.8.1'
 CARD_LOST_TIMEOUT=.25
-ROOT=Path(__file__).resolve().parent
-(ROOT/'PROJECTES').mkdir(exist_ok=True)
-(ROOT/'GRAVACIONS').mkdir(exist_ok=True)
+from atmo_paths import data_directory
+ROOT=data_directory()
 W,H=640,360
 NAMES=['Motor de ferro','Tempesta de pols','Vapor tòxic','Reactor elèctric','Túnel mecànic','Forja de foc','Fantasma digital','Ones mecàniques','Ferralla orbital','Nucli radioactiu','Ull de la màquina','Sol terminal','Cercle cromàtic 360°']
 NAMES.append('Cap')
@@ -2345,7 +2344,7 @@ class App:
     if self.midi:self.midi.close()
     if not self.local_audio.close():print('El backend d’àudio encara s’està aturant; comprova el dispositiu.')
     for timer in self.root.tk.call('after','info'):
-      self.root.after_cancel(timer)
+      self.root.tk.call('after','cancel',timer)
     self.root.destroy()
 
 if __name__=='__main__':

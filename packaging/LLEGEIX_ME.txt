@@ -1,0 +1,33 @@
+ATMO ESFERA FX · Edició d'escriptori · Novembre de 2026
+
+INSTAL·LACIÓ DE WINDOWS
+Executa ATMO_ESFERA_FX_Instal_lador_Windows.exe.
+L'assistent crea l'accés directe de l'escriptori i del menú Inici.
+Inclou Python i les dependències MIDI, càmera, imatges i àudio local.
+No cal executar cap instal·lador addicional de Python, MIDI o àudio.
+Per obrir el programa, fes doble clic a la icona ATMO ESFERA FX.
+Es pot desinstal·lar des de la configuració d'aplicacions de Windows.
+
+CONSERVAR EL TREBALL ACTUAL
+L'instal·lador permet triar opcionalment la carpeta de l'ATMO anterior.
+Copia PROJECTES i GRAVACIONS al directori de dades, sense sobreescriure fitxers existents.
+S'hi inclou PROJECTES/distribucio_finestres.json, amb les finestres desades.
+Si tens projectes o mitjans en altres carpetes, continuen al mateix lloc: obre'ls amb Projecte.
+Conserva la carpeta anterior fins a comprovar els projectes i recursos al programa instal·lat.
+
+DADES DE L'APLICACIÓ INSTAL·LADA
+%LOCALAPPDATA%\ATMO ESFERA FX\PROJECTES
+%LOCALAPPDATA%\ATMO ESFERA FX\GRAVACIONS
+Aquestes dades es conserven en actualitzar o desinstal·lar el programa.
+
+ÚLTIMS CANVIS
+La segona pantalla només ofereix Projecte nou i Obrir un projecte existent.
+Nou projecte, dins del motor, torna a Tria el teu univers després de preguntar si vols desar.
+En obrir s'aplica la distribució de finestres desada; es pot modificar i tornar a desar.
+La icona de finestres i accessos directes és el logo de l'eclipsi d'ATMO.
+No s'inclouen versions antigues ni projectes de prova personals al paquet.
+
+CODI NET (OPCIONAL)
+El ZIP de codi és per a qui vulgui executar o revisar el codi font.
+Aquesta modalitat requereix Python 3.12 i els paquets del seu requirements.txt.
+No cal descarregar-lo per utilitzar l'instal·lador de Windows.

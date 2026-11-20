@@ -1,0 +1,109 @@
+name: ATMO - programa Windows i paquet net
+on:
+  push:
+    branches: [atmo/interficie-primera-integracio]
+    paths: ['atmo_*.py', 'packaging/**', '.github/workflows/atmo-escriptori-windows.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PYTHONUTF8: '1'
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependències del programa i de construcció
+        run: python -m pip install numpy opencv-contrib-python Pillow mido==1.3.3 python-rtmidi==1.5.8 -r requirements-audio.txt pyinstaller
+      - name: Proves abans d'empaquetar
+        run: |
+          New-Item -ItemType Directory -Force VALIDACIO/escriptori | Out-Null
+          python -m tools.provar_tests *> VALIDACIO/escriptori/tests.log
+          $result = $LASTEXITCODE
+          Get-Content VALIDACIO/escriptori/tests.log | Select-Object -Last 35
+          exit $result
+      - name: Paquet de codi net i icona
+        run: python packaging/build_clean.py build/clean
+      - name: Construir el programa amb totes les dependències
+        run: |
+          $manifest = Get-Content build/clean/MANIFEST.json | ConvertFrom-Json
+          $hidden = @()
+          foreach ($module in $manifest.modules) { $hidden += @('--hidden-import', $module) }
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --noupx --name ATMO_ESFERA_FX --icon build/clean/atmo_assets/atmo.ico --paths build/clean --add-data "build/clean/atmo_assets;atmo_assets" --add-data "build/clean/atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py;." --collect-all cv2 --collect-all pygame --collect-all soundfile --collect-all mido --hidden-import mido.backends.rtmidi --hidden-import rtmidi @hidden build/clean/atmo_esfera_fx_integracio_19.py *> VALIDACIO/escriptori/pyinstaller.log
+          $result = $LASTEXITCODE
+          Get-Content VALIDACIO/escriptori/pyinstaller.log | Select-Object -Last 30
+          exit $result
+      - name: Crear instal·lador i accessos directes
+        run: |
+          $compiler = Get-ChildItem "${env:ProgramFiles(x86)}/Inno Setup */ISCC.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $compiler) {
+            choco install innosetup --yes --no-progress
+            $compiler = Get-ChildItem "${env:ProgramFiles(x86)}/Inno Setup */ISCC.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          }
+          & $compiler.FullName packaging/atmo.iss
+          exit $LASTEXITCODE
+      - name: Instal·lar i provar el programa real
+        run: |
+          $installer = Resolve-Path dist/ATMO_ESFERA_FX_Instal_lador_Windows.exe
+          $target = Join-Path $env:RUNNER_TEMP 'ATMO Instal lat'
+          $install = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$target`"") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Instal·lació fallida: $($install.ExitCode)" }
+          $desktop = [Environment]::GetFolderPath('Desktop')
+          $shortcutPath = Join-Path $desktop 'ATMO ESFERA FX.lnk'
+          if (-not (Test-Path $shortcutPath)) { throw 'Falta l’accés directe' }
+          $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcutPath)
+          if ($shortcut.TargetPath -ne (Join-Path $target 'ATMO_ESFERA_FX.exe')) { throw 'Destí incorrecte de l’accés directe' }
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'ATMO Test Profile'
+          $report = Join-Path $env:GITHUB_WORKSPACE 'VALIDACIO/escriptori/aplicacio.json'
+          $process = Start-Process (Join-Path $target 'ATMO_ESFERA_FX.exe') -ArgumentList @('--atmo-self-test', "`"$report`"") -PassThru
+          if (-not $process.WaitForExit(120000)) { $process.Kill(); throw 'Temps exhaurit en provar el programa' }
+          if (-not (Test-Path $report)) { throw 'El programa no ha generat l’informe' }
+          Get-Content $report
+          if ($process.ExitCode -ne 0) { throw "Prova fallida: $($process.ExitCode)" }
+          $data = Join-Path $env:LOCALAPPDATA 'ATMO ESFERA FX/PROJECTES'
+          New-Item -ItemType Directory -Force $data | Out-Null
+          Set-Content (Join-Path $data 'CONSERVAR.txt') 'dades de prova'
+          $uninstall = Start-Process (Join-Path $target 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw 'Desinstal·lació fallida' }
+          if (-not (Test-Path (Join-Path $data 'CONSERVAR.txt'))) { throw 'La desinstal·lació ha eliminat dades' }
+          if (Test-Path $shortcutPath) { throw 'L’accés directe no s’ha eliminat' }
+          'Instal·lació, icona, navegació, àudio, desinstal·lació i conservació de dades: OK' | Set-Content VALIDACIO/escriptori/installacio.txt
+      - name: Preparar els fitxers de lliurament
+        run: |
+          Copy-Item build/ATMO_ESFERA_FX_Codi_net.zip dist/
+          Copy-Item packaging/LLEGEIX_ME.txt dist/
+          Get-FileHash dist/ATMO_ESFERA_FX_Instal_lador_Windows.exe,dist/ATMO_ESFERA_FX_Codi_net.zip -Algorithm SHA256 | Format-List | Out-File dist/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: atmo-escriptori-validacio
+          path: VALIDACIO/escriptori
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atmo-escriptori-lliurament
+          path: |
+            dist/ATMO_ESFERA_FX_Instal_lador_Windows.exe
+            dist/ATMO_ESFERA_FX_Codi_net.zip
+            dist/LLEGEIX_ME.txt
+            dist/SHA256.txt
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: atmo-escriptori-lliurament
+          path: delivery
+      - name: Publicar la versió d'escriptori validada
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "atmo-escriptori-${GITHUB_RUN_NUMBER}" delivery/* --target "$GITHUB_SHA" --title "ATMO ESFERA FX · Programa Windows · ${GITHUB_RUN_NUMBER}" --notes "Instal·lador Windows amb logo ATMO, accés directe, àudio i MIDI inclosos. Paquet de codi net sense versions antigues. Instal·lació i navegació comprovades a Windows; consulta LLEGEIX_ME.txt per conservar projectes i distribució de finestres."
