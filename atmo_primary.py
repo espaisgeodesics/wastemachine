@@ -28,6 +28,8 @@ def primary_engine(module, mode='Joc'):
     class PrimaryApp(adapted):
         def __init__(self, root):
             self.atmo_starting = True
+            self.navigate_new_project = False
+            self.return_to_start = False
             self.atmo_experience_mode = mode
             super().__init__(root)
             self.hide_startup_tools()
@@ -45,6 +47,22 @@ def primary_engine(module, mode='Joc'):
             maximize_window(self.root)
             self.root.lift()
             self.root.focus_set()
+            layout=getattr(self,'window_layout_file',None)
+            if layout is not None and layout.is_file():
+                self.restore_window_layout(silent=True)
+
+        def new_project(self):
+            if self.atmo_starting or not self.navigate_new_project:
+                return super().new_project()
+            if not self.confirm_new_project():return
+            if not self.confirm_rule_discard():return
+            if not self.confirm_participant_discard():return
+            if not self.confirm_zone_discard():return
+            if not self.live_kaoss.stop():
+                self.status.set('Reconnecta MIDI per alliberar les notes Chaos abans de canviar de projecte.')
+                return
+            super().close(confirmed=True)
+            self.return_to_start = True
 
         def make_panel_window(self, key, title, geometry):
             window = super().make_panel_window(key, title, geometry)

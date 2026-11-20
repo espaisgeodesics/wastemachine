@@ -403,7 +403,7 @@ class App:
         for key in ('camera','visual','editor'):
           x,y,w,h=self.initial_panel_layouts[key];self.panel_windows[key].geometry(f'{w}x{h}+{x}+{y}')
  def save_window_layout(self):
-    layout={'layout_version':3,'main':self.root.geometry(),'panels':{}}
+    layout={'layout_version':4,'main':self.root.geometry(),'main_state':self.root.state(),'panels':{}}
     for key,win in self.panel_windows.items():
       if not win.winfo_exists():continue
       state=win.state()
@@ -421,6 +421,10 @@ class App:
     try:
       with open(self.window_layout_file,encoding='utf-8') as f:layout=json.load(f)
       self.loaded_layout_version=layout.get('layout_version',0)
+      state=layout.get('main_state')
+      if state in ('normal','zoomed'):
+        try:self.root.state(state)
+        except tk.TclError:pass
       if 'main' in layout:self.root.geometry(layout['main'])
       for key,data in layout.get('panels',{}).items():
         win=self.panel_windows.get(key)
@@ -437,8 +441,10 @@ class App:
           win.lift(self.root)
         else:win.withdraw()
       if not silent:self.status.set('Distribució de finestres recuperada.')
+      return True
     except Exception as exc:
       self.status.set('No s’ha pogut recuperar la distribució: '+str(exc))
+      return False
  def show_runtime_info(self):
     messagebox.showinfo('ATMO ESFERA FX · Versió i fitxer',f'Versió: {APP_VERSION}\n\nFitxer: {Path(__file__).resolve()}\n\nPython: {sys.executable}',parent=self.root)
  def resize_banner(self,event):
@@ -2325,9 +2331,10 @@ class App:
     if size!=(w,h):rgb=cv2.resize(rgb,size,interpolation=cv2.INTER_AREA if factor<1 else cv2.INTER_LINEAR)
     photo=ImageTk.PhotoImage(Image.fromarray(rgb),master=label)
     setattr(self,attr,photo);label.config(image=photo,text='')
- def close(self):
-    if not self.confirm_rule_discard():return
-    if not self.confirm_zone_discard():return
+ def close(self,confirmed=False):
+    if not confirmed:
+      if not self.confirm_rule_discard():return
+      if not self.confirm_zone_discard():return
     self._closing=True
     self.card_media.close();self.projection_mosaic.reset()
     self.arp_stop.set()
@@ -2337,6 +2344,8 @@ class App:
     if self.camera:self.camera.release()
     if self.midi:self.midi.close()
     if not self.local_audio.close():print('El backend d’àudio encara s’està aturant; comprova el dispositiu.')
+    for timer in self.root.tk.call('after','info'):
+      self.root.after_cancel(timer)
     self.root.destroy()
 
 if __name__=='__main__':

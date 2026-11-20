@@ -33,22 +33,24 @@ def open_engine(mode, game_action=None):
         app = primary_engine(module, mode)(root)
         app.atmo_experience_mode = mode
         app.atmo_integration_version = 19
+        app.navigate_new_project = True
         root.title('ATMO ESFERA FX · ' + mode)
         root.deiconify()
         maximize_window(root)
         def start_project():
             try:
                 if game_action == 'new': app.new_project()
-                elif game_action in ('open', 'template'): app.open_project()
+                elif game_action == 'open': app.open_project()
             finally:
                 app.finish_startup()
         root.after_idle(start_project)
         root.mainloop()
+        return app.return_to_start
     except Exception as exc:
         messagebox.showerror('ATMO ESFERA FX', 'Error en iniciar ATMO:\n' + str(exc), parent=root)
 
 
-def main():
+def choose_experience():
     splash=tk.Tk(); splash.title('ATMO ESFERA FX · Inici')
     splash.geometry('1280x760'); splash.minsize(940,620); splash.configure(bg=BG)
     install_window_theme(splash); theme_widgets(splash); maximize_window(splash)
@@ -83,7 +85,7 @@ def main():
         label(options,'Un nou espai per crear, explorar i transformar.',11,MUTED).pack(pady=(0,18))
         def proceed(action):
             selected['mode']=mode;selected['game_action']=action;splash.destroy()
-        for title,action,primary in (('+  Projecte nou','new',True),('Obrir un projecte existent','open',False),('Triar una plantilla','template',False),('Entrar a l’editor sense carregar cap projecte',None,False)):
+        for title,action,primary in (('+  Projecte nou','new',True),('Obrir un projecte existent','open',False)):
             btn(options,title,lambda a=action:proceed(a),primary).pack(fill='x',pady=6)
         btn(options,'← Tornar a les experiències',show_start).pack(fill='x',pady=(14,0))
     def show_start():
@@ -140,7 +142,15 @@ def main():
             wrap_card_text(footer)
         row.grid_rowconfigure(0,weight=1)
     show_start();splash.mainloop()
-    if selected['mode']:open_engine(selected['mode'],selected['game_action'])
+    return selected
+
+
+def main():
+    # Each completed session releases Tk, camera, MIDI and audio before returning.
+    while True:
+        selected=choose_experience()
+        if not selected['mode']:return
+        if not open_engine(selected['mode'],selected['game_action']):return
 
 if __name__=="__main__":main()
 
