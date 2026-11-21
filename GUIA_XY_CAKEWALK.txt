@@ -57,6 +57,7 @@ Desa el preset de la superfície, la cadena i el projecte de Cakewalk: són inde
 Si la versió no permet assignar els dos comandaments així, envia la captura d'ACT i de Control Properties. Encara no considerarem feta l'assignació real.
 
 4. PROVA PETITA, SENSE CÀMERA
+Atura la càmera i desactiva la simulació abans de provar/aprendre els CC. Així no s’envien valors de posició mentre estàs assignant un eix.
 A ATMO, reprèn MIDI si està en silenci. Prem X0, X64 i X127, un per un.
 Només Filtre ha de moure's. Després prem Y0, Y64 i Y127: només Ambient.
 Són valors MIDI literals, no passen pels rangs ni per la inversió de càmera.

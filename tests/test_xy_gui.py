@@ -38,6 +38,11 @@ class XYGuiTests(unittest.TestCase):
             self.assertEqual(self.app.cards[0]['kaoss']['y_cc'],17)
             self.assertEqual(self.app.cards[0]['kaoss_bus']['return_s'],.6)
         self.assertFalse(self.errors)
+    def test_manual_learning_rejects_live_camera_without_sending(self):
+        with patch.object(self.app,'camera',Mock()),patch('atmo_card_functions.messagebox.showerror') as error,patch.object(module.mido,'open_output') as opened:
+            self.view.test_axis('x',64)
+        error.assert_called_once();opened.assert_not_called()
+
     def test_muted_test_sends_nothing_and_disabled_route_can_be_applied(self):
         self.assertTrue(self.view.apply())
         self.view.bus_enabled.set(False)

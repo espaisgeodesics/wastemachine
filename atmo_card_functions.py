@@ -277,6 +277,8 @@ class CardKaossEditor(ttk.Frame):
     def test_axis(self,axis,value):
         try:
             if self.app.muted:raise ValueError('Prem REPRENDRE MIDI abans de provar el control XY.')
+            if getattr(self.app,'camera',None) is not None or self.app.simulation.get():
+                raise ValueError('Atura la càmera i desactiva la simulació abans de les proves manuals, per aprendre només el CC escollit.')
             if not self.apply():return
             bus=self.app.live_kaoss.bus
             if self.index not in bus.cards:raise ValueError('Activa Control dedicat de bus XY i aplica la configuració.')
