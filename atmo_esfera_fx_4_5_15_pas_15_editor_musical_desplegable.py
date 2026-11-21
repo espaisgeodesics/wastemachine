@@ -2335,6 +2335,7 @@ class App:
       if not self.confirm_rule_discard():return
       if not self.confirm_zone_discard():return
     self._closing=True
+    self.live_kaoss.close()
     self.card_media.close();self.projection_mosaic.reset()
     self.arp_stop.set()
     self.arp_thread.join(timeout=1.0)

@@ -1,4 +1,4 @@
-ATMO ESFERA FX · Edició d'escriptori · Novembre de 2026
+ATMO ESFERA FX · Edició d'escriptori · Novembre de 2026 · Control XY de Cakewalk
 
 INSTAL·LACIÓ DE WINDOWS
 Executa ATMO_ESFERA_FX_Instal_lador_Windows.exe.
@@ -31,3 +31,11 @@ CODI NET (OPCIONAL)
 El ZIP de codi és per a qui vulgui executar o revisar el codi font.
 Aquesta modalitat requereix Python 3.12 i els paquets del seu requirements.txt.
 No cal descarregar-lo per utilitzar l'instal·lador de Windows.
+
+CONTROL XY DEL MASTER DE CAKEWALK
+A la targeta Chaos Oscillator (Kaoss XY), obre Configurar funció i prem
+Preparar Cakewalk · filtre + reverb. Crea ATMO FX a loopMIDI.
+El perfil envia X CC16 i Y CC17 al canal 16, sense notes ni controls de volum.
+La guia GUIA_XY_CAKEWALK.txt explica com preparar una FX Chain i l'assignació ACT.
+La resposta real de Modfilter i Sonitus Reverb s'ha de confirmar al teu Cakewalk;
+les proves automàtiques comproven ATMO i els missatges, no aquests connectors.

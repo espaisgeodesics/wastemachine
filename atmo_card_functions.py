@@ -1,5 +1,6 @@
 """Per-card Kaoss configuration and live MIDI, using the existing XY engine."""
 from dataclasses import replace
+from atmo_xy_control import BusXY, MidiFXOutput, bus_profile
 import time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -40,6 +41,9 @@ class LiveKaoss:
         self.fx_values = {}
         self.fx_revision = 0
         self.pending_restore = {}
+        self.output=MidiFXOutput(app)
+        self.bus=BusXY(self.output.send)
+        self.output_error=None
 
     def send(self, command):
         if self.app.muted and command.kind != 'note_off': return False
@@ -78,19 +82,35 @@ class LiveKaoss:
 
     def prepare(self, cards, rules):
         configs = live_configs(cards, rules)
-        if configs != self.engine.configs and not self.stop():
-            raise ValueError('No s’han pogut alliberar les notes o controls XY. Reconnecta MIDI abans de canviar la configuració.')
+        bus_cards=BusXY.validate(cards,rules)
+        legacy={i:c for i,c in configs.items() if i not in bus_cards}
+        if (legacy != self.engine.configs or bus_cards != self.bus.cards) and not self.stop():
+            raise ValueError('No s’han pogut alliberar els controls XY. Comprova la sortida MIDI abans de canviar la configuració.')
         return configs
 
     def configure(self, cards, rules):
-        configs = self.prepare(cards, rules)
-        if configs != self.engine.configs:self.engine = KaossEngine(configs)
+        configs=self.prepare(cards,rules)
+        bus_cards=BusXY.validate(cards,rules)
+        legacy={i:c for i,c in configs.items() if i not in bus_cards}
+        if legacy!=self.engine.configs:self.engine=KaossEngine(legacy)
+        self.bus.configure(bus_cards)
+        if not bus_cards:self.output.close()
 
     def observe(self, marker, x, y, rotation):
         if self.app.muted:return
-        self.engine.observe(marker,x,y,rotation,time.monotonic())
+        if marker in self.bus.cards:
+            project=getattr(self.app,'musical_position',None)
+            point=project(x,y) if callable(project) else (x,y)
+            if point is None:self.bus.release(marker,time.monotonic());return
+            self.bus.observe(marker,*point,rotation,time.monotonic())
+        else:self.engine.observe(marker,x,y,rotation,time.monotonic())
 
     def tick(self):
+        self.bus.tick(time.monotonic())
+        if self.output.error and self.output.error!=self.output_error:
+            status=getattr(self.app,'status',None)
+            if hasattr(status,'set'):status.set('Control XY: '+self.output.error)
+        self.output_error=self.output.error
         for marker,force in list(self.pending_restore.items()):self.restore(marker,force)
         previous=set(self.engine.voices)
         self.engine.tick(time.monotonic(),self.send,self.app.bpm,self.send_for_marker)
@@ -98,14 +118,18 @@ class LiveKaoss:
             if marker in self.fx_values:self.restore(marker)
 
     def release(self, marker):
+        if marker in self.bus.cards:self.bus.release(marker,time.monotonic());return
         if marker in self.fx_values:self.restore(marker)
         voice=self.engine.voices.get(marker)
         if voice is not None:voice.cancelled=True;self.tick()
 
     def stop(self):
-        reset=True
+        reset=self.bus.stop()
         for marker in list(self.fx_values):reset=self.restore(marker,True) and reset
         return self.engine.stop(self.send,self.send_for_marker) and reset
+
+    def close(self):
+        self.stop();self.output.close()
 
     def invalidate_editors(self):self.generation += 1
 
@@ -134,10 +158,25 @@ class CardKaossEditor(ttk.Frame):
         self.window,self.app=window,app;self.index=int(app.card_id.get())-1
         self.generation=app.live_kaoss.generation
         card=app.cards[self.index]
+        self.bus_enabled=tk.BooleanVar(value=bool(card.get('kaoss_bus')))
         config=KaossConfig.from_dict(card['kaoss']) if card.get('kaoss',{}).get('mode')=='Efectes' else default_config(app,self.index)
         metadata=ambience_settings(card) if card.get('kaoss',{}).get('mode')=='Efectes' else ambience_preset('Obert / aire',config.channel)[1]
         ttk.Label(body,text=f'Ambients XY · Targeta {self.index+1:02d}',font=('Segoe UI',14,'bold')).pack(anchor='w')
         ttk.Label(body,text='Modifica instruments que ja sonen a Cakewalk. No genera notes.\nAssigna els CC a efectes del sintetitzador o d’un bus amb MIDI Learn / ACT. No processa els WAV locals.',wraplength=800).pack(anchor='w',pady=8)
+        ttk.Button(body,text='Preparar Cakewalk · filtre + reverb (CC16 / CC17)',command=self.load_bus_profile).pack(fill='x',pady=5)
+        self.port=tk.StringVar(value=(card.get('kaoss_bus') or {}).get('port','ATMO FX'))
+        self.rate=tk.StringVar(value=str((card.get('kaoss_bus') or {}).get('rate_hz',25)))
+        self.return_s=tk.StringVar(value=str((card.get('kaoss_bus') or {}).get('return_s',.6)))
+        route=ttk.Frame(body);route.pack(fill='x')
+        ttk.Checkbutton(route,text='Control dedicat de bus XY',variable=self.bus_enabled).pack(side='left')
+        ttk.Label(route,text='Port MIDI (buit = principal)').pack(side='left',padx=5)
+        self.port_box=ttk.Combobox(route,textvariable=self.port,width=24);self.port_box.pack(side='left')
+        ttk.Button(route,text='Actualitzar ports',command=self.refresh_ports).pack(side='left',padx=3)
+        from atmo_ui import wrap_controls
+        wrap_controls(route)
+        for variable,title in ((self.rate,'Màxim enviaments/s (1–50)'),(self.return_s,'Retorn progressiu (0–5 s)')):
+            line=ttk.Frame(body);line.pack(fill='x',pady=3)
+            ttk.Label(line,text=title).pack(side='left');ttk.Entry(line,textvariable=variable,width=7).pack(side='right')
         head=ttk.Frame(body);head.pack(fill='x')
         self.preset_name=tk.StringVar(value=metadata['kaoss_ambience'])
         ttk.Combobox(head,textvariable=self.preset_name,values=AMBIENCES,state='readonly').pack(side='left')
@@ -173,8 +212,15 @@ class CardKaossEditor(ttk.Frame):
             row=ttk.Frame(body);row.pack(fill='x',pady=3);ttk.Label(row,text=title).pack(side='left')
             var=tk.StringVar(value=str(getattr(config,key)));self.variables[key]=var;ttk.Entry(row,textvariable=var,width=8).pack(side='right')
         self.release=tk.StringVar(value=metadata['kaoss_release'])
-        ttk.Radiobutton(body,text='En retirar: tornar a neutre',variable=self.release,value='neutral').pack(anchor='w')
+        ttk.Radiobutton(body,text='En retirar: tornar progressivament als valors de retorn (no és un bypass)',variable=self.release,value='neutral').pack(anchor='w')
         ttk.Radiobutton(body,text='En retirar: mantenir ambient',variable=self.release,value='hold').pack(anchor='w')
+        test=ttk.LabelFrame(body,text='Prova sense càmera · aplica primer la configuració',padding=6);test.pack(fill='x',pady=8)
+        for row,axis in enumerate(('x','y')):
+            ttk.Label(test,text=axis.upper()).grid(row=row,column=0)
+            for col,value in enumerate((0,64,127),1):
+                ttk.Button(test,text=str(value),command=lambda a=axis,v=value:self.test_axis(a,v)).grid(row=row,column=col,padx=4,pady=3)
+        ttk.Button(body,text='Guia: connectar filtre i reverb a Cakewalk',command=self.open_guide).pack(fill='x',pady=4)
+        ttk.Button(test,text='Reconnectar sortida XY',command=self.reconnect_output).grid(row=2,column=0,columnspan=4,sticky='ew',pady=4)
         self.status=tk.StringVar(value='Els noms d’efecte no configuren automàticament Cakewalk: cal mapar els CC.')
         ttk.Label(body,textvariable=self.status,wraplength=800).pack(fill='x',pady=6)
 
@@ -191,10 +237,57 @@ class CardKaossEditor(ttk.Frame):
         return KaossConfig.from_dict(values)
 
     def effect_settings(self):
-        return ambience_settings(dict(kaoss=self.read().to_dict(),kaoss_target=TARGETS[self.target.get()],kaoss_targets=[i for i,var in enumerate(self.target_cards) if var.get()],kaoss_release=self.release.get(),kaoss_ambience=self.preset_name.get(),kaoss_ranges={a:[int(v.get()) for v in values] for a,values in self.ranges.items()},kaoss_neutral={a:int(v.get()) for a,v in self.neutral.items()}))
+        result=ambience_settings(dict(kaoss=self.read().to_dict(),kaoss_target=TARGETS[self.target.get()],kaoss_targets=[i for i,var in enumerate(self.target_cards) if var.get()],kaoss_release=self.release.get(),kaoss_ambience=self.preset_name.get(),kaoss_ranges={a:[int(v.get()) for v in values] for a,values in self.ranges.items()},kaoss_neutral={a:int(v.get()) for a,v in self.neutral.items()}))
+        result['kaoss_bus']=dict(port=self.port.get().strip(),rate_hz=float(self.rate.get().replace(',','.')),return_s=float(self.return_s.get().replace(',','.'))) if self.bus_enabled.get() else None
+        return result
+
+    def open_guide(self):
+        from pathlib import Path
+        import os
+        path=Path(__file__).resolve().parent/'GUIA_XY_CAKEWALK.txt'
+        try:
+            if hasattr(os,'startfile'):os.startfile(path)
+            else:
+                import webbrowser
+                webbrowser.open(path.as_uri())
+        except OSError as exc:self.error(exc)
+
+    def refresh_ports(self):
+        try:
+            import mido
+            self.port_box['values']=list(mido.get_output_names())
+        except Exception as exc:self.error(exc)
+
+    def load_bus_profile(self):
+        config,meta=bus_profile()
+        self.bus_enabled.set(True);self.channel.set(str(config.channel));self.port.set(meta['kaoss_bus']['port'])
+        self.target.set('Canal MIDI concret');self.release.set('neutral')
+        self.preset_name.set('Cakewalk · filtre i reverb')
+        for key,var in self.variables.items():var.set(getattr(config,key))
+        for axis,key in (('x','x_cc'),('y','y_cc'),('rotation','rotation_cc')):
+            self.parameter_names[axis].set('Personalitzat')
+            for var,value in zip(self.ranges[axis],meta['kaoss_ranges'][axis]):var.set(str(value))
+            self.neutral[axis].set(str(meta['kaoss_neutral'][axis]))
+        self.status.set('Canal 16 · X CC16 · Y CC17 · gir desactivat. Crea ATMO FX a loopMIDI i aplica. Assigna els dos CC a una FX Chain de Cakewalk.')
+
+    def reconnect_output(self):
+        self.app.live_kaoss.bus.stop();self.app.live_kaoss.output.reconnect()
+        self.status.set('Sortida XY preparada per reconnectar. Prem una prova o mou la targeta; no es reprodueixen ordres antigues.')
+
+    def test_axis(self,axis,value):
+        try:
+            if self.app.muted:raise ValueError('Prem REPRENDRE MIDI abans de provar el control XY.')
+            if not self.apply():return
+            bus=self.app.live_kaoss.bus
+            if self.index not in bus.cards:raise ValueError('Activa Control dedicat de bus XY i aplica la configuració.')
+            if not bus.test(self.index,axis,value):raise ValueError(self.app.live_kaoss.output.error or bus.error)
+            config=self.app.cards[self.index]['kaoss']
+            self.status.set(f'Enviat {axis.upper()} · canal {config["channel"]} · CC{config[axis+"_cc"]} = {value}. Comprova el comandament de Cakewalk.')
+        except (ValueError,tk.TclError) as exc:self.error(exc)
 
     def load_preset(self):
         try:
+            self.bus_enabled.set(False)
             config,meta=ambience_preset(self.preset_name.get(),int(self.channel.get()))
             for key,var in self.variables.items():var.set(getattr(config,key))
             for axis,key in (('x','x_cc'),('y','y_cc'),('rotation','rotation_cc')):

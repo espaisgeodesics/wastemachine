@@ -34,7 +34,7 @@ jobs:
             build/clean
             build/ATMO_ESFERA_FX_Codi_net.zip
             dist
-          key: atmo-desktop-${{ hashFiles('*.py', 'packaging/build_clean.py', 'packaging/LLEGEIX_ME.txt', 'atmo_assets/**', 'requirements*.txt') }}
+          key: atmo-desktop-${{ hashFiles('*.py', 'packaging/build_clean.py', 'packaging/LLEGEIX_ME.txt', 'GUIA_XY_CAKEWALK.txt', 'atmo_assets/**', 'requirements*.txt') }}
       - name: Paquet de codi net i icona
         if: steps.cached.outputs.cache-hit != 'true' 
         run: python packaging/build_clean.py build/clean
@@ -44,7 +44,7 @@ jobs:
           $manifest = Get-Content build/clean/MANIFEST.json | ConvertFrom-Json
           $hidden = @()
           foreach ($module in $manifest.modules) { $hidden += @('--hidden-import', $module) }
-          python -m PyInstaller --noconfirm --clean --onedir --windowed --noupx --name ATMO_ESFERA_FX --icon build/clean/atmo_assets/atmo.ico --paths build/clean --add-data "build/clean/atmo_assets;atmo_assets" --add-data "build/clean/atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py;." --collect-all cv2 --collect-all pygame --collect-all soundfile --collect-all mido --hidden-import mido.backends.rtmidi --hidden-import rtmidi @hidden build/clean/atmo_esfera_fx_integracio_19.py *> VALIDACIO/escriptori/pyinstaller.log
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --noupx --name ATMO_ESFERA_FX --icon build/clean/atmo_assets/atmo.ico --paths build/clean --add-data "build/clean/atmo_assets;atmo_assets" --add-data "build/clean/atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py;." --add-data "build/clean/GUIA_XY_CAKEWALK.txt;." --collect-all cv2 --collect-all pygame --collect-all soundfile --collect-all mido --hidden-import mido.backends.rtmidi --hidden-import rtmidi @hidden build/clean/atmo_esfera_fx_integracio_19.py *> VALIDACIO/escriptori/pyinstaller.log
           $result = $LASTEXITCODE
           Get-Content VALIDACIO/escriptori/pyinstaller.log | Select-Object -Last 30
           exit $result
@@ -99,6 +99,7 @@ jobs:
         run: |
           Copy-Item build/ATMO_ESFERA_FX_Codi_net.zip dist/
           Copy-Item packaging/LLEGEIX_ME.txt dist/
+          Copy-Item GUIA_XY_CAKEWALK.txt dist/
           Get-FileHash dist/ATMO_ESFERA_FX_Instal_lador_Windows.exe,dist/ATMO_ESFERA_FX_Codi_net.zip -Algorithm SHA256 | Format-List | Out-File dist/SHA256.txt
       - uses: actions/upload-artifact@v4
         if: always()
@@ -112,6 +113,7 @@ jobs:
             dist/ATMO_ESFERA_FX_Instal_lador_Windows.exe
             dist/ATMO_ESFERA_FX_Codi_net.zip
             dist/LLEGEIX_ME.txt
+            dist/GUIA_XY_CAKEWALK.txt
             dist/SHA256.txt
   publish:
     needs: build

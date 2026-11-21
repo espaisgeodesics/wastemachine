@@ -102,6 +102,11 @@ def run(output,scales):
             try:
                 if kind:app.fun.set(kind)
                 getattr(app,method)();capture(name,getattr(app,attribute))
+                if name=='06_ambients':
+                    app.kaoss_editor.load_bus_profile()
+                    capture('06b_XY_Cakewalk',app.kaoss_window)
+                    for canvas in (w for w in widgets(app.kaoss_window) if w.winfo_class()=='Canvas' and w.cget('yscrollcommand')):canvas.yview_moveto(1.)
+                    capture('06c_XY_proves',app.kaoss_window)
                 if name=='12_zones' and hasattr(app.zone_editor,'audio_status'):
                     canvases=[w for w in widgets(app.zone_window) if w.winfo_class()=='Canvas' and w.cget('yscrollcommand')]
                     for canvas in canvases:canvas.yview_moveto(.52)

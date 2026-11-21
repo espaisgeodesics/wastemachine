@@ -45,6 +45,9 @@ def ambience_settings(card):
         if not isinstance(limits,(tuple,list)) or len(limits)!=2 or any(type(v) is not int for v in limits) or not 0<=limits[0]<=limits[1]<=127:
             raise ValueError('Límits de cada eix XY: 0–127, mínim ≤ màxim')
         if type(neutral) is not int or not 0<=neutral<=127:raise ValueError('Valor neutre XY: 0–127')
+    from atmo_xy_control import settings
+    bus=settings(card)
+    if 'kaoss_bus' in card:result['kaoss_bus']=bus
     return result
 
 
