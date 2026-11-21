@@ -1,0 +1,3 @@
+# Optional prototype backend. Core MIDI/visual operation does not import these.
+pygame-ce==2.5.8
+soundfile==0.14.0

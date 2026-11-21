@@ -1,0 +1,13 @@
+{
+  "commit": "7526303a6c09b36771ead51e90e5988216e57c1a",
+  "run_id": 44416544196,
+  "job_id": 135198231911,
+  "conclusion": "success",
+  "tests": 417,
+  "passed": 417,
+  "skipped": 0,
+  "captures": 90,
+  "artifact_id": 14478204433,
+  "artifact_sha256": "edc320a1a18a0d19dc56bf47c76d603854ad0c9c2400652cf43c5b9bae6403d7",
+  "url": "https://github.com/espaisgeodesics/wastemachine/actions/runs/44416544196"
+}

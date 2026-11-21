@@ -1,0 +1,81 @@
+ATMO ESFERA FX · Control XY de filtre i reverberació
+21 de novembre de 2026
+
+QUÈ ESTÀ PREPARAT I QUÈ CAL VERIFICAR
+ATMO envia MIDI CC. Cakewalk processa el so. El controlador XY no genera notes.
+La implementació i els missatges es comproven automàticament. La resposta de la teva versió de Cakewalk, Modfilter i Sonitus Reverb necessita una prova al teu ordinador.
+No hem instal·lat ni manipulat Cakewalk al teu PC des d'aquí.
+
+1. PREPARAR LA SORTIDA A ATMO
+A loopMIDI, crea un port anomenat ATMO FX. Mantén el port musical que ja utilitzes.
+A ATMO, tria una targeta lliure, funció Chaos Oscillator (Kaoss XY), Configurar funció.
+Prem Preparar Cakewalk · filtre + reverb. Configura:
+- Control dedicat de bus XY activat.
+- Port ATMO FX (Actualitzar ports permet veure'n els noms exactes).
+- Destinació Canal MIDI concret, canal 16.
+- X: CC16; Y: CC17; gir desactivat.
+- Invertir Y activat: la càmera creix cap avall i volem més efecte cap amunt.
+- Suavització 0,08 s i màxim 25 enviaments per eix i segon.
+- Retirada: retorn progressiu de 0,6 s, o mantenir els últims valors.
+- Valors de retorn inicials: X127, Y0. Són valors MIDI; NO són un bypass universal.
+Aplica i desa el projecte. La selecció del port també es desa.
+No assignis aquest port d'efectes a les entrades Omni dels instruments: tria el seu port musical.
+
+2. PREPARAR UNA SOLA FX CHAIN A CAKEWALK
+Desa una còpia del projecte de Cakewalk abans de canviar el rack.
+Els efectes actuals són DX: no pressuposem que tinguin MIDI Learn propi.
+La ruta documentada és reunir Modfilter i Sonitus Reverb dins d'una FX Chain i controlar els seus dos comandaments assignables amb ACT.
+Una sola superfície ACT segueix un context d'efecte: no confiïs que seguirà dos connectors separats alhora.
+
+Al rack FX del Master, crea una FX Chain (clic dret al rack, FX Chain).
+Posa-hi Modfilter abans de Sonitus Reverb. Evita deixar còpies addicionals fora de la cadena.
+Obre la cadena i afegeix dos comandaments (Add knob). A Edit control / Control Properties, assigna:
+- Comandament 1, nom Filtre: paràmetre Cutoff de Modfilter.
+- Comandament 2, nom Ambient: paràmetre de nivell Reverb de Sonitus Reverb.
+Els noms dels menús poden variar segons la versió i l'idioma.
+Ajusta límits útils dins la cadena: el màxim MIDI no ha de significar obligatòriament màxim acústic.
+Mantén Dry fix a Sonitus. Comença amb Decay Time curt i fix; a Modfilter, Mod Depth a zero.
+Escolta primer movent els dos comandaments amb el ratolí. Han de modificar només el timbre i la reverberació, sense moure el volum Master.
+Si un dels paràmetres no apareix a la llista de la cadena, atura aquesta part i envia una captura: no inventem una compatibilitat.
+
+3. DOS APRENENTATGES DIFERENTS A ACT
+A Preferences > MIDI > Devices, habilita ATMO FX com a entrada.
+A Preferences > MIDI > Control Surfaces, afegeix ACT MIDI Controller amb entrada ATMO FX.
+Deixa la sortida de feedback sense assignar si la versió ho permet; no creïs un bucle de retorn cap a ATMO FX.
+Obre Utilities > ACT MIDI Controller. Crea i desa un preset propi, per exemple ATMO XY.
+
+Primer: MIDI Learn, per unir CC i cel·les de la superfície.
+En una cel·la de comandament rotatiu, activa l'aprenentatge MIDI i prem X64 a ATMO; comprova canal16/CC16.
+Repeteix amb una altra cel·la i Y64; comprova canal16/CC17.
+Desactiva l'aprenentatge de cada cel·la abans de provar un altre eix. No moguis targetes durant aquest aprenentatge.
+
+Segon: ACT Learn, per unir cel·les i paràmetres de la cadena.
+Dona el focus a la finestra de la FX Chain, no a un dels efectes interiors.
+Activa ACT Learn; mou Filtre i Ambient amb el ratolí i envia X/Y des dels botons d'ATMO, en el mateix ordre. Desactiva ACT Learn i comprova les assignacions mostrades.
+Bloqueja el context ACT a aquesta instància de la cadena (ACT Lock / Lock Context) per evitar que canviï quan obris un instrument o una altra finestra.
+Desa el preset de la superfície, la cadena i el projecte de Cakewalk: són independents del projecte ATMO.
+Si la versió no permet assignar els dos comandaments així, envia la captura d'ACT i de Control Properties. Encara no considerarem feta l'assignació real.
+
+4. PROVA PETITA, SENSE CÀMERA
+A ATMO, reprèn MIDI si està en silenci. Prem X0, X64 i X127, un per un.
+Només Filtre ha de moure's. Després prem Y0, Y64 i Y127: només Ambient.
+Són valors MIDI literals, no passen pels rangs ni per la inversió de càmera.
+Un missatge Enviat confirma la sortida local, NO que Cakewalk hagi mogut l'efecte.
+Si no es mou res, comprova primer el port ATMO FX, després les cel·les MIDI Learn i finalment l'assignació ACT i el context bloquejat.
+
+5. AMB TARGETES I SO
+Fes sonar una targeta musical i mou la targeta XY per l'espai calibrat.
+X ha de transformar el timbre i Y la quantitat de reverberació. La targeta XY no ha de produir notes.
+Prova la retirada i la reentrada durant el retorn. Si tries Mantenir, l'ambient queda fins que el canviïs o aturis els controls.
+Silenci absolut i el tancament retornen immediatament els controls XY als valors configurats; la ruta XY no envia All Notes Off ni resets generals. El botó global de silenci continua aturant també la música, com abans.
+Si desconnectes un port, no es reprodueixen ordres acumulades quan torna. Prem Reconnectar sortida XY i torna a moure la targeta o prem una prova.
+No s'assumeix que un receptor desconnectat hagi rebut els valors de retorn.
+
+FONTS OFICIALS CONSULTADES
+FX Chain, comandaments assignables i control ACT:
+https://legacy.cakewalk.com/Documentation?help=Mixing.34.html&language=3&product=Cakewalk
+Configuració d'ACT MIDI Controller: MIDI Learn i ACT Learn són passos diferents:
+https://legacy.cakewalk.com/Support/Knowledge-Base/2007013008/Configuring-the-ACT-MIDI-Controller-Plug-in
+Focus i bloqueig d'un controlador a una instància:
+https://gaga.cakewalk.com/Documentation?help=ExternalDevices.01.html&language=3&product=Cakewalk
+Documentació de diferents versions: cal confirmar els noms i l'exposició dels paràmetres en la versió de l'usuari.

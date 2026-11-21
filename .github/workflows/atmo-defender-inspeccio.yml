@@ -1,0 +1,126 @@
+name: ATMO - inspeccio Defender del ZIP bloquejat
+on:
+  push:
+    branches: [atmo/interficie-primera-integracio]
+    paths: [.github/workflows/atmo-defender-inspeccio.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  defender:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Inspeccionar ZIP original sense executar ATMO
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $reportDir = Join-Path $env:RUNNER_TEMP 'atmo-defender-report'
+          New-Item -ItemType Directory -Force $reportDir | Out-Null
+          $report = [ordered]@{
+            release_commit = '091e7b0d03a179e6bbf6137dacd1a21cabd10e8c'
+            original_url = 'https://codeload.github.com/espaisgeodesics/wastemachine/zip/091e7b0d03a179e6bbf6137dacd1a21cabd10e8c'
+            expected_sha256 = 'e405bac3f86401f87871c2da489191899db9adba886c0a566248eed16bdaf33c'
+            result = 'scan_incomplete'
+            application_executed = $false
+            windows = [Environment]::OSVersion.VersionString
+            scan_started_utc = [DateTime]::UtcNow.ToString('o')
+            scans = @()
+            detections = @()
+          }
+          $scanStart = Get-Date
+          try {
+            $before = Get-MpComputerStatus
+            $report.defender_before = $before | Select-Object AMServiceEnabled,AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureVersion,AntivirusSignatureLastUpdated,AMProductVersion
+            if (-not $before.AMServiceEnabled -or -not $before.AntivirusEnabled) {
+              $report.result = 'blocked_antivirus_unavailable'
+              throw 'Defender is not active. No antivirus result can be claimed.'
+            }
+            $pref = Get-MpPreference
+            $report.initial_archive_scanning_disabled = $pref.DisableArchiveScanning
+            $report.initial_excluded_paths = @($pref.ExclusionPath)
+            # Only this disposable runner is changed, to ENABLE actual inspection.
+            # No application or file from the archive is executed.
+            if ($pref.DisableArchiveScanning) { Set-MpPreference -DisableArchiveScanning $false }
+            $scanDirectory = 'C:\ATMO_Defender_Inspection_' + $env:GITHUB_RUN_ID
+            $removed = @()
+            foreach ($excluded in @($pref.ExclusionPath)) {
+              $prefix = ([string]$excluded).TrimEnd('\')
+              if ($prefix -and ($scanDirectory -like ($prefix + '*'))) {
+                Remove-MpPreference -ExclusionPath ([string]$excluded)
+                $removed += [string]$excluded
+              }
+            }
+            $report.removed_exclusions_for_isolated_scan = $removed
+            $pref = Get-MpPreference
+            $report.archive_scanning_disabled = $pref.DisableArchiveScanning
+            $report.excluded_paths = @($pref.ExclusionPath)
+            if ($pref.DisableArchiveScanning) {
+              $report.result = 'blocked_archive_scanning_disabled'
+              throw 'Archive inspection could not be enabled on the disposable runner.'
+            }
+            try {
+              Update-MpSignature
+              $report.signature_update = 'success'
+            } catch {
+              $report.signature_update = $_.Exception.Message
+            }
+            $work = 'C:\ATMO_Defender_Inspection_' + $env:GITHUB_RUN_ID
+            foreach ($excluded in @($pref.ExclusionPath)) {
+              $prefix = ([string]$excluded).TrimEnd('\')
+              if ($prefix -and ($work -like ($prefix + '*'))) {
+                $report.result = 'blocked_excluded_scan_path'
+                throw 'The inspection directory falls under a Defender exclusion.'
+              }
+            }
+            New-Item -ItemType Directory -Force $work | Out-Null
+            $zip = Join-Path $work 'wastemachine-091e7b0d03a179e6bbf6137dacd1a21cabd10e8c.zip'
+            Invoke-WebRequest -Uri $report.original_url -OutFile $zip
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+            $report.actual_sha256 = $hash
+            $report.byte_identical_to_reviewed_archive = ($hash -eq $report.expected_sha256)
+            if (-not $report.byte_identical_to_reviewed_archive) {
+              $report.result = 'blocked_archive_hash_mismatch'
+              throw 'The archive differs from the recorded SHA-256; do not substitute another package.'
+            }
+            $scanner = Get-ChildItem "$env:ProgramData\Microsoft\Windows Defender\Platform\*\MpCmdRun.exe" -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+            if (-not $scanner) { $scanner = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" }
+            if (-not (Test-Path -LiteralPath $scanner)) { throw 'Defender command-line scanner is unavailable.' }
+            $report.scanner_path = $scanner
+            & $scanner -Scan -ScanType 3 -File $zip *> (Join-Path $reportDir 'scan-zip.log')
+            $report.scans += [ordered]@{ target='original_zip'; exit_code=$LASTEXITCODE }
+            $firstDetections = @(Get-MpThreatDetection | Where-Object { $_.InitialDetectionTime -ge $scanStart })
+            if ($firstDetections.Count -gt 0 -or -not (Test-Path -LiteralPath $zip)) {
+              $report.result = 'threat_detected'
+            } elseif ($report.scans[0].exit_code -eq 0) {
+              $folder = Join-Path $work 'extracted'
+              Expand-Archive -LiteralPath $zip -DestinationPath $folder
+              & $scanner -Scan -ScanType 3 -File $folder *> (Join-Path $reportDir 'scan-files.log')
+              $report.scans += [ordered]@{ target='extracted_files_not_executed'; exit_code=$LASTEXITCODE }
+              if ($LASTEXITCODE -eq 0) { $report.result = 'scan_completed_no_detection' }
+            }
+          } catch {
+            $report.error = $_.Exception.Message
+          } finally {
+            try {
+              $detections = @(Get-MpThreatDetection | Where-Object { $_.InitialDetectionTime -ge $scanStart })
+              $report.detections = @($detections | Select-Object ThreatID,InitialDetectionTime,LastThreatStatusChangeTime,ActionSuccess,Resources)
+              if ($detections.Count -gt 0) { $report.result = 'threat_detected' }
+              $report.threat_names = @(Get-MpThreat | Select-Object ThreatID,ThreatName,SeverityID,IsActive)
+              $report.defender_after = Get-MpComputerStatus | Select-Object AMServiceEnabled,AntivirusEnabled,AntivirusSignatureVersion,AntivirusSignatureLastUpdated,AMProductVersion
+              $events = Get-WinEvent -FilterHashtable @{ LogName='Microsoft-Windows-Windows Defender/Operational'; StartTime=$scanStart } -ErrorAction SilentlyContinue
+              $events | Select-Object TimeCreated,Id,Message | ConvertTo-Json -Depth 8 |
+                Set-Content -Encoding utf8 (Join-Path $reportDir 'defender-events.json')
+            } catch { $report.collection_error = $_.Exception.Message }
+            $report.finished_utc = [DateTime]::UtcNow.ToString('o')
+            $report | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 (Join-Path $reportDir 'result.json')
+            Write-Output ($report | ConvertTo-Json -Depth 12)
+          }
+          if ($report.result -ne 'scan_completed_no_detection') { exit 1 }
+      - name: Guardar nomes registres, mai el ZIP sospitos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: atmo-defender-inspeccio
+          path: ${{ runner.temp }}/atmo-defender-report

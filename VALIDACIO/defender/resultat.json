@@ -1,0 +1,53 @@
+{
+  "release_commit": "091e7b0d03a179e6bbf6137dacd1a21cabd10e8c",
+  "original_url": "https://codeload.github.com/espaisgeodesics/wastemachine/zip/091e7b0d03a179e6bbf6137dacd1a21cabd10e8c",
+  "expected_sha256": "e405bac3f86401f87871c2da489191899db9adba886c0a566248eed16bdaf33c",
+  "result": "scan_completed_no_detection",
+  "application_executed": false,
+  "windows": "Microsoft Windows NT 10.0.26100.0",
+  "scan_started_utc": "2026-11-19T17:50:33.0385400Z",
+  "scans": [
+    {
+      "target": "original_zip",
+      "exit_code": 0
+    },
+    {
+      "target": "extracted_files_not_executed",
+      "exit_code": 0
+    }
+  ],
+  "detections": [],
+  "defender_before": {
+    "AMServiceEnabled": true,
+    "AntivirusEnabled": true,
+    "RealTimeProtectionEnabled": false,
+    "AntivirusSignatureVersion": "1.463.373.0",
+    "AntivirusSignatureLastUpdated": "2026-11-19T10:51:59+00:00",
+    "AMProductVersion": "4.18.26100.4"
+  },
+  "initial_archive_scanning_disabled": true,
+  "initial_excluded_paths": [
+    "C:\\",
+    "D:\\"
+  ],
+  "removed_exclusions_for_isolated_scan": [
+    "C:\\"
+  ],
+  "archive_scanning_disabled": false,
+  "excluded_paths": [
+    "D:\\"
+  ],
+  "signature_update": "success",
+  "actual_sha256": "e405bac3f86401f87871c2da489191899db9adba886c0a566248eed16bdaf33c",
+  "byte_identical_to_reviewed_archive": true,
+  "scanner_path": "C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\4.18.26100.4-0\\MpCmdRun.exe",
+  "threat_names": [],
+  "defender_after": {
+    "AMServiceEnabled": true,
+    "AntivirusEnabled": true,
+    "AntivirusSignatureVersion": "1.463.373.0",
+    "AntivirusSignatureLastUpdated": "2026-11-19T10:51:59+00:00",
+    "AMProductVersion": "4.18.26100.4"
+  },
+  "finished_utc": "2026-11-19T17:51:07.8735053Z"
+}
