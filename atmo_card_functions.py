@@ -261,6 +261,7 @@ class CardKaossEditor(ttk.Frame):
     def load_bus_profile(self):
         config,meta=bus_profile()
         self.bus_enabled.set(True);self.channel.set(str(config.channel));self.port.set(meta['kaoss_bus']['port'])
+        self.rate.set('25');self.return_s.set('0.6')
         self.target.set('Canal MIDI concret');self.release.set('neutral')
         self.preset_name.set('Cakewalk · filtre i reverb')
         for key,var in self.variables.items():var.set(getattr(config,key))
@@ -288,6 +289,8 @@ class CardKaossEditor(ttk.Frame):
         except (ValueError,tk.TclError) as exc:self.error(exc)
 
     def load_preset(self):
+        if self.preset_name.get()=='Cakewalk · filtre i reverb':
+            self.load_bus_profile();return
         try:
             self.bus_enabled.set(False)
             config,meta=ambience_preset(self.preset_name.get(),int(self.channel.get()))
