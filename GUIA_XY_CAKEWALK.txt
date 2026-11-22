@@ -1,5 +1,5 @@
 ATMO ESFERA FX · Control XY de filtre i reverberació
-21 de novembre de 2026
+22 de novembre de 2026
 
 QUÈ ESTÀ PREPARAT I QUÈ CAL VERIFICAR
 ATMO envia MIDI CC. Cakewalk processa el so. El controlador XY no genera notes.
@@ -39,7 +39,7 @@ Escolta primer movent els dos comandaments amb el ratolí. Han de modificar nom�
 Si un dels paràmetres no apareix a la llista de la cadena, atura aquesta part i envia una captura: no inventem una compatibilitat.
 
 3. DOS APRENENTATGES DIFERENTS A ACT
-A Preferences > MIDI > Devices, habilita ATMO FX com a entrada.
+A Preferences > MIDI > Devices, habilita el port escollit (ATMO FX o el teu nom) com a entrada. No l'habilitis com a sortida de Cakewalk: ATMO és qui envia els controls. En Windows MM, tenir-lo obert com a sortida en una altra aplicació pot impedir que ATMO l'obri.
 A Preferences > MIDI > Control Surfaces, afegeix ACT MIDI Controller amb entrada ATMO FX.
 Deixa la sortida de feedback sense assignar si la versió ho permet; no creïs un bucle de retorn cap a ATMO FX.
 Obre Utilities > ACT MIDI Controller. Crea i desa un preset propi, per exemple ATMO XY.
@@ -80,3 +80,9 @@ https://legacy.cakewalk.com/Support/Knowledge-Base/2007013008/Configuring-the-AC
 Focus i bloqueig d'un controlador a una instància:
 https://gaga.cakewalk.com/Documentation?help=ExternalDevices.01.html&language=3&product=Cakewalk
 Documentació de diferents versions: cal confirmar els noms i l'exposició dels paràmetres en la versió de l'usuari.
+
+ERROR EN OBRIR WINDOWS MM MIDI OUTPUT
+El perfil conserva el port que has triat, encara que el seu nom no sigui ATMO FX.
+Si ATMO ja utilitza aquest port com a sortida principal, el control XY comparteix la connexió.
+Si el missatge continua, mantén loopMIDI obert; a Cakewalk comprova MIDI > Devices > Outputs (el port de control desmarcat) i ACT > Output Port (None/Ninguno).
+Torna a ATMO, prem Reconnectar sortida XY i prova X64. No cal canviar el nom del port.

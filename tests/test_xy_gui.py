@@ -38,6 +38,34 @@ class XYGuiTests(unittest.TestCase):
             self.assertEqual(self.app.cards[0]['kaoss']['y_cc'],17)
             self.assertEqual(self.app.cards[0]['kaoss_bus']['return_s'],.6)
         self.assertFalse(self.errors)
+    def test_loading_profile_keeps_custom_port_and_explicit_main_selection(self):
+        self.view.port.set('Atmosfera FX2');self.view.load_bus_profile()
+        self.assertEqual(self.view.port.get(),'Atmosfera FX2')
+        self.assertTrue(self.view.apply())
+        self.assertEqual(self.app.cards[0]['kaoss_bus']['port'],'Atmosfera FX2')
+        self.view.load_preset();self.assertEqual(self.view.port.get(),'Atmosfera FX2')
+        self.view.port.set('');self.view.load_bus_profile()
+        self.assertEqual(self.view.port.get(),'')
+
+    def test_main_can_connect_after_xy_already_opened_the_same_windows_endpoint(self):
+        own=Mock();own.name='Atmosfera FX2';own.closed=False
+        main=Mock();main.name='Atmosfera FX2';main.closed=False
+        self.view.port.set('Atmosfera FX2')
+        with patch.object(module.mido,'get_output_names',return_value=['Atmosfera FX2']),patch.object(module.mido,'open_output',return_value=own):
+            self.view.test_axis('x',64)
+        self.assertIs(self.app.live_kaoss.output.ports['Atmosfera FX2'],own)
+        self.app.midi_choice.set('Atmosfera FX2')
+        def open_main(name):
+            own.close.assert_called_once()
+            return main
+        with patch.object(module.mido,'open_output',side_effect=open_main):self.app.connect_midi()
+        main.send.reset_mock()
+        with patch.object(module.mido,'open_output',side_effect=OSError('duplicate open')) as opened:
+            self.view.test_axis('y',64)
+        opened.assert_not_called()
+        self.assertTrue(any(c.args[0].type=='control_change' and c.args[0].control==17 and c.args[0].value==64 for c in main.send.call_args_list))
+        self.assertFalse(self.errors)
+
     def test_manual_learning_rejects_live_camera_without_sending(self):
         with patch.object(self.app,'camera',Mock()),patch('atmo_card_functions.messagebox.showerror') as error,patch.object(module.mido,'open_output') as opened:
             self.view.test_axis('x',64)

@@ -260,7 +260,8 @@ class CardKaossEditor(ttk.Frame):
 
     def load_bus_profile(self):
         config,meta=bus_profile()
-        self.bus_enabled.set(True);self.channel.set(str(config.channel));self.port.set(meta['kaoss_bus']['port'])
+        self.bus_enabled.set(True);self.channel.set(str(config.channel))
+        # The profile changes effects, never an explicitly chosen device name.
         self.rate.set('25');self.return_s.set('0.6')
         self.target.set('Canal MIDI concret');self.release.set('neutral')
         self.preset_name.set('Cakewalk · filtre i reverb')
@@ -269,7 +270,7 @@ class CardKaossEditor(ttk.Frame):
             self.parameter_names[axis].set('Personalitzat')
             for var,value in zip(self.ranges[axis],meta['kaoss_ranges'][axis]):var.set(str(value))
             self.neutral[axis].set(str(meta['kaoss_neutral'][axis]))
-        self.status.set('Canal 16 · X CC16 · Y CC17 · gir desactivat. Crea ATMO FX a loopMIDI i aplica. Assigna els dos CC a una FX Chain de Cakewalk.')
+        self.status.set(f'Canal 16 · X CC16 · Y CC17 · port {self.port.get()}. Aplica la configuració i assigna els dos CC a una FX Chain de Cakewalk.')
 
     def reconnect_output(self):
         self.app.live_kaoss.bus.stop();self.app.live_kaoss.output.reconnect()

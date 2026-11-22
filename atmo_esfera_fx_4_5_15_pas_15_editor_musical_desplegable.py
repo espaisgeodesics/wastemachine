@@ -1485,11 +1485,14 @@ class App:
     if self.midi:
       try:self.midi.close()
       except Exception:pass
-    self.midi=None;self.mute_sent.clear();self.mute_retry_after.clear(); self.card2_cc_values.clear(); name=self.midi_choice.get()
+    self.midi=None;self.mute_sent.clear();self.mute_retry_after.clear(); self.card2_cc_values.clear(); self.midi_port_name=None; name=self.midi_choice.get()
     if name=='Sense MIDI':
       self.status.set('MIDI desconnectat');self.midi_indicator.config(text='Estat: desconnectat');return
     try:
+      # XY may have opened this same Windows MM endpoint first.
+      if hasattr(self,'live_kaoss'):self.live_kaoss.output.release_port(name)
       port=mido.open_output(name)
+      self.midi_port_name=name
       self.midi=TracedMidiOutput(port,lambda message,error:self.record_midi_send(name,message,error))
       self.log_midi_event('CONNEXIÓ LOCAL: '+name)
       self.status.set('MIDI connectat a '+name)

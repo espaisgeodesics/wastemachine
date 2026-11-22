@@ -103,6 +103,24 @@ class PortTests(unittest.TestCase):
             sink.reconnect();port.send.side_effect=None
             self.assertTrue(sink.send('ATMO FX',16,17,64));self.assertEqual(mido.open_output.call_count,2)
         sink.close()
+    def test_named_main_connection_is_reused_without_opening_a_second_handle(self):
+        main=Mock(name='main');main.name='Atmosfera FX2';main.closed=False
+        app=SimpleNamespace(midi=main,midi_choice=SimpleNamespace(get=lambda:'different selection'))
+        sink=MidiFXOutput(app);sink.blocked.add('Atmosfera FX2')
+        mido=SimpleNamespace(Message=lambda *a,**kw:kw,open_output=Mock(side_effect=OSError('already open')))
+        with patch.dict('sys.modules',mido=mido):
+            self.assertTrue(sink.send('Atmosfera FX2',16,16,64))
+        mido.open_output.assert_not_called();main.send.assert_called_once()
+        sink.reconnect();main.close.assert_not_called()
+
+    def test_owned_handle_is_released_before_main_takes_same_endpoint(self):
+        own=Mock();main=Mock();main.name='Atmosfera FX2';main.closed=False
+        sink=MidiFXOutput(SimpleNamespace(midi=main));sink.ports['Atmosfera FX2']=own
+        with patch.dict('sys.modules',mido=SimpleNamespace(Message=lambda *a,**kw:kw)):
+            self.assertTrue(sink.send('Atmosfera FX2',16,17,64))
+        own.close.assert_called_once();main.close.assert_not_called()
+        self.assertFalse(sink.ports)
+
     def test_shared_main_port_is_not_closed(self):
         port=Mock();sink=MidiFXOutput(SimpleNamespace(midi=port))
         with patch.dict('sys.modules',mido=SimpleNamespace(Message=lambda *a,**kw:kw)):

@@ -38,25 +38,46 @@ def bus_profile(channel=16):
 
 class MidiFXOutput:
     def __init__(self,app):self.app=app;self.ports={};self.blocked=set();self.error=''
+    def main_name(self):
+        main=getattr(self.app,'midi',None)
+        name=getattr(main,'name',None)
+        if isinstance(name,str):return name
+        name=getattr(self.app,'midi_port_name',None)
+        if isinstance(name,str):return name
+        choice=getattr(self.app,'midi_choice',None)
+        return choice.get() if hasattr(choice,'get') else None
+
+    def release_port(self,port):
+        """Release only our own handle; the main connection is never owned here."""
+        target=self.ports.pop(port,None)
+        if target is not None:
+            try:target.close()
+            except Exception:pass
+        self.blocked.discard(port)
+
     def send(self,port,channel,cc,value):
         try:
             import mido
             message=mido.Message('control_change',channel=channel-1,control=cc,value=value)
-            if not port:
-                target=getattr(self.app,'midi',None)
-                if target is None:raise ValueError('Connecta la sortida MIDI principal o tria el port ATMO FX')
+            main=getattr(self.app,'midi',None)
+            shared=main is not None and getattr(main,'closed',False) is not True and (not port or self.main_name()==port)
+            if shared:
+                if port:self.release_port(port)
+                target=main
+            elif not port:
+                raise ValueError('Connecta la sortida MIDI principal o tria un port loopMIDI')
             else:
                 if port in self.blocked:return False
                 target=self.ports.get(port)
                 if target is None:
-                    if port not in mido.get_output_names():raise ValueError(f'No es troba el port «{port}». Crea’l a loopMIDI i reconnecta la sortida XY.')
+                    if port not in mido.get_output_names():raise ValueError(f'No es troba el port «{port}». Comprova el nom a loopMIDI i reconnecta la sortida XY.')
                     target=self.ports[port]=mido.open_output(port)
             target.send(message)
             self.error=''
-            if hasattr(self.app,'record_midi_send'):self.app.record_midi_send(port or 'Principal',message,None)
+            if not shared and hasattr(self.app,'record_midi_send'):self.app.record_midi_send(port,message,None)
             return True
         except Exception as exc:
-            self.error=str(exc)
+            self.error=f'Port «{port or "principal"}»: {exc}. A Cakewalk, habilita aquest port només com a entrada de control; comprova que cap altra aplicació n’ocupi la sortida.'
             if port:
                 self.blocked.add(port)
                 target=self.ports.pop(port,None)
