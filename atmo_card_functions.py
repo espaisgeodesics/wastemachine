@@ -221,6 +221,11 @@ class CardKaossEditor(ttk.Frame):
                 ttk.Button(test,text=str(value),command=lambda a=axis,v=value:self.test_axis(a,v)).grid(row=row,column=col,padx=4,pady=3)
         ttk.Button(body,text='Guia: connectar filtre i reverb a Cakewalk',command=self.open_guide).pack(fill='x',pady=4)
         ttk.Button(test,text='Reconnectar sortida XY',command=self.reconnect_output).grid(row=2,column=0,columnspan=4,sticky='ew',pady=4)
+        self.last_probe=''
+        self.probe_info=tk.StringVar(value='Aplica la configuració abans d’activar qualsevol aprenentatge MIDI a Cakewalk.')
+        ttk.Label(test,textvariable=self.probe_info,wraplength=730,justify='left').grid(row=3,column=0,columnspan=4,sticky='ew',pady=5)
+        ttk.Button(test,text='Copiar dades de la prova',command=self.copy_probe).grid(row=4,column=0,columnspan=4,sticky='ew')
+        ttk.Button(body,text='Guia alternativa sense ACT · Remote Control',command=lambda:self.open_guide('GUIA_CONTROL_DIRECTE_CAKEWALK.txt')).pack(fill='x',pady=4)
         self.status=tk.StringVar(value='Els noms d’efecte no configuren automàticament Cakewalk: cal mapar els CC.')
         ttk.Label(body,textvariable=self.status,wraplength=800).pack(fill='x',pady=6)
 
@@ -241,10 +246,10 @@ class CardKaossEditor(ttk.Frame):
         result['kaoss_bus']=dict(port=self.port.get().strip(),rate_hz=float(self.rate.get().replace(',','.')),return_s=float(self.return_s.get().replace(',','.'))) if self.bus_enabled.get() else None
         return result
 
-    def open_guide(self):
+    def open_guide(self,filename="GUIA_XY_CAKEWALK.txt"):
         from pathlib import Path
         import os
-        path=Path(__file__).resolve().parent/'GUIA_XY_CAKEWALK.txt'
+        path=Path(__file__).resolve().parent/filename
         try:
             if hasattr(os,'startfile'):os.startfile(path)
             else:
@@ -276,18 +281,35 @@ class CardKaossEditor(ttk.Frame):
         self.app.live_kaoss.bus.stop();self.app.live_kaoss.output.reconnect()
         self.status.set('Sortida XY preparada per reconnectar. Prem una prova o mou la targeta; no es reprodueixen ordres antigues.')
 
+    def copy_probe(self):
+        if not self.last_probe:
+            self.status.set('Encara no hi ha cap prova enviada. Aplica la configuració i prem un botó X/Y.');return
+        self.window.clipboard_clear();self.window.clipboard_append(self.last_probe)
+        self.status.set('Dades de la prova copiades. Confirmació local; no confirma recepció a Cakewalk.')
+
     def test_axis(self,axis,value):
+        self.last_probe=''
         try:
             if self.app.muted:raise ValueError('Prem REPRENDRE MIDI abans de provar el control XY.')
             if getattr(self.app,'camera',None) is not None or self.app.simulation.get():
                 raise ValueError('Atura la càmera i desactiva la simulació abans de les proves manuals, per aprendre només el CC escollit.')
-            if not self.apply():return
+            if self.generation!=self.app.live_kaoss.generation or int(self.app.card_id.get())-1!=self.index:
+                raise ValueError('La targeta o el projecte han canviat. Torna a obrir el formulari XY.')
+            card=self.app.cards[self.index]
+            if card.get('function')!=CHAOS_FUNCTION or card.get('kaoss')!=self.read().to_dict() or ambience_settings(card)!=self.effect_settings():
+                raise ValueError('Hi ha configuració pendent. Prem APLICAR abans d’activar l’aprenentatge MIDI a Cakewalk. Els botons de prova no apliquen ni canvien el projecte.')
             bus=self.app.live_kaoss.bus
             if self.index not in bus.cards:raise ValueError('Activa Control dedicat de bus XY i aplica la configuració.')
             if not bus.test(self.index,axis,value):raise ValueError(self.app.live_kaoss.output.error or bus.error)
             config=self.app.cards[self.index]['kaoss']
+            port=(self.app.cards[self.index].get('kaoss_bus') or {}).get('port') or 'Sortida principal'
+            number=config[axis+'_cc']
+            raw=f'{0xB0+config["channel"]-1:02X} {number:02X} {value:02X}'
+            self.last_probe=f'Port: {port} · {axis.upper()} · canal={config["channel"]} · CC={number} · valor={value} · bytes={raw} · acceptat localment'
+            self.probe_info.set(self.last_probe)
             self.status.set(f'Enviat {axis.upper()} · canal {config["channel"]} · CC{config[axis+"_cc"]} = {value}. Comprova el comandament de Cakewalk.')
-        except (ValueError,tk.TclError) as exc:self.error(exc)
+        except (ValueError,tk.TclError) as exc:
+            self.probe_info.set('Prova no enviada: '+str(exc));self.error(exc)
 
     def load_preset(self):
         if self.preset_name.get()=='Cakewalk · filtre i reverb':

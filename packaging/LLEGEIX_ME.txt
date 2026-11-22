@@ -39,3 +39,11 @@ El perfil envia X CC16 i Y CC17 al canal 16, sense notes ni controls de volum.
 La guia GUIA_XY_CAKEWALK.txt explica com preparar una FX Chain i l'assignació ACT.
 La resposta real de Modfilter i Sonitus Reverb s'ha de confirmar al teu Cakewalk;
 les proves automàtiques comproven ATMO i els missatges, no aquests connectors.
+
+ACT I PROVES MIDI NETES
+Els botons X/Y ara envien únicament el CC triat; primer cal prémer APLICAR.
+La prova mostra els bytes enviats i permet copiar-ne les dades.
+Si ACT no respon, obre la Guia alternativa sense ACT des del formulari XY.
+La ruta documentada Remote Control dels controls natius de Cakewalk es descriu
+amb una prova curta i una opció d'enviament de reverberació. La resposta del
+Cakewalk de l'usuari i l'assignació al filtre encara requereixen comprovació real.

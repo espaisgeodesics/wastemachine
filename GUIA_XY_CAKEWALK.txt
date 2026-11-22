@@ -1,4 +1,6 @@
 ATMO ESFERA FX · Control XY de filtre i reverberació
+
+ACT NO HA RESPOST EN LES PROVES DE L’USUARI: aquesta guia es conserva com a referència. Per a la ruta alternativa, obre GUIA_CONTROL_DIRECTE_CAKEWALK.txt. No donem ACT ni els efectes reals per validats.
 22 de novembre de 2026
 
 QUÈ ESTÀ PREPARAT I QUÈ CAL VERIFICAR
@@ -18,7 +20,7 @@ Prem Preparar Cakewalk · filtre + reverb. Configura:
 - Suavització 0,08 s i màxim 25 enviaments per eix i segon.
 - Retirada: retorn progressiu de 0,6 s, o mantenir els últims valors.
 - Valors de retorn inicials: X127, Y0. Són valors MIDI; NO són un bypass universal.
-Aplica i desa el projecte. La selecció del port també es desa.
+Aplica i desa el projecte. La selecció del port també es desa. Els botons de prova no tornen a aplicar la targeta: si canvies el formulari, has de prémer APLICAR abans de provar/aprendre MIDI.
 No assignis aquest port d'efectes a les entrades Omni dels instruments: tria el seu port musical.
 
 2. PREPARAR UNA SOLA FX CHAIN A CAKEWALK

@@ -24,6 +24,7 @@ class XYGuiTests(unittest.TestCase):
         self.app.close()
     def test_manual_xy_messages_are_independent_and_project_roundtrip_keeps_settings(self):
         output=Mock()
+        self.assertTrue(self.view.apply())
         with patch.object(module.mido,'get_output_names',return_value=['ATMO FX']),patch.object(module.mido,'open_output',return_value=output):
             self.view.test_axis('x',64);self.view.test_axis('y',127)
             messages=[c.args[0] for c in output.send.call_args_list]
@@ -38,6 +39,34 @@ class XYGuiTests(unittest.TestCase):
             self.assertEqual(self.app.cards[0]['kaoss']['y_cc'],17)
             self.assertEqual(self.app.cards[0]['kaoss_bus']['return_s'],.6)
         self.assertFalse(self.errors)
+    def test_probe_never_reapplies_or_sends_volume_on_shared_main_port(self):
+        main=Mock();main.name='ATMO FX';main.closed=False
+        self.app.midi=module.TracedMidiOutput(main,lambda message,error:None)
+        self.assertTrue(self.view.apply())
+        main.send.reset_mock()
+        with patch.object(self.app,'apply_card',side_effect=AssertionError('A probe must not apply')):
+            self.view.test_axis('x',64)
+            self.view.test_axis('y',127)
+        messages=[call.args[0] for call in main.send.call_args_list]
+        self.assertEqual([(m.type,m.channel,m.control,m.value) for m in messages],[('control_change',15,16,64),('control_change',15,17,127)])
+        self.assertIn('BF 11 7F',self.view.last_probe)
+        self.view.copy_probe()
+        self.assertEqual(self.root.clipboard_get(),self.view.last_probe)
+        self.assertFalse(self.errors)
+
+    def test_dirty_probe_is_rejected_without_mutating_or_opening_ports(self):
+        with patch('atmo_card_functions.messagebox.showerror') as error,patch.object(module.mido,'open_output') as opened:
+            self.view.test_axis('x',64)
+        error.assert_called_once();opened.assert_not_called()
+        self.assertNotEqual(self.app.cards[0]['function'],CHAOS_FUNCTION)
+        self.assertTrue(self.view.apply())
+        self.view.port.set('Different port')
+        with patch('atmo_card_functions.messagebox.showerror') as error,patch.object(module.mido,'open_output') as opened:
+            self.view.test_axis('y',64)
+        error.assert_called_once();opened.assert_not_called()
+        self.assertEqual(self.app.cards[0]['kaoss_bus']['port'],'ATMO FX')
+        self.assertFalse(self.errors)
+
     def test_loading_profile_keeps_custom_port_and_explicit_main_selection(self):
         self.view.port.set('Atmosfera FX2');self.view.load_bus_profile()
         self.assertEqual(self.view.port.get(),'Atmosfera FX2')
@@ -51,6 +80,7 @@ class XYGuiTests(unittest.TestCase):
         own=Mock();own.name='Atmosfera FX2';own.closed=False
         main=Mock();main.name='Atmosfera FX2';main.closed=False
         self.view.port.set('Atmosfera FX2')
+        self.assertTrue(self.view.apply())
         with patch.object(module.mido,'get_output_names',return_value=['Atmosfera FX2']),patch.object(module.mido,'open_output',return_value=own):
             self.view.test_axis('x',64)
         self.assertIs(self.app.live_kaoss.output.ports['Atmosfera FX2'],own)
