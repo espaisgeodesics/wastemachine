@@ -1,6 +1,6 @@
 """Per-card Kaoss configuration and live MIDI, using the existing XY engine."""
 from dataclasses import replace
-from atmo_xy_control import BusXY, MidiFXOutput, bus_profile
+from atmo_xy_control import BusXY, MidiFXOutput, bus_profile, CAKEWALK_PRESETS, LEGACY_CAKEWALK_PRESET
 import time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -162,8 +162,18 @@ class CardKaossEditor(ttk.Frame):
         config=KaossConfig.from_dict(card['kaoss']) if card.get('kaoss',{}).get('mode')=='Efectes' else default_config(app,self.index)
         metadata=ambience_settings(card) if card.get('kaoss',{}).get('mode')=='Efectes' else ambience_preset('Obert / aire',config.channel)[1]
         ttk.Label(body,text=f'Ambients XY · Targeta {self.index+1:02d}',font=('Segoe UI',14,'bold')).pack(anchor='w')
-        ttk.Label(body,text='Modifica instruments que ja sonen a Cakewalk. No genera notes.\nAssigna els CC a efectes del sintetitzador o d’un bus amb MIDI Learn / ACT. No processa els WAV locals.',wraplength=800).pack(anchor='w',pady=8)
-        ttk.Button(body,text='Preparar Cakewalk · filtre + reverb (CC16 / CC17)',command=self.load_bus_profile).pack(fill='x',pady=5)
+        ttk.Label(body,text='Modifica instruments que ja sonen a Cakewalk. No genera notes.\nAssigna els CC amb Control remoto de Cakewalk. No processa els WAV locals.',wraplength=800).pack(anchor='w',pady=8)
+        prepared=ttk.LabelFrame(body,text='Presets Cakewalk · assignables a qualsevol targeta',padding=8);prepared.pack(fill='x',pady=5)
+        saved_name=metadata['kaoss_ambience']
+        self.cakewalk_preset=tk.StringVar(value=saved_name if saved_name in CAKEWALK_PRESETS else 'Filtre + reverberació')
+        self.cakewalk_box=ttk.Combobox(prepared,textvariable=self.cakewalk_preset,values=tuple(CAKEWALK_PRESETS),state='readonly',width=32)
+        self.cakewalk_box.pack(anchor='w')
+        ttk.Button(prepared,text='Carregar preset a aquesta targeta',command=lambda:self.load_bus_profile(self.cakewalk_preset.get())).pack(anchor='w',pady=4)
+        self.cakewalk_info=tk.StringVar()
+        ttk.Label(prepared,textvariable=self.cakewalk_info,wraplength=740,justify='left').pack(fill='x')
+        self.cakewalk_box.bind('<<ComboboxSelected>>',lambda event:self.describe_cakewalk())
+        self.describe_cakewalk()
+        ttk.Label(prepared,text='Obre el projecte corresponent a Cakewalk. ATMO no carrega ni canvia els seus efectes. Reverb i eco comparteixen CC16/17: per usar-los en targetes independents, canvia el canal o els CC i adapta Cakewalk.',wraplength=740,justify='left').pack(fill='x',pady=4)
         self.port=tk.StringVar(value=(card.get('kaoss_bus') or {}).get('port','ATMO FX'))
         self.rate=tk.StringVar(value=str((card.get('kaoss_bus') or {}).get('rate_hz',25)))
         self.return_s=tk.StringVar(value=str((card.get('kaoss_bus') or {}).get('return_s',.6)))
@@ -179,7 +189,7 @@ class CardKaossEditor(ttk.Frame):
             ttk.Label(line,text=title).pack(side='left');ttk.Entry(line,textvariable=variable,width=7).pack(side='right')
         head=ttk.Frame(body);head.pack(fill='x')
         self.preset_name=tk.StringVar(value=metadata['kaoss_ambience'])
-        ttk.Combobox(head,textvariable=self.preset_name,values=AMBIENCES,state='readonly').pack(side='left')
+        ttk.Combobox(head,textvariable=self.preset_name,values=tuple(CAKEWALK_PRESETS)+(LEGACY_CAKEWALK_PRESET,)+AMBIENCES,state='readonly').pack(side='left')
         ttk.Button(head,text='Carregar ambient',command=self.load_preset).pack(side='left',padx=8)
         self.target=tk.StringVar(value=next(label for label,value in TARGETS.items() if value==metadata['kaoss_target']))
         ttk.Combobox(body,textvariable=self.target,values=tuple(TARGETS),state='readonly',width=48).pack(anchor='w',pady=6)
@@ -263,19 +273,25 @@ class CardKaossEditor(ttk.Frame):
             self.port_box['values']=list(mido.get_output_names())
         except Exception as exc:self.error(exc)
 
-    def load_bus_profile(self):
-        config,meta=bus_profile()
+    def describe_cakewalk(self):
+        self.cakewalk_info.set(CAKEWALK_PRESETS[self.cakewalk_preset.get()][2])
+
+    def load_bus_profile(self,name=LEGACY_CAKEWALK_PRESET):
+        config,meta=bus_profile(name=name)
         self.bus_enabled.set(True);self.channel.set(str(config.channel))
         # The profile changes effects, never an explicitly chosen device name.
         self.rate.set('25');self.return_s.set('0.6')
         self.target.set('Canal MIDI concret');self.release.set('neutral')
-        self.preset_name.set('Cakewalk · filtre i reverb')
+        self.preset_name.set(name)
+        self.cakewalk_preset.set('Filtre + reverberació' if name==LEGACY_CAKEWALK_PRESET else name)
+        self.describe_cakewalk()
+        for selected in self.target_cards:selected.set(False)
         for key,var in self.variables.items():var.set(getattr(config,key))
         for axis,key in (('x','x_cc'),('y','y_cc'),('rotation','rotation_cc')):
             self.parameter_names[axis].set('Personalitzat')
             for var,value in zip(self.ranges[axis],meta['kaoss_ranges'][axis]):var.set(str(value))
             self.neutral[axis].set(str(meta['kaoss_neutral'][axis]))
-        self.status.set(f'Canal 16 · X CC16 · Y CC17 · port {self.port.get()}. Aplica la configuració i assigna els dos CC a una FX Chain de Cakewalk.')
+        self.status.set(f'{self.cakewalk_preset.get()} · canal 16 · X CC{config.x_cc} · Y CC{config.y_cc} · port {self.port.get() or chr(171)+"principal"+chr(187)}. Prem Aplicar i desa el projecte. Cakewalk necessita les assignacions corresponents.')
 
     def reconnect_output(self):
         self.app.live_kaoss.bus.stop();self.app.live_kaoss.output.reconnect()
@@ -312,8 +328,8 @@ class CardKaossEditor(ttk.Frame):
             self.probe_info.set('Prova no enviada: '+str(exc));self.error(exc)
 
     def load_preset(self):
-        if self.preset_name.get()=='Cakewalk · filtre i reverb':
-            self.load_bus_profile();return
+        if self.preset_name.get() in CAKEWALK_PRESETS or self.preset_name.get()==LEGACY_CAKEWALK_PRESET:
+            self.load_bus_profile(self.preset_name.get());return
         try:
             self.bus_enabled.set(False)
             config,meta=ambience_preset(self.preset_name.get(),int(self.channel.get()))

@@ -76,6 +76,32 @@ class XYGuiTests(unittest.TestCase):
         self.view.port.set('');self.view.load_bus_profile()
         self.assertEqual(self.view.port.get(),'')
 
+    def test_cakewalk_selector_roundtrip_and_independent_cards(self):
+        from atmo_xy_control import CAKEWALK_PRESETS
+        self.assertEqual(tuple(self.view.cakewalk_box['values']),tuple(CAKEWALK_PRESETS))
+        for index,name in enumerate(CAKEWALK_PRESETS):
+            self.app.card_id.set(str(index+1));self.app.open_kaoss_settings()
+            view=self.app.kaoss_editor
+            view.port.set('ATMO ESFERA FX 2' if index!=1 else '')
+            view.load_bus_profile(name)
+            self.assertEqual(view.port.get(),'ATMO ESFERA FX 2' if index!=1 else '')
+            self.assertEqual(view.preset_name.get(),name)
+            # Reverb/echo share historical CCs: use a distinct channel for echo.
+            if index==1:view.channel.set('15')
+            self.assertTrue(view.apply())
+        path=Path(self.temp.name)/'three-presets.json'
+        with patch.object(module.filedialog,'asksaveasfilename',return_value=str(path)):
+            self.assertTrue(self.app.save_project(True))
+        self.assertTrue(self.app.load_project_file(path))
+        for index,name in enumerate(CAKEWALK_PRESETS):
+            item=self.app.cards[index]
+            self.assertEqual(item['kaoss_ambience'],name)
+            self.assertEqual(item['kaoss']['x_cc'],CAKEWALK_PRESETS[name][0])
+            self.assertEqual(item['kaoss_neutral']['y'],0)
+            self.app.card_id.set(str(index+1));self.app.open_kaoss_settings()
+            self.assertEqual(self.app.kaoss_editor.cakewalk_preset.get(),name)
+        self.assertFalse(self.errors)
+
     def test_main_can_connect_after_xy_already_opened_the_same_windows_endpoint(self):
         own=Mock();own.name='Atmosfera FX2';own.closed=False
         main=Mock();main.name='Atmosfera FX2';main.closed=False

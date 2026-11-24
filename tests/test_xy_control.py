@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock,patch
 
-from atmo_xy_control import BusXY,State,MidiFXOutput,bus_profile,settings
+from atmo_xy_control import BusXY,State,MidiFXOutput,bus_profile,settings,CAKEWALK_PRESETS
 from atmo_ambience import ambience_settings
 from experience_rules import RulesConfig,RuleAction,ExperienceRule
 
@@ -24,6 +24,22 @@ class XYTests(unittest.TestCase):
         self.observe(0,1)
         self.assertEqual(self.sent,[('ATMO FX',16,16,0),('ATMO FX',16,17,0)])
         self.assertFalse(self.card['kaoss']['rotation_enabled'])
+    def test_three_cakewalk_profiles_keep_exact_routes_and_return_values(self):
+        for name,expected in zip(CAKEWALK_PRESETS,((16,17),(16,17),(18,19))):
+            with self.subTest(name=name):
+                config,meta=bus_profile(name=name)
+                self.assertEqual((config.channel,config.x_cc,config.y_cc),(16,*expected))
+                self.assertFalse(config.rotation_enabled)
+                self.assertEqual(meta['kaoss_ambience'],name)
+                self.assertEqual(meta['kaoss_neutral'],dict(x=127,y=0,rotation=0))
+                item=dict(function='Chaos Oscillator (Kaoss XY)',kaoss=config.to_dict(),**meta)
+                self.assertIsNotNone(settings(item))
+                bus=BusXY(lambda *message:self.sent.append(message))
+                bus.configure(BusXY.validate([item],RulesConfig()))
+                bus.observe(0,0,0,0,1);bus.tick(1)
+                bus.release(0,1.1);bus.tick(2)
+                self.assertEqual(self.sent[-2:],[(meta['kaoss_bus']['port'],16,expected[0],127),(meta['kaoss_bus']['port'],16,expected[1],0)])
+
     def test_cadence_and_deduplication(self):
         self.observe(0,1)
         for i in range(1,30):

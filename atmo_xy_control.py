@@ -27,10 +27,19 @@ def settings(card):
 def axes(card):return ('x','y','rotation') if card['kaoss'].get('rotation_enabled',False) else ('x','y')
 
 
-def bus_profile(channel=16):
+CAKEWALK_PRESETS={
+    'Filtre + reverberació':(16,17,'X: filtre LP del Bus D · Y: enviament D → E (Sonitus Reverb).'),
+    'Filtre + eco':(16,17,'X: filtre LP del Bus D · Y: enviament D → F (Sonitus Delay).'),
+    'Filtre + distorsió':(18,19,'X: filtre LP del Bus G, després de House of Metal · Y: enviament D → G.'),
+}
+LEGACY_CAKEWALK_PRESET='Cakewalk · filtre i reverb'
+
+
+def bus_profile(channel=16,name=LEGACY_CAKEWALK_PRESET):
     from kaoss_xy import KaossConfig
-    config=KaossConfig(mode='Efectes',channel=channel,x_cc=16,y_cc=17,rotation_cc=18,rotation_enabled=False)
-    meta=dict(kaoss_target='channel',kaoss_targets=[],kaoss_release='neutral',kaoss_ambience='Cakewalk · filtre i reverb',
+    x,y,_=CAKEWALK_PRESETS['Filtre + reverberació' if name==LEGACY_CAKEWALK_PRESET else name]
+    config=KaossConfig(mode='Efectes',channel=channel,x_cc=x,y_cc=y,rotation_cc=20,rotation_enabled=False)
+    meta=dict(kaoss_target='channel',kaoss_targets=[],kaoss_release='neutral',kaoss_ambience=name,
         kaoss_ranges={'x':[0,127],'y':[0,127],'rotation':[0,127]},kaoss_neutral={'x':127,'y':0,'rotation':0},
         kaoss_bus={'port':'ATMO FX','rate_hz':25,'return_s':.6})
     return config,meta

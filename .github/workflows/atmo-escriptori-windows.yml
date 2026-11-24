@@ -132,4 +132,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "atmo-escriptori-${GITHUB_RUN_NUMBER}" delivery/* --target "$GITHUB_SHA" --title "ATMO ESFERA FX · Programa Windows · ${GITHUB_RUN_NUMBER}" --notes "Proves XY amb un sol missatge MIDI, sense reaplicar la targeta ni sincronitzar volums. Guia alternativa Remote Control de Cakewalk; la resposta del Cakewalk de l’usuari queda pendent de comprovació. Instal·lador i proves Windows inclosos."
+          gh release create "atmo-escriptori-${GITHUB_RUN_NUMBER}" delivery/* --target "$GITHUB_SHA" --title "ATMO ESFERA FX · Programa Windows · ${GITHUB_RUN_NUMBER}" --notes "Tres presets Cakewalk a Ambients XY: filtre i reverberació, filtre i eco, filtre i distorsió. Assignables a qualsevol targeta, port MIDI conservat i retorn X127/Y0. Cal obrir el projecte compatible de Cakewalk; reverb i eco comparteixen els CC històrics. Instal·lador i proves Windows inclosos."

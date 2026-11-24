@@ -68,3 +68,20 @@ https://taylor.cakewalk.com/Documentation?help=Mixing.45.html&language=4&product
 Blog de Cakewalk: limitació del comandament d'una FX Chain i alternativa amb filtres agrupats de ProChannel:
 https://noelborthwick.com/cakewalk/2014/01/20/anatomy-of-an-fx-chain-vintage-wah/
 Les fonts descriuen versions diferents de Cakewalk. Els noms i la disponibilitat del menú s'han de confirmar en la versió de l'usuari; no s'ha validat físicament el seu equip.
+
+
+PRESETS ATMO · FILTRE I REVERB / ECO / DISTORSIÓ
+A l’editor de qualsevol targeta, obre Ambients XY. Tria un dels tres
+presets Cakewalk, prem Carregar preset a aquesta targeta i després Aplicar.
+Desa el projecte ATMO. El port escollit es conserva; gir desactivat.
+Canal 16: reverb i eco X CC16/Y CC17; distorsió X CC18/Y CC19.
+Retorn X127/Y0: filtre obert i enviament tancat; cues naturals d’eco/reverb.
+ATMO no obre projectes ni instal·la efectes a Cakewalk. Obre el projecte
+compatible. Per tenir reverb i eco independents alhora, canvia el canal
+o els CC d’un preset a ATMO i les assignacions Remote Control de Cakewalk.
+Les col·lisions de port/canal/CC entre targetes es continuen rebutjant.
+La targeta sonora conserva la seva funció: no la substitueixis per un
+control d’efectes si vols continuar generant notes amb ella.
+Distorsió: House of Metal al Bus G, EQ LP en Post, enviament D→G;
+Bus G→Master. Totes les pistes a processar han d’enviar àudio al Bus D.
+Desa tant el projecte Cakewalk com el projecte ATMO.
