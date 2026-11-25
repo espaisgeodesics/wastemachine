@@ -69,6 +69,26 @@ class FadeTests(unittest.TestCase):
         self.assertEqual(self.sent[-2:],[(1,118,0),(1,119,127)])
         self.sent.clear();self.fade.tick(100)
         self.assertFalse(self.sent)
+    def test_emergency_still_attempts_mute_when_zero_gain_send_fails(self):
+        self.enter();self.fade.tick(2);self.sent.clear()
+        original=self.fade.send
+        def fail(ch,cc,value):
+            if cc==118 and value==0:raise OSError('gain unavailable')
+            return original(ch,cc,value)
+        self.fade.send=fail
+        self.assertFalse(self.fade.stop(0,3))
+        self.assertEqual(self.sent,[(1,119,127)])
+        self.assertEqual(self.fade.states[0].gate_sent,127)
+    def test_reentry_after_partial_silence_failure_reprimes_zero_before_unmute(self):
+        self.enter();self.fade.tick(2)
+        original=self.fade.send
+        def fail(ch,cc,value):
+            if cc==118 and value==0:raise OSError('gain unavailable')
+            return original(ch,cc,value)
+        self.fade.send=fail;self.assertFalse(self.fade.stop(0,3))
+        self.fade.send=original;self.sent.clear();self.enter(4)
+        self.assertEqual(self.sent,[(1,118,0),(1,119,0)])
+
     def test_changed_route_is_silenced_before_new_route_unmutes(self):
         self.enter();self.fade.tick(2);self.sent.clear()
         other=card(channel=2)

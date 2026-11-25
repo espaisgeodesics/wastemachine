@@ -150,6 +150,19 @@ class PresenceFades:
     def _step(self,state,now,force=False):
         if not force and now<state.retry_at:return False
         r=state.route
+        if force:
+            # Emergency silence is best effort on BOTH routes. A failed gain
+            # message must not prevent the existing Mute from being attempted.
+            okay=True
+            if state.level_sent!=0:
+                if self._send(state,r.cc,0):state.level_sent=0
+                else:okay=False
+            if state.gate_sent!=r.silent:
+                if self._send(state,r.gate,r.silent):state.gate_sent=r.silent
+                else:okay=False
+            state.retry_at=float('-inf') if okay else now+.5
+            if okay:self.error=''
+            return okay
         value=round(state.value(now))
         ended=now>=state.since+state.duration
         # Startup/reconnection and re-entry at zero always set gain before unmute.
@@ -157,6 +170,9 @@ class PresenceFades:
             if not self._send(state,r.cc,0):state.retry_at=now+.5;return False
             state.level_sent=0
         if state.present and state.gate_sent!=r.audible:
+            if state.level_sent!=0:
+                if not self._send(state,r.cc,0):state.retry_at=now+.5;return False
+                state.level_sent=0
             if not self._send(state,r.gate,r.audible):state.retry_at=now+.5;return False
             state.gate_sent=r.audible
         if (force or ended or now-state.sent_at>=1/30) and state.level_sent!=value:
