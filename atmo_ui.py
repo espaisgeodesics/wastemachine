@@ -35,6 +35,22 @@ def draw_banner(app,event):
     if width>850:canvas.create_text(width-24,28,anchor='e',text='ESPAI  ·  SO  ·  IMATGE',fill=LEAF,font=(FONT,10,'bold'))
 
 
+def owned_idle(widget,callback):
+    """Cancel deferred work when its owner closes, before Tcl command IDs recycle."""
+    pending=[None]
+    def run():
+        pending[0]=None
+        if widget.winfo_exists():callback()
+    def cleanup(event):
+        if event.widget is widget and pending[0] is not None:
+            try:widget.after_cancel(pending[0])
+            except tk.TclError:pass
+            pending[0]=None
+    widget.bind('<Destroy>',cleanup,add='+')
+    pending[0]=widget.after_idle(run)
+    return pending
+
+
 def scrollable_form(parent,padding=12):
     from atmo_runtime import BG
     holder=ttk.Frame(parent);holder.pack(fill='both',expand=True)
@@ -53,7 +69,7 @@ def scrollable_form(parent,padding=12):
         for child in widget.winfo_children():
             child.bind('<MouseWheel>',wheel,add='+');child.bind('<Button-4>',wheel,add='+');child.bind('<Button-5>',wheel,add='+')
             bind_children(child)
-    body.after_idle(lambda:bind_children(body) if body.winfo_exists() else None)
+    owned_idle(body,lambda:bind_children(body))
     body.atmo_canvas=canvas
     return body
 
@@ -77,7 +93,7 @@ def wrap_controls(frame):
                 widget.grid(row=row,column=column,sticky='w',padx=4,pady=4)
                 x+=needed;column+=1
         finally:state['busy']=False
-    frame.bind('<Configure>',arrange,add='+');frame.after_idle(arrange)
+    frame.bind('<Configure>',arrange,add='+');owned_idle(frame,arrange)
 
 
 def build_workspace(app):

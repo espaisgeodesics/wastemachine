@@ -65,6 +65,16 @@ class VisualRegressionTests(unittest.TestCase):
         self.assertEqual(str(button.cget('menu')),str(sub))
         sub.invoke(0);command.assert_called_once()
 
+    def test_destroyed_form_cancels_its_pending_idle_callback(self):
+        from atmo_ui import scrollable_form
+        for i in range(12):
+            window=tk.Toplevel(self.root)
+            body=scrollable_form(window)
+            ttk.Entry(body).pack()
+            window.destroy()
+        self.root.update()
+        self.assertFalse(self.errors)
+
     def test_long_experience_action_wraps_at_high_dpi(self):
         from atmo_ui import wrap_card_text
         self.root.tk.call('tk','scaling',2.)
