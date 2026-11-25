@@ -107,6 +107,11 @@ def run(output,scales):
                     capture('06b_XY_Cakewalk',app.kaoss_window)
                     for canvas in (w for w in widgets(app.kaoss_window) if w.winfo_class()=='Canvas' and w.cget('yscrollcommand')):canvas.yview_moveto(1.)
                     capture('06c_XY_proves',app.kaoss_window)
+                if name=='10_mute':
+                    app.mute_fade_enabled.set(True)
+                    capture('10b_fades',app.mute_settings_window)
+                    for canvas in (w for w in widgets(app.mute_settings_window) if w.winfo_class()=='Canvas' and w.cget('yscrollcommand')):canvas.yview_moveto(1.)
+                    capture('10c_fades_ajuda',app.mute_settings_window)
                 if name=='12_zones' and hasattr(app.zone_editor,'audio_status'):
                     canvases=[w for w in widgets(app.zone_window) if w.winfo_class()=='Canvas' and w.cget('yscrollcommand')]
                     for canvas in canvases:canvas.yview_moveto(.52)

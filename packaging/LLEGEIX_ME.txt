@@ -1,4 +1,4 @@
-ATMO ESFERA FX · Edició d'escriptori · Novembre de 2026 · Control XY de Cakewalk
+ATMO ESFERA FX · Edició d'escriptori · 25 de novembre de 2026 · Fades de targetes i control XY
 
 INSTAL·LACIÓ DE WINDOWS
 Executa ATMO_ESFERA_FX_Instal_lador_Windows.exe.
@@ -32,27 +32,38 @@ El ZIP de codi és per a qui vulgui executar o revisar el codi font.
 Aquesta modalitat requereix Python 3.12 i els paquets del seu requirements.txt.
 No cal descarregar-lo per utilitzar l'instal·lador de Windows.
 
-CONTROL XY DEL MASTER DE CAKEWALK
-A la targeta Chaos Oscillator (Kaoss XY), obre Configurar funció i prem
-Preparar Cakewalk · filtre + reverb. Crea ATMO FX a loopMIDI.
-El perfil envia X CC16 i Y CC17 al canal 16, sense notes ni controls de volum.
-La guia GUIA_XY_CAKEWALK.txt explica com preparar una FX Chain i l'assignació ACT.
-La resposta real de Modfilter i Sonitus Reverb s'ha de confirmar al teu Cakewalk;
-les proves automàtiques comproven ATMO i els missatges, no aquests connectors.
+CONTROL XY DE CAKEWALK
+A Ambients XY pots triar Filtre + reverberació, Filtre + eco o Filtre + distorsió.
+Selecciona el port MIDI real que tens a loopMIDI; no cal crear un port nou.
+Aplica el preset a la targeta i desa el projecte. Obre el projecte compatible
+al Cakewalk: ATMO no carrega instruments ni assignacions de Cakewalk.
+Els perfils d’eco/reverb conserven X CC16 / Y CC17 al canal 16;
+el de distorsió utilitza X CC18 / Y CC19 al canal 16.
+Reverb i eco comparteixen els CC històrics: per fer-los independents alhora,
+canvia el canal o els CC d’un perfil i les assignacions del receptor.
+Consulta GUIA_CONTROL_DIRECTE_CAKEWALK.txt per als controls remots natius.
+No cal una superfície ACT. La guia ACT antiga es conserva com a referència.
 
-ACT I PROVES MIDI NETES
-Els botons X/Y ara envien únicament el CC triat; primer cal prémer APLICAR.
+PROVES MIDI NETES
+Els botons X/Y envien únicament el CC triat; primer cal prémer APLICAR.
 La prova mostra els bytes enviats i permet copiar-ne les dades.
-Si ACT no respon, obre la Guia alternativa sense ACT des del formulari XY.
-La ruta documentada Remote Control dels controls natius de Cakewalk es descriu
-amb una prova curta i una opció d'enviament de reverberació. La resposta del
-Cakewalk de l'usuari i l'assignació al filtre encara requereixen comprovació real.
+Les proves automàtiques comproven ATMO i els missatges; comprova també
+la recepció i l’efecte real al teu Cakewalk.
 
 ATMO · BOSC I ATMOSFERA
-Paleta blau profund / verd bosc / molsa i formes de fulles discretes.
+Paleta blau profund / verd bosc / molsa, amb fons nets sense fulles artificials.
 Les quatre imatges inicials aprovades es conserven sense canvis.
 A Ambients XY: avis de port no disponible sense canviar-lo automaticament;
 boto Usar sortida MIDI principal (cal connectar-la, Aplicar i desar).
 Boto Filtre menys extrem: posa el minim X a 60 al formulari; cal Aplicar.
 No modifica els projectes existents fins que l’usuari aplica els ajustos.
 Les frequències depenen del mapatge de Cakewalk; ajusta-les a l’oïda.
+
+ENTRADA I SORTIDA PROGRESSIVES DE TARGETES
+A Control d’audio/Mute activa Fade in / fade out i configura els segons.
+Conserva el mapatge de Mute CC119 i assigna CC118 al volum de cada pista
+d’audio a Cakewalk amb el canal corresponent. Consulta GUIA_FADES_CAKEWALK.txt.
+El fade es opcional: els projectes antics no canvien fins que l’actives.
+La primera configuracio amb Cakewalk s’ha de fer manualment; l’instal·lador
+no modifica els seus projectes ni assignacions. La funcio Mute no genera notes.
+S’han retirat les fulles artificials mantenint els colors de bosc i blau.

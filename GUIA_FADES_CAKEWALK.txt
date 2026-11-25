@@ -1,0 +1,83 @@
+ATMO ESFERA FX · ENTRADA I SORTIDA PROGRESSIVES
+Actualització del 25 de novembre de 2026
+
+QUÈ CANVIA
+La funció Control d’àudio / Mute té una opció Activar fade in / fade out.
+Es conserven les notes i el transport de Cakewalk: no es reinicia la peça.
+Aquesta opció és per a les targetes que controlen una pista de Cakewalk amb
+Mute. No modifica l’envolupant de Nota MIDI ni de l’Arpegiador espacial.
+Per als instruments de les targetes 6/7, pots ajustar Attack/Release a Surge.
+
+ABANS DE COMENÇAR
+Desa una còpia del projecte actual de Cakewalk i del projecte ATMO.
+No canviïs les cinc assignacions Mute que ja funcionen.
+Un Mute només rep encès/apagat: el fade real necessita un segon control.
+Aquest segon control és un mapatge manual a Cakewalk, no una configuració
+que pugui enviar el fitxer MIDI ni que s’instal·li automàticament amb ATMO.
+
+PROVA NOMÉS LA TARGETA 1
+1. Atura la càmera i la simulació d’ATMO mentre configures Cakewalk.
+2. A Cakewalk, localitza la pista d’ÀUDIO del violí que vam separar i on
+   el Mute de la targeta 1 ja funciona. No ho facis a la pista de notes MIDI.
+3. Conserva el Mute amb Control remoto > Controlador 119 > canal 1.
+4. Clic dret SOBRE EL FADER DE VOLUM d’aquesta mateixa pista d’àudio >
+   Control remoto > Controlador 118 > canal 1 > Acceptar.
+   No assignis CC118 al Mute, al Pan, al Gain ni al Master.
+5. Comprova que el botó de lectura d’automatització R estigui activat i
+   que no hi hagi una automatització de volum escrita que competeixi amb
+   el control. Deixa la gravació d’automatització W desactivada per provar.
+6. A ATMO, selecciona la targeta 1 > Control d’àudio / Mute > Configurar:
+   - Activa Fade in / fade out.
+   - Entrada: 1,5 segons.
+   - Sortida: 2 segons.
+   - CC addicional del volum: 118.
+   - Nivell màxim: 100 per començar.
+   - Canal 1; Mute CC119; audible 0; silenciat 127, com abans.
+7. Prem Aplicar a la targeta i tancar. Torna a activar la càmera.
+8. Prem Play una vegada a Cakewalk. Mostra la targeta 1: el fader ha de
+   començar baix i pujar. Retira-la: ha de baixar, i Mute només s’activa
+   al final. Tornar-la a mostrar a mig fade inverteix el recorregut sense
+   reiniciar el volum des de zero.
+9. Ajusta el nivell màxim mirant el valor REAL en dB de Cakewalk. Un valor
+   MIDI no són dB. 127 pot superar 0 dB segons el mapatge del fader; no cal
+   posar-lo al màxim. Mantén un volum d’escolta còmode i evita el vermell.
+10. Desa tant el projecte de Cakewalk com el d’ATMO.
+
+REPETIR A LES TARGETES 2–5
+Mateixos CC, però el canal de cada instrument:
+  Targeta 1 · Violí: Mute CC119 / Volum CC118 / canal 1.
+  Targeta 2 · Flauta: Mute CC119 / Volum CC118 / canal 2.
+  Targeta 3 · Oboè: Mute CC119 / Volum CC118 / canal 3.
+  Targeta 4 · Viola: Mute CC119 / Volum CC118 / canal 4.
+  Targeta 5 · Violoncel: Mute CC119 / Volum CC118 / canal 5.
+Cada targeta pot tenir temps i nivell diferents. Cada canal/CC de fade ha
+de quedar lliure d’altres controls XY, targetes o regles del projecte.
+
+COMPORTAMENT
+- Entrada: volum zero, Mute desactivat i pujada suau fins al nivell màxim.
+- Sortida: després de confirmar l’absència (~250 ms), baixa el volum i
+  després activa Mute. El temps de sortida s’afegeix al temps de detecció.
+- Entrada/sortida: 0–60 segons, amb corba suau. Zero és canvi immediat.
+- Reentrada: reprèn des del nivell actual, sense salts a zero o al màxim.
+- Silenci absolut, tancament i canvi de connexió: silenci immediat.
+- El programa no envia notes ni ordres Play/Stop per fer aquests fades.
+- Els projectes antics segueixen en Mute directe fins que activis la casella.
+- Retirar el fade: desactiva la casella i aplica. ATMO deixa el control de
+  volum mentre està silenciat i restaura el nivell màxim configurat si
+  mantens la mateixa ruta Mute. Així no queda una pista amb volum zero
+  quan retornes a Mute directe. Si canvies de ruta, l’antiga queda silenciada.
+
+SI NO FUNCIONA
+Si només es mou Mute, falta mapar CC118 al volum de la sortida d’àudio.
+Si la pista combinada no respon al control remot, separa-la amb Dividir
+pista de instrumento i utilitza la sortida d’àudio, com a la prova que ja
+funciona. Mantén ATMO activat com a entrada MIDI de Cakewalk, no com a
+sortida de retorn; no cal crear una superfície ACT.
+Si hi ha un error de port, el silenci del receptor no es pot garantir:
+atura el transport de Cakewalk i reconnecta el MIDI abans de continuar.
+
+VALIDACIÓ
+S’han preparat proves de l’envolupant, reentrada, canals independents,
+errors de port, silenci immediat, persistència i compatibilitat amb Mute.
+La prova física amb el teu Cakewalk, càmera i amplificador segueix sent
+necessària després d’assignar-hi el segon controlador.

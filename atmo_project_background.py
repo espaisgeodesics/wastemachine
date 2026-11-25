@@ -38,8 +38,6 @@ class ProjectBackground(tk.Canvas):
             fitted = ImageOps.fit(self._source, (width, height),
                                   method=Image.Resampling.LANCZOS)
             fitted = Image.blend(fitted, Image.new('RGB', fitted.size, BG), .28)
-            from atmo_ui import forest_overlay
-            fitted=Image.alpha_composite(fitted.convert('RGBA'),forest_overlay(width,height))
             self._photo = ImageTk.PhotoImage(fitted, master=self)
             self.itemconfigure(self._art, image=self._photo)
 

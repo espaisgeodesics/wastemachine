@@ -1,3 +1,4 @@
+from atmo_presence_fade import PresenceFades, settings as presence_fade_settings, validate as validate_presence_fades
 from atmo_runtime import configure_theme, install_window_theme, BG, PANEL, SURFACE, TEXT, MUTED, CYAN, PURPLE, DANGER
 from atmo_ui import draw_banner, scrollable_form, wrap_controls
 import os, sys, json, time, math, random, datetime, threading
@@ -152,7 +153,8 @@ class App:
     self.active={}; self.target_trails={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.clock_start=time.monotonic(); self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
     self.show_only_assigned=tk.BooleanVar(value=True); self.visual_dirty=True; self.preview_card=None; self.preview_dirty=True; self.preview_caption=tk.StringVar(value='Previsualització en directe'); self.muted=False; self.sim_card=None; self.sim_xy=None; self.simulation=tk.BooleanVar(value=False); self.sim_angle=tk.DoubleVar(value=0); self.arp_direction=tk.StringVar(value='Ascendent');self.arp_note_count=tk.StringVar(value='5');self.arp_octaves=tk.IntVar(value=2);self.arp_source=tk.StringVar(value='Acord');self.arp_custom_notes=tk.StringVar(value='60 64 67 72 76');self.arp_map=tk.StringVar(value='Quadrícula 8 × 3'); self.rhythm_steps=[tk.BooleanVar(value=i%4==0) for i in range(16)]; self.drum_preset=tk.StringVar(value='Rock bàsic'); self.drum_notes={name:tk.IntVar(value=note) for name,note in DRUM_NOTES.items()}
-    self.mute_audible=tk.IntVar(value=0);self.mute_silent=tk.IntVar(value=127);self.mute_sent={};self.mute_retry_after={}
+    self.mute_audible=tk.IntVar(value=0);self.mute_silent=tk.IntVar(value=127);self.mute_sent={};self.mute_retry_after={};self.presence_fades=None
+    self.mute_fade_enabled=tk.BooleanVar(value=False);self.mute_fade_cc=tk.IntVar(value=118);self.mute_fade_in=tk.StringVar(value='1.5');self.mute_fade_out=tk.StringVar(value='2.0');self.mute_fade_level=tk.IntVar(value=100)
     self.audio_states={}; self.audio_error=None; self.audio_duration=tk.DoubleVar(value=0);self.audio_cc_values={}
     self.audio_control_vars={}
     for role,defaults in AUDIO_CONTROLS.items():
@@ -938,23 +940,50 @@ class App:
     return frame
  def confirm_zone_discard(self):
     return self.zone_editor is None or self.zone_editor.confirm_discard()
+ def open_presence_fade_guide(self):
+    import os,webbrowser
+    path=Path(__file__).resolve().parent/'GUIA_FADES_CAKEWALK.txt'
+    try:
+      if not path.is_file():raise OSError('No es troba la guia dins la instal·lació')
+      if hasattr(os,'startfile'):os.startfile(str(path))
+      else:webbrowser.open(path.as_uri())
+    except OSError as exc:messagebox.showerror('Guia de fades',str(exc),parent=self.mute_settings_window)
+ def read_presence_fade(self):
+    data=dict(enabled=self.mute_fade_enabled.get(),cc=int(self.mute_fade_cc.get()),in_s=float(self.mute_fade_in.get().replace(',','.')),out_s=float(self.mute_fade_out.get().replace(',','.')),level=int(self.mute_fade_level.get()))
+    return presence_fade_settings(dict(cc=int(self.cc.get()),mute_fade=data))
  def open_mute_settings(self):
     old=getattr(self,'mute_settings_window',None)
     if old is not None and old.winfo_exists():old.destroy()
-    if self.cards[int(self.card_id.get())-1]['function']!=MUTE_FUNCTION:
+    index=int(self.card_id.get())-1;generation=self.live_kaoss.generation
+    if self.cards[index]['function']!=MUTE_FUNCTION:
       self.cc.set(119);self.mute_audible.set(0);self.mute_silent.set(127)
+      self.mute_fade_enabled.set(False);self.mute_fade_cc.set(118);self.mute_fade_in.set('1.5');self.mute_fade_out.set('2.0');self.mute_fade_level.set(100)
     win=tk.Toplevel(self.root);self.mute_settings_window=win
-    win.title('CONTROL D’ÀUDIO / MUTE · TARGETA '+self.card_id.get());win.geometry('460x480');win.transient(self.root);win.configure(bg='#080e20')
+    win.title('CONTROL D’ÀUDIO / MUTE · TARGETA '+self.card_id.get());win.geometry('620x700');win.transient(self.root);win.configure(bg=BG)
+    footer=ttk.Frame(win,padding=12);footer.pack(side='bottom',fill='x')
     pane=scrollable_form(win,padding=16)
-    ttk.Label(pane,text='PRESÈNCIA DE TARGETA → MUTE',font=('Segoe UI',11,'bold')).pack(anchor='w',pady=8)
-    for title,var,minimum,maximum in [('Canal MIDI',self.channel,1,16),('Controlador CC',self.cc,0,119),('Visible → pista audible',self.mute_audible,0,127),('Absent → pista silenciada',self.mute_silent,0,127)]:
-      ttk.Label(pane,text=title).pack(anchor='w',pady=(8,2))
-      tk.Spinbox(pane,textvariable=var,from_=minimum,to=maximum,width=8).pack(anchor='w')
-    ttk.Label(pane,text='Verificat a Sonar: canal 1, CC119, audible 0 i Mute 127. Assigna aquest mateix controlador al Mute de la pista amb Remote Control. No envia notes ni toca Play.',wraplength=420).pack(anchor='w',pady=12)
-    ttk.Label(pane,text='En retirar la targeta s’envia Mute després de 250 ms. En aplicar o connectar, se sincronitza l’estat actual. Cada pista ha de tenir un canal + CC diferent.',wraplength=420).pack(anchor='w',pady=4)
+    ttk.Label(pane,text='PRESÈNCIA → MUTE I VOLUM PROGRESSIU',font=('Segoe UI',11,'bold'),wraplength=540).pack(anchor='w',pady=8)
+    ttk.Label(pane,text='La música continua al mateix punt de Cakewalk. Aquesta targeta no envia notes ni toca Play.',wraplength=540).pack(anchor='w',pady=4)
+    for title,var,minimum,maximum in [('Canal MIDI',self.channel,1,16),('CC del Mute existent',self.cc,0,119),('Visible → Mute desactivat',self.mute_audible,0,127),('Absent → Mute activat',self.mute_silent,0,127)]:
+      row=ttk.Frame(pane);row.pack(fill='x',pady=4)
+      ttk.Label(row,text=title).pack(side='left')
+      ttk.Spinbox(row,textvariable=var,from_=minimum,to=maximum,width=7).pack(side='right')
+    fades=ttk.LabelFrame(pane,text='Entrada i sortida suaus',padding=10);fades.pack(fill='x',pady=12)
+    ttk.Checkbutton(fades,text='Activar fade in / fade out',variable=self.mute_fade_enabled).pack(anchor='w')
+    for title,var,minimum,maximum,step in [('Entrada · segons',self.mute_fade_in,0,60,.1),('Sortida · segons',self.mute_fade_out,0,60,.1),('CC addicional per al volum',self.mute_fade_cc,1,119,1),('Nivell màxim · valor MIDI',self.mute_fade_level,1,127,1)]:
+      row=ttk.Frame(fades);row.pack(fill='x',pady=4)
+      ttk.Label(row,text=title).pack(side='left')
+      ttk.Spinbox(row,textvariable=var,from_=minimum,to=maximum,increment=step,width=7).pack(side='right')
+    ttk.Label(fades,text='A Cakewalk: conserva CC119 al Mute i assigna CC118 al fader de volum de la mateixa pista d’àudio, amb el mateix canal. Si canvies els CC aquí, adapta també Cakewalk.',wraplength=500,justify='left').pack(fill='x',pady=8)
+    ttk.Label(fades,text='El nivell màxim no són dB. Comença a 100 i ajusta’l mirant el volum real de Cakewalk. Sense el mapatge del volum no hi haurà fade, encara que es mogui el Mute.',wraplength=500,justify='left').pack(fill='x',pady=4)
+    ttk.Label(pane,text='En retirar la targeta: es confirma l’absència (~250 ms), baixa el volum i després s’activa Mute. Si torna abans d’acabar, el fade canvia de sentit sense reiniciar-se. SILENCI ABSOLUT continua sent immediat.',wraplength=540,justify='left').pack(fill='x',pady=6)
+    ttk.Label(pane,text='Els projectes antics mantenen Mute directe fins que activis aquest ajust. Desa el projecte després d’aplicar.',wraplength=540).pack(fill='x',pady=4)
     def apply():
+      if int(self.card_id.get())-1!=index or self.live_kaoss.generation!=generation or self.fun.get()!=MUTE_FUNCTION:
+        messagebox.showerror('Control d’àudio','La targeta o el projecte han canviat. Torna a obrir aquesta configuració.',parent=win);return
       if self.apply_card():win.destroy()
-    ttk.Button(pane,text='APLICAR A LA TARGETA I TANCAR',command=apply).pack(fill='x',pady=12)
+    ttk.Button(footer,text='Guia: configurar fades a Cakewalk',command=self.open_presence_fade_guide).pack(fill='x',pady=(0,6))
+    ttk.Button(footer,text='APLICAR A LA TARGETA I TANCAR',command=apply,style='Accent.TButton').pack(fill='x')
  def open_audio_settings(self):
     old=getattr(self,'audio_settings_window',None)
     if old is not None and old.winfo_exists():old.destroy()
@@ -993,6 +1022,7 @@ class App:
     def test():
       if self.apply_card():self.trigger_audio(int(self.card_id.get())-1)
     ttk.Button(footer,text='PROVAR DISPAR A SONAR',command=test).pack(fill='x',pady=(10,0))
+    ttk.Button(footer,text='Guia: configurar fades a Cakewalk',command=self.open_presence_fade_guide).pack(fill='x',pady=(0,6))
     ttk.Button(footer,text='APLICAR A LA TARGETA I TANCAR',command=apply).pack(fill='x',pady=12)
  def open_cc_settings(self):
     old=getattr(self,'cc_settings_window',None)
@@ -1090,6 +1120,8 @@ class App:
     self.arp_map.set(next(label for label,value in ARP_MAPS.items() if value==settings['arp_map']))
     self.card_name.set(c.get('name',f'Targeta {int(self.card_id.get()):02d}'))
     self.mute_audible.set(c.get('mute_audible',0));self.mute_silent.set(c.get('mute_silent',127))
+    fade=presence_fade_settings(c) if c.get('function')==MUTE_FUNCTION else presence_fade_settings({})
+    self.mute_fade_enabled.set(fade['enabled']);self.mute_fade_cc.set(fade['cc']);self.mute_fade_in.set(str(fade['in_s']));self.mute_fade_out.set(str(fade['out_s']));self.mute_fade_level.set(fade['level'])
     self.audio_duration.set(c.get('audio_duration',0))
     for role,variables in self.audio_control_vars.items():
       for key,var in variables.items():var.set(c.get('audio_controls',{}).get(role,{}).get(key,AUDIO_CONTROLS[role][key]))
@@ -1116,12 +1148,14 @@ class App:
         if config['enabled']:used.append(config['cc'])
       if len(set(used))!=len(used):raise ValueError('Cada control d’àudio actiu ha de tenir un número CC diferent.')
       mute_values=(int(self.mute_audible.get()),int(self.mute_silent.get()))
+      new_fade=self.read_presence_fade() if self.fun.get()==MUTE_FUNCTION else None
       if self.fun.get()==MUTE_FUNCTION:
         if not 1<=int(self.channel.get())<=16 or not 0<=int(self.cc.get())<=119 or not all(0<=value<=127 for value in mute_values) or mute_values[0]==mute_values[1]:raise ValueError('Mute: canal 1–16, CC 0–119 i dos valors diferents entre 0 i 127.')
         for i,other in enumerate(self.cards):
           if i!=card_index and other['function']==MUTE_FUNCTION and (other['channel'],other['cc'])==(int(self.channel.get()),int(self.cc.get())):raise ValueError(f'La ruta Mute ja és de la targeta {i+1:02d}. Tria un altre canal o CC per a una pista independent.')
       previous=dict(self.cards[card_index])
-      prospective=list(self.cards);prospective[card_index]=dict(previous,function=self.fun.get(),channel=max(1,min(16,int(self.channel.get()))))
+      prospective=list(self.cards);prospective[card_index]=dict(previous,function=self.fun.get(),channel=max(1,min(16,int(self.channel.get()))),cc=max(0,min(127,int(self.cc.get()))),mute_audible=mute_values[0],mute_silent=mute_values[1])
+      if new_fade is not None:prospective[card_index]['mute_fade']=new_fade
       if self.fun.get()==CHAOS_FUNCTION:
         config=self.kaoss_draft or default_config(self,card_index)
         if self.kaoss_draft is None:self.channel.set(config.channel)
@@ -1135,14 +1169,23 @@ class App:
         prospective[card_index]['channel']=config.channel
         prospective[card_index]['kaoss']=config.to_dict()
       self.rule_config.validate_channels(prospective)
+      validate_presence_fades(prospective,self.rule_config)
       self.live_kaoss.prepare(prospective,self.rule_config)
       same_mute=previous['function']==self.fun.get()==MUTE_FUNCTION
-      if same_mute:
-        if (previous['channel'],previous['cc'],previous.get('mute_silent',127))!=(int(self.channel.get()),int(self.cc.get()),mute_values[1]):self.send_mute_state(card_index,False)
-      else:
+      mute_changed=previous['function']==MUTE_FUNCTION and (not same_mute or (previous['channel'],previous['cc'],previous.get('mute_audible',0),previous.get('mute_silent',127),presence_fade_settings(previous))!=(int(self.channel.get()),int(self.cc.get()),mute_values[0],mute_values[1],new_fade))
+      if mute_changed:
+        if self.midi and not self.send_mute_state(card_index,False,immediate=True):raise ValueError('No es pot silenciar la ruta antiga. Reconnecta MIDI abans de canviar aquesta targeta.')
+        if same_mute and presence_fade_settings(previous)['enabled'] and not new_fade['enabled'] and (previous['channel'],previous['cc'])==(int(self.channel.get()),int(self.cc.get())) and self.midi:
+          fade=presence_fade_settings(previous)
+          self.midi.send(mido.Message('control_change',channel=previous['channel']-1,control=fade['cc'],value=fade['level']))
+        self.mute_sent.pop(card_index,None);self.mute_retry_after.pop(card_index,None)
+      if not same_mute:
         self.deactivate(card_index)
         self.mute_sent.pop(card_index,None);self.mute_retry_after.pop(card_index,None)
       c=self.cards[card_index]; c.update(mute_audible=mute_values[0],mute_silent=mute_values[1],name=self.card_name.get().strip(),audio_controls=control_configs,audio_duration=duration,drum_preset=self.drum_preset.get(),drum_notes={name:max(0,min(127,int(var.get()))) for name,var in self.drum_notes.items()},arp_direction=self.arp_direction.get(),rhythm_pattern=[v.get() for v in self.rhythm_steps],arp_division=self.arp_division.get(),arp_gate=max(10,min(95,int(self.arp_gate.get()))),harmony_root=NOTE_NAMES.index(self.harmony_root.get()),harmony_scale=self.harmony_scale.get(),harmony_velocity=max(1,min(127,int(self.harmony_velocity.get()))),function=self.fun.get(),axis=self.axis.get(),note=max(0,min(127,int(self.note.get()))),cc=max(0,min(127,int(self.cc.get()))),channel=max(1,min(16,int(self.channel.get()))),visual=NAMES.index(self.visual.get()))
+      if new_fade is not None:c['mute_fade']=new_fade
+      else:c.pop('mute_fade',None)
+      if mute_changed and getattr(self,'presence_fades',None) is not None:self.presence_fades.forget(card_index)
       c.update(media);self.media_draft=media
       if new_arp is not None:c.update(new_arp)
       if c['function']==CHAOS_FUNCTION:
@@ -1371,6 +1414,7 @@ class App:
           for sector in range(8):
             for ring in range(3):arp_pitches(card,sector,ring,harmony_pitches(card,sector)[0],SCALE_INTERVALS)
       rules.validate_channels(d['cards'])
+      validate_presence_fades(d['cards'],rules)
       shape=spatial.calibration.shape if spatial.calibration is not None else 'circle'
       if shape not in SURFACES.values():raise ValueError('Forma del mapa no vàlida')
       self.live_kaoss.prepare(d['cards'],rules)
@@ -1485,6 +1529,7 @@ class App:
     if self.midi:
       try:self.midi.close()
       except Exception:pass
+    if getattr(self,'presence_fades',None) is not None:self.presence_fades.clear()
     self.midi=None;self.mute_sent.clear();self.mute_retry_after.clear(); self.card2_cc_values.clear(); self.midi_port_name=None; name=self.midi_choice.get()
     if name=='Sense MIDI':
       self.status.set('MIDI desconnectat');self.midi_indicator.config(text='Estat: desconnectat');return
@@ -1816,14 +1861,27 @@ class App:
     for i,state in list(self.audio_states.items()):
       if now>=state['release_at']:self.release_audio_trigger(state)
       if now>=state['ends_at']:self.audio_states.pop(i,None)
- def send_mute_state(self,i,audible):
+ def send_mute_state(self,i,audible,immediate=False):
     c=self.cards[i]
     if c['function']!=MUTE_FUNCTION or not self.midi:return False
-    audible=bool(audible and not self.muted and not getattr(self,'_closing',False))
+    immediate=bool(immediate or self.muted or getattr(self,'_closing',False))
+    audible=bool(audible and not immediate)
+    if presence_fade_settings(c)['enabled']:
+      if getattr(self,'presence_fades',None) is None:
+        def send(channel,control,value):
+          if self.midi is None:return False
+          self.midi.send(mido.Message('control_change',channel=channel-1,control=control,value=value))
+          return True
+        self.presence_fades=PresenceFades(send)
+      result=self.presence_fades.request(i,c,audible,time.monotonic(),immediate=immediate)
+      current=self.presence_fades.states.get(i)
+      if current is not None and current.gate_sent is not None:self.mute_sent[i]=(c['channel']-1,c['cc'],current.gate_sent)
+      if not result:self.status.set(self.presence_fades.error)
+      return result
     state=(int(c['channel'])-1,int(c['cc']),int(c.get('mute_audible',0) if audible else c.get('mute_silent',127)))
     if self.mute_sent.get(i)==state:return True
     now=time.monotonic()
-    if now<self.mute_retry_after.get(i,0):return False
+    if not immediate and now<self.mute_retry_after.get(i,0):return False
     try:self.midi.send(mido.Message('control_change',channel=state[0],control=state[1],value=state[2]))
     except Exception as exc:
       self.mute_retry_after[i]=now+.5
@@ -1832,8 +1890,9 @@ class App:
     return True
  def sync_mute_controls(self,silence=False):
     for i,c in enumerate(self.cards):
-      if c['function']==MUTE_FUNCTION:self.send_mute_state(i,not silence and i in self.active)
+      if c['function']==MUTE_FUNCTION:self.send_mute_state(i,not silence and i in self.active,immediate=silence)
  def reset_mute_controls(self):
+    if getattr(self,'presence_fades',None) is not None:self.presence_fades.clear()
     self.mute_sent.clear();self.mute_retry_after.clear()
     # Un projecte nou comença absent fins al següent fotograma de detecció.
     for i,c in enumerate(self.cards):

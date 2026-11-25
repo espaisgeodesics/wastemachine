@@ -14,6 +14,7 @@ from atmo_preview import NO_VISUAL, visual_index
 from card_media import media_settings, MEDIA_LABEL, MEDIA_VISUAL
 from atmo_ambience import ambience_preset, ambience_settings
 from experience_rules import RulesConfig, RuleAction, ExperienceRule
+from atmo_presence_fade import validate as validate_presence_fades, settings as presence_fade_settings
 
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -30,6 +31,7 @@ def method(name):
            'NOTE_NAMES':['Do','Do#','Re','Re#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si'],
            'media_settings':media_settings,'MEDIA_LABEL':MEDIA_LABEL,'MEDIA_VISUAL':MEDIA_VISUAL,
            'ambience_preset':ambience_preset,'ambience_settings':ambience_settings,
+           'validate_presence_fades':validate_presence_fades,'presence_fade_settings':presence_fade_settings,
            'NAMES':['visual'],'messagebox':Mock(),'NO_VISUAL':NO_VISUAL,'visual_index':visual_index}
     exec(compile(ast.Module(body=[function],type_ignores=[]),str(SOURCE),'exec'),scope)
     return scope[name]

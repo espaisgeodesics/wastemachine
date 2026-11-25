@@ -5,19 +5,6 @@ from tkinter import ttk
 from functools import lru_cache
 from PIL import Image,ImageTk,ImageDraw,ImageFilter
 
-def leaf_motif(draw, origin, length, angle, fill, vein, width=1):
-    """A tapered leaf in local coordinates; never draws on media/projector canvases."""
-    ox,oy=origin;ux,uy=math.cos(angle),math.sin(angle);vx,vy=-uy,ux
-    def point(t,side):
-        breadth=math.sin(math.pi*t)*length*.22*side
-        return ox+ux*length*t+vx*breadth,oy+uy*length*t+vy*breadth
-    outline=[point(i/24,1) for i in range(25)]+[point(i/24,-1) for i in range(24,-1,-1)]
-    draw.polygon(outline,fill=fill)
-    draw.line((origin,point(1,0)),fill=vein,width=width)
-    for t in (.28,.45,.62,.77):
-        for side in (-1,1):draw.line((point(t,0),point(min(.96,t+.12),side*.75)),fill=vein,width=width)
-
-
 @lru_cache(maxsize=8)
 def atmosphere_art(width,height):
     from atmo_runtime import BG
@@ -32,26 +19,9 @@ def atmosphere_art(width,height):
     for offset,color in ((0,'#376357'),(15,'#2a5367')):
         points=[(width*(.44+.7*i/120),height*(.55+.24*math.sin(i/120*math.tau-.8))+offset) for i in range(121)]
         line.line(points,fill=color,width=1,joint='curve')
-    # Leaves inhabit the right edge; the title and subtitle stay on a quiet field.
-    for x,y,size,angle in ((.76,.90,.65,-1.0),(.86,1.20,.85,-1.8),(.98,.95,.9,-2.1)):
-        leaf_motif(line,(width*x,height*y),height*size,angle,'#254f43','#548268')
     return image.convert('RGB')
 
 
-@lru_cache(maxsize=4)
-def forest_overlay(width,height):
-    """Quiet botanical border for workspace artwork, clear in the central work area."""
-    overlay=Image.new('RGBA',(width,height))
-    draw=ImageDraw.Draw(overlay)
-    size=min(width,height)
-    for side in (-1,1):
-        ox=width*.02 if side==1 else width*.98
-        for i in range(6):
-            y=height*(.25+i*.15)
-            length=size*(.17+.025*(i%3))
-            leaf_motif(draw,(ox,y),length,-.9 if side==1 else -2.2,
-                       (40,91,60,115),(139,177,111,90),max(1,round(size/600)))
-    return overlay
 
 
 def draw_banner(app,event):

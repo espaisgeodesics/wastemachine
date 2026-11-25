@@ -31,7 +31,7 @@ def build(destination):
         shutil.copy2(ROOT/'atmo_assets'/name,destination/'atmo_assets'/name)
     with Image.open(ROOT/'atmo_assets'/'atmo_logo.png') as image:
         image.save(destination/'atmo_assets'/'atmo.ico',format='ICO',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
-    for guide in ('GUIA_XY_CAKEWALK.txt','GUIA_CONTROL_DIRECTE_CAKEWALK.txt'):
+    for guide in ('GUIA_XY_CAKEWALK.txt','GUIA_CONTROL_DIRECTE_CAKEWALK.txt','GUIA_FADES_CAKEWALK.txt'):
         shutil.copy2(ROOT/guide,destination/guide)
     shutil.copy2(ROOT/'packaging'/'LLEGEIX_ME.txt',destination/'LLEGEIX_ME.txt')
     (destination/'OBRIR_ATMO.bat').write_text('@echo off\ncd /d "%~dp0"\npy -3.12 atmo_esfera_fx_integracio_19.py\npause\n')
