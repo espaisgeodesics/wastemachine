@@ -47,3 +47,12 @@ Si ACT no respon, obre la Guia alternativa sense ACT des del formulari XY.
 La ruta documentada Remote Control dels controls natius de Cakewalk es descriu
 amb una prova curta i una opció d'enviament de reverberació. La resposta del
 Cakewalk de l'usuari i l'assignació al filtre encara requereixen comprovació real.
+
+ATMO · BOSC I ATMOSFERA
+Paleta blau profund / verd bosc / molsa i formes de fulles discretes.
+Les quatre imatges inicials aprovades es conserven sense canvis.
+A Ambients XY: avis de port no disponible sense canviar-lo automaticament;
+boto Usar sortida MIDI principal (cal connectar-la, Aplicar i desar).
+Boto Filtre menys extrem: posa el minim X a 60 al formulari; cal Aplicar.
+No modifica els projectes existents fins que l’usuari aplica els ajustos.
+Les frequències depenen del mapatge de Cakewalk; ajusta-les a l’oïda.

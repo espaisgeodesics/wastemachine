@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from spatial_zone_editor import ZoneEditor, DISPLAY_MODES
-from atmo_runtime import BG, PANEL, SURFACE, TEXT, MUTED, CYAN, PURPLE
+from atmo_runtime import BG, PANEL, SURFACE, TEXT, MUTED, CYAN, PURPLE, FOREST, LEAF
 MODES=("Joc","Música","Exposició","Instal·lació immersiva")
 
 def label(parent, text, size=11, color=TEXT, bold=False, **kwargs):
@@ -10,8 +10,8 @@ def label(parent, text, size=11, color=TEXT, bold=False, **kwargs):
                     font=("Segoe UI",size,"bold" if bold else "normal"),**kwargs)
 
 def btn(parent,text,command,accent=False):
-    return tk.Button(parent,text=text,command=command,bg=CYAN if accent else SURFACE,
-                     fg="#07182a" if accent else TEXT,activebackground=PURPLE,
+    return tk.Button(parent,text=text,command=command,bg=LEAF if accent else FOREST,
+                     fg="#07182a" if accent else TEXT,activebackground=CYAN,
                      activeforeground="#07182a",font=("Segoe UI",10,"bold"),
                      relief="flat",padx=12,pady=9,cursor="hand2")
 

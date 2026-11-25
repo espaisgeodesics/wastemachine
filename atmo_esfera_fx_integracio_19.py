@@ -9,7 +9,7 @@ from atmo_primary import primary_engine
 from atmo_windows import maximize_window
 from atmo_runtime import theme_widgets, configure_theme, install_window_theme, SURFACE
 from PIL import Image, ImageTk, ImageOps
-from atmo_ui import wrap_card_text
+from atmo_ui import wrap_card_text, atmosphere_art
 from atmo_project_background import ProjectBackground
 
 BASE = Path(__file__).resolve().parent
@@ -69,7 +69,12 @@ def choose_experience():
         titles=tk.Frame(band,bg=BG);titles.pack(side='left')
         label(titles,'ATMO ESFERA FX',27,bold=True).pack(anchor='w')
         label(titles,subtitle,12,MUTED).pack(anchor='w')
-        tk.Frame(splash,bg=SURFACE,height=1).pack(fill='x',padx=35)
+        ribbon=tk.Canvas(splash,height=38,bg=BG,highlightthickness=0)
+        ribbon.pack(fill='x',padx=35)
+        def paint_ribbon(event):
+            ribbon._photo=ImageTk.PhotoImage(atmosphere_art(max(1,event.width),38),master=ribbon)
+            ribbon.delete('all');ribbon.create_image(0,0,image=ribbon._photo,anchor='nw')
+        ribbon.bind('<Configure>',paint_ribbon)
     def choose(mode):
         clear();splash.title('ATMO ESFERA FX · '+mode+' · Projecte')
         header('Una experiència comença amb un projecte')

@@ -5,31 +5,64 @@ from tkinter import ttk
 from functools import lru_cache
 from PIL import Image,ImageTk,ImageDraw,ImageFilter
 
+def leaf_motif(draw, origin, length, angle, fill, vein, width=1):
+    """A tapered leaf in local coordinates; never draws on media/projector canvases."""
+    ox,oy=origin;ux,uy=math.cos(angle),math.sin(angle);vx,vy=-uy,ux
+    def point(t,side):
+        breadth=math.sin(math.pi*t)*length*.22*side
+        return ox+ux*length*t+vx*breadth,oy+uy*length*t+vy*breadth
+    outline=[point(i/24,1) for i in range(25)]+[point(i/24,-1) for i in range(24,-1,-1)]
+    draw.polygon(outline,fill=fill)
+    draw.line((origin,point(1,0)),fill=vein,width=width)
+    for t in (.28,.45,.62,.77):
+        for side in (-1,1):draw.line((point(t,0),point(min(.96,t+.12),side*.75)),fill=vein,width=width)
+
+
 @lru_cache(maxsize=8)
 def atmosphere_art(width,height):
-    image=Image.new('RGB',(width,height),'#080e20')
+    from atmo_runtime import BG
+    image=Image.new('RGBA',(width,height),BG)
     glow=Image.new('RGBA',image.size)
     draw=ImageDraw.Draw(glow)
-    draw.ellipse((width*.52,-height*1.2,width*.91,height*1.4),fill=(76,226,224,42))
-    draw.ellipse((width*.76,-height*.5,width*1.12,height*1.8),fill=(167,139,250,55))
-    draw.ellipse((width*.40,-height*.8,width*.69,height*.7),fill=(114,223,168,18))
-    image=Image.alpha_composite(image.convert('RGBA'),glow.filter(ImageFilter.GaussianBlur(max(8,height*.28))))
+    draw.ellipse((width*.45,-height,width*.98,height*1.7),fill=(60,151,130,100))
+    draw.ellipse((width*.76,-height*.4,width*1.15,height*1.8),fill=(73,126,171,80))
+    draw.ellipse((width*.58,-height*.5,width*.85,height*1.3),fill=(149,177,95,55))
+    image=Image.alpha_composite(image,glow.filter(ImageFilter.GaussianBlur(max(8,height*.28))))
     line=ImageDraw.Draw(image)
-    for offset,color in ((0,'#204c65'),(15,'#344364')):
+    for offset,color in ((0,'#376357'),(15,'#2a5367')):
         points=[(width*(.44+.7*i/120),height*(.55+.24*math.sin(i/120*math.tau-.8))+offset) for i in range(121)]
         line.line(points,fill=color,width=1,joint='curve')
+    # Leaves inhabit the right edge; the title and subtitle stay on a quiet field.
+    for x,y,size,angle in ((.76,.90,.65,-1.0),(.86,1.20,.85,-1.8),(.98,.95,.9,-2.1)):
+        leaf_motif(line,(width*x,height*y),height*size,angle,'#254f43','#548268')
     return image.convert('RGB')
 
 
+@lru_cache(maxsize=4)
+def forest_overlay(width,height):
+    """Quiet botanical border for workspace artwork, clear in the central work area."""
+    overlay=Image.new('RGBA',(width,height))
+    draw=ImageDraw.Draw(overlay)
+    size=min(width,height)
+    for side in (-1,1):
+        ox=width*.02 if side==1 else width*.98
+        for i in range(6):
+            y=height*(.25+i*.15)
+            length=size*(.17+.025*(i%3))
+            leaf_motif(draw,(ox,y),length,-.9 if side==1 else -2.2,
+                       (40,91,60,115),(139,177,111,90),max(1,round(size/600)))
+    return overlay
+
+
 def draw_banner(app,event):
-    from atmo_runtime import BG,TEXT,CYAN,PURPLE,FONT
+    from atmo_runtime import BG,TEXT,CYAN,PURPLE,FONT,LEAF
     canvas=app.banner_canvas;width=max(1,event.width);height=84
     canvas.configure(height=height,bg=BG);canvas.delete('all')
     app.banner_photo=ImageTk.PhotoImage(atmosphere_art(width,height),master=canvas)
     canvas.create_image(0,0,image=app.banner_photo,anchor='nw')
     canvas.create_text(22,26,anchor='w',text='ATMO ESFERA FX',fill=TEXT,font=(FONT,23,'bold'))
     canvas.create_text(24,58,anchor='w',text='Atmosfera viva · L’espai es converteix en instrument',fill=CYAN,font=(FONT,10))
-    if width>850:canvas.create_text(width-24,28,anchor='e',text='ESPAI  ·  SO  ·  IMATGE',fill=PURPLE,font=(FONT,10,'bold'))
+    if width>850:canvas.create_text(width-24,28,anchor='e',text='ESPAI  ·  SO  ·  IMATGE',fill=LEAF,font=(FONT,10,'bold'))
 
 
 def scrollable_form(parent,padding=12):

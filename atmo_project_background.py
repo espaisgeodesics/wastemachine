@@ -1,7 +1,7 @@
 """Responsive artwork behind the project chooser; original assets stay unchanged."""
 import tkinter as tk
 from PIL import Image, ImageOps, ImageTk
-from atmo_runtime import BG, PANEL, SURFACE
+from atmo_runtime import BG, PANEL, SURFACE, FOREST
 
 
 class ProjectBackground(tk.Canvas):
@@ -17,7 +17,7 @@ class ProjectBackground(tk.Canvas):
             self._source = None
         self._art = self.create_image(0, 0, anchor='nw')
         self.panel = tk.Frame(self, bg=PANEL, padx=28, pady=18,
-                              highlightthickness=1, highlightbackground=SURFACE)
+                              highlightthickness=1, highlightbackground=FOREST)
         self._card = self.create_window(0, 0, window=self.panel, anchor='center') if with_panel else None
         self.bind('<Configure>', self._schedule)
         self.bind('<Destroy>', self._cleanup)
@@ -38,6 +38,8 @@ class ProjectBackground(tk.Canvas):
             fitted = ImageOps.fit(self._source, (width, height),
                                   method=Image.Resampling.LANCZOS)
             fitted = Image.blend(fitted, Image.new('RGB', fitted.size, BG), .28)
+            from atmo_ui import forest_overlay
+            fitted=Image.alpha_composite(fitted.convert('RGBA'),forest_overlay(width,height))
             self._photo = ImageTk.PhotoImage(fitted, master=self)
             self.itemconfigure(self._art, image=self._photo)
 

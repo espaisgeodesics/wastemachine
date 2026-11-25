@@ -5,13 +5,16 @@ import tkinter as tk
 from tkinter import ttk
 from atmo_windows import dark_titlebar
 
-BG = '#080e20'
-PANEL = '#121f39'
-SURFACE = '#1a2c49'
-TEXT = '#f2f6ff'
-MUTED = '#b4c4dd'
+BG = '#0b171e'
+PANEL = '#122c32'
+SURFACE = '#203e49'
+TEXT = '#f1f5ed'
+MUTED = '#b9ccbf'
 CYAN = '#4ce2e0'
-PURPLE = '#a78bfa'
+PURPLE = '#b0a1df'
+FOREST = '#244c3e'
+MOSS = '#9bc58b'
+LEAF = '#b7dba3'
 
 
 def title_atmo(text):
@@ -42,14 +45,14 @@ def configure_theme(root):
     style.map('TMenubutton',background=[('active',SURFACE)],foreground=[('active',CYAN)])
     style.configure('Muted.TLabel', background=BG, foreground=MUTED)
     style.configure('Title.TLabel', background=BG, foreground=TEXT, font=(FONT, 17, 'bold'))
-    style.configure('Section.TLabel', background=BG, foreground=CYAN, font=(FONT, 11, 'bold'))
-    style.configure('TLabelFrame', background=BG, bordercolor=SURFACE, relief='flat', borderwidth=1)
-    style.configure('TLabelFrame.Label', background=BG, foreground=CYAN, font=(FONT, 10, 'bold'))
+    style.configure('Section.TLabel', background=BG, foreground=LEAF, font=(FONT, 11, 'bold'))
+    style.configure('TLabelFrame', background=BG, bordercolor=FOREST, relief='flat', borderwidth=1)
+    style.configure('TLabelFrame.Label', background=BG, foreground=LEAF, font=(FONT, 10, 'bold'))
     for name in ('TCheckbutton','TRadiobutton'):
         style.configure(name, background=BG, foreground=TEXT, padding=(3, 5))
         style.map(name, background=[('active', BG)], foreground=[('disabled', MUTED)])
     buttons = {
-        'TButton': (SURFACE, TEXT),
+        'TButton': (FOREST, TEXT),
         'Secondary.TButton': (SURFACE, TEXT),
         'Accent.TButton': (CYAN, BG),
         'Danger.TButton': (DANGER, BG),
@@ -59,7 +62,7 @@ def configure_theme(root):
                         padding=(13, 9), borderwidth=1, bordercolor=SURFACE,
                         relief='flat', font=(FONT, 10, 'bold'))
         style.map(name,
-            background=[('disabled', PANEL), ('pressed', PURPLE), ('active', PURPLE)],
+            background=[('disabled', PANEL), ('pressed', MOSS), ('active', LEAF)],
             foreground=[('disabled', MUTED), ('pressed', BG), ('active', BG)],
             bordercolor=[('focus', FOCUS), ('active', CYAN)])
     for name in ('TEntry', 'TCombobox', 'TSpinbox'):
@@ -80,7 +83,7 @@ def configure_theme(root):
     style.configure('TNotebook.Tab', background=SURFACE, foreground=TEXT, padding=(15, 9),
                     font=(FONT, 10))
     style.map('TNotebook.Tab', background=[('selected', PANEL), ('active', SURFACE)],
-              foreground=[('selected', CYAN), ('disabled', MUTED)])
+              foreground=[('selected', LEAF), ('disabled', MUTED)])
     for orient in ('Vertical', 'Horizontal'):
         style.configure(orient+'.TScrollbar', background=SURFACE, troughcolor=BG,
                         arrowcolor=CYAN, bordercolor=BG, gripcount=0)
@@ -88,7 +91,7 @@ def configure_theme(root):
     style.configure('TScale', background=SURFACE,troughcolor=BG,lightcolor=SURFACE,darkcolor=SURFACE,bordercolor=SURFACE)
     for orientation in ('Horizontal','Vertical'):
         style.configure(orientation+'.TScale',background=SURFACE,troughcolor=BG,lightcolor=SURFACE,darkcolor=SURFACE,bordercolor=SURFACE)
-    style.configure('TProgressbar', background=CYAN, troughcolor=SURFACE)
+    style.configure('TProgressbar', background=MOSS, troughcolor=SURFACE)
     style.configure('Atmo.Treeview',background=PANEL,fieldbackground=PANEL,foreground=TEXT,rowheight=30)
     style.configure('Atmo.Treeview.Heading',background=SURFACE,foreground=CYAN)
     from tkinter import font as tkfont

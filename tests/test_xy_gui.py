@@ -18,7 +18,7 @@ class XYGuiTests(unittest.TestCase):
         self.app.arp_stop.set();self.app.arp_thread.join(1)
         self.errors=[];self.root.report_callback_exception=lambda typ,value,tb:self.errors.append(str(value))
         self.app.fun.set(CHAOS_FUNCTION);self.app.open_kaoss_settings()
-        self.view=self.app.kaoss_editor;self.view.load_bus_profile()
+        self.view=self.app.kaoss_editor;self.view.port.set('ATMO FX');self.view.load_bus_profile()
     def tearDown(self):
         for name in ('confirm_rule_discard','confirm_zone_discard'):setattr(self.app,name,lambda:True)
         self.app.close()
@@ -101,6 +101,30 @@ class XYGuiTests(unittest.TestCase):
             self.app.card_id.set(str(index+1));self.app.open_kaoss_settings()
             self.assertEqual(self.app.kaoss_editor.cakewalk_preset.get(),name)
         self.assertFalse(self.errors)
+
+    def test_missing_port_feedback_and_explicit_main_choice_do_not_apply(self):
+        self.view.port.set('Missing device')
+        with patch.object(module.mido,'get_output_names',return_value=['ATMO ESFERA FX 2']):
+            self.view.refresh_ports()
+        self.assertIn('no disponible',self.view.port_feedback.get())
+        self.assertEqual(self.view.port.get(),'Missing device')
+        before=json.dumps(self.app.cards)
+        self.view.use_main_output()
+        self.assertEqual(self.view.port.get(),'')
+        self.assertEqual(json.dumps(self.app.cards),before)
+        self.assertTrue(self.view.apply())
+        self.assertEqual(self.app.cards[0]['kaoss_bus']['port'],'')
+
+    def test_less_extreme_filter_is_opt_in_and_persisted(self):
+        self.assertEqual(self.view.ranges['x'][0].get(),'0')
+        before=json.dumps(self.app.cards)
+        self.view.limit_filter()
+        self.assertEqual(self.view.ranges['x'][0].get(),'60')
+        self.assertEqual(json.dumps(self.app.cards),before)
+        self.assertTrue(self.view.apply())
+        self.assertEqual(self.app.cards[0]['kaoss_ranges']['x'],[60,127])
+        self.assertEqual(self.app.cards[0]['kaoss_neutral']['x'],127)
+        self.assertEqual(self.app.cards[0]['kaoss']['x_cc'],16)
 
     def test_main_can_connect_after_xy_already_opened_the_same_windows_endpoint(self):
         own=Mock();own.name='Atmosfera FX2';own.closed=False

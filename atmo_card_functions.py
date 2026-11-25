@@ -174,7 +174,7 @@ class CardKaossEditor(ttk.Frame):
         self.cakewalk_box.bind('<<ComboboxSelected>>',lambda event:self.describe_cakewalk())
         self.describe_cakewalk()
         ttk.Label(prepared,text='Obre el projecte corresponent a Cakewalk. ATMO no carrega ni canvia els seus efectes. Reverb i eco comparteixen CC16/17: per usar-los en targetes independents, canvia el canal o els CC i adapta Cakewalk.',wraplength=740,justify='left').pack(fill='x',pady=4)
-        self.port=tk.StringVar(value=(card.get('kaoss_bus') or {}).get('port','ATMO FX'))
+        self.port=tk.StringVar(value=(card.get('kaoss_bus') or {}).get('port',''))
         self.rate=tk.StringVar(value=str((card.get('kaoss_bus') or {}).get('rate_hz',25)))
         self.return_s=tk.StringVar(value=str((card.get('kaoss_bus') or {}).get('return_s',.6)))
         route=ttk.Frame(body);route.pack(fill='x')
@@ -183,7 +183,11 @@ class CardKaossEditor(ttk.Frame):
         self.port_box=ttk.Combobox(route,textvariable=self.port,width=24);self.port_box.pack(side='left')
         ttk.Button(route,text='Actualitzar ports',command=self.refresh_ports).pack(side='left',padx=3)
         from atmo_ui import wrap_controls
+        ttk.Button(route,text='Usar sortida MIDI principal',command=self.use_main_output).pack(side='left',padx=3)
         wrap_controls(route)
+        self.port_feedback=tk.StringVar()
+        ttk.Label(body,textvariable=self.port_feedback,style='Muted.TLabel',wraplength=740).pack(fill='x',pady=4)
+        self.port.trace_add('write',lambda *args:self.describe_port())
         for variable,title in ((self.rate,'Màxim enviaments/s (1–50)'),(self.return_s,'Retorn progressiu (0–5 s)')):
             line=ttk.Frame(body);line.pack(fill='x',pady=3)
             ttk.Label(line,text=title).pack(side='left');ttk.Entry(line,textvariable=variable,width=7).pack(side='right')
@@ -215,6 +219,8 @@ class CardKaossEditor(ttk.Frame):
             self.neutral[axis]=tk.StringVar(value=str(metadata['kaoss_neutral'][axis]))
             for col,var in enumerate(self.ranges[axis]+[self.neutral[axis]],3):ttk.Spinbox(form,textvariable=var,from_=0,to=127,width=4).grid(row=row,column=col,padx=3)
         for column,title in ((2,'CC'),(3,'Mín.'),(4,'Màx.'),(5,'Neutre')):ttk.Label(form,text=title).grid(row=3,column=column)
+        ttk.Button(body,text='Filtre menys extrem · mínim X a 60',command=self.limit_filter).pack(anchor='w',pady=4)
+        ttk.Label(body,text='Per als presets de filtre: limita el tall més baix per conservar més so. 60 és un valor MIDI, no una freqüència. Ajusta el mínim a l’oïda i prem Aplicar.',style='Muted.TLabel',wraplength=740).pack(fill='x')
         options=ttk.Frame(body);options.pack(fill='x')
         for i,(key,title) in enumerate((('rotation_enabled','Activar gir'),('invert_x','Invertir X'),('invert_y','Invertir Y'),('invert_rotation','Invertir gir'))):
             var=tk.BooleanVar(value=getattr(config,key));self.variables[key]=var;ttk.Checkbutton(options,text=title,variable=var).grid(row=0,column=i,padx=5)
@@ -238,6 +244,7 @@ class CardKaossEditor(ttk.Frame):
         ttk.Button(body,text='Guia alternativa sense ACT · Remote Control',command=lambda:self.open_guide('GUIA_CONTROL_DIRECTE_CAKEWALK.txt')).pack(fill='x',pady=4)
         self.status=tk.StringVar(value='Els noms d’efecte no configuren automàticament Cakewalk: cal mapar els CC.')
         ttk.Label(body,textvariable=self.status,wraplength=800).pack(fill='x',pady=6)
+        self.refresh_ports()
 
     def select_parameter(self,axis,key):
         from atmo_ambience import neutral_cc
@@ -267,11 +274,35 @@ class CardKaossEditor(ttk.Frame):
                 webbrowser.open(path.as_uri())
         except OSError as exc:self.error(exc)
 
+    def describe_port(self):
+        port=self.port.get().strip()
+        available=tuple(self.port_box['values'])
+        main=self.app.live_kaoss.output.main_name()
+        if not port:
+            text=f'Sortida principal: {main}. Aplica per utilitzar-la.' if main else 'Sortida principal: connecta MIDI a la finestra principal o selecciona un port disponible.'
+        elif port not in available:
+            text=f'Port desat «{port}» no disponible. Actualitza ports i selecciona el port real, o usa la sortida principal. No s’ha substituït automàticament.'
+        else:text=f'Port disponible: {port}. Aplica i desa el projecte per conservar-lo.'
+        self.port_feedback.set(text)
+
+    def use_main_output(self):
+        self.port.set('')
+        self.status.set('Sortida principal seleccionada al formulari. Prem Aplicar; la targeta desada encara no ha canviat.')
+
+    def limit_filter(self):
+        if self.preset_name.get() not in CAKEWALK_PRESETS and self.preset_name.get()!=LEGACY_CAKEWALK_PRESET:
+            self.error('Selecciona un preset Cakewalk de filtre abans d’utilitzar aquest ajust.');return
+        self.ranges['x'][0].set('60')
+        if int(self.ranges['x'][1].get())<60:self.ranges['x'][1].set('127')
+        self.status.set('Mínim X a 60 al formulari. Comprova el so i prem Aplicar. El filtre enfosqueix el so; no canvia l’afinació.')
+
     def refresh_ports(self):
         try:
             import mido
             self.port_box['values']=list(mido.get_output_names())
-        except Exception as exc:self.error(exc)
+            self.describe_port()
+        except Exception as exc:
+            self.port_feedback.set(f'No es poden consultar els ports: {exc}. Prem Actualitzar ports després de connectar MIDI.')
 
     def describe_cakewalk(self):
         self.cakewalk_info.set(CAKEWALK_PRESETS[self.cakewalk_preset.get()][2])

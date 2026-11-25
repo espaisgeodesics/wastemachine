@@ -15,6 +15,17 @@ class ApprovedAssetsTests(unittest.TestCase):
         self.assertEqual(len(manifest),4)
         for name,expected in manifest.items():self.assertEqual(hashlib.sha256((ROOT/'atmo_assets'/name).read_bytes()).hexdigest(),expected)
 
+class ForestPaletteTests(unittest.TestCase):
+    def test_readable_text_and_natural_accents(self):
+        from atmo_runtime import BG,PANEL,SURFACE,TEXT,MUTED,LEAF,FOREST
+        def light(color):
+            values=[int(color[i:i+2],16)/255 for i in (1,3,5)]
+            values=[v/12.92 if v<=.04045 else ((v+.055)/1.055)**2.4 for v in values]
+            return sum(v*w for v,w in zip(values,(.2126,.7152,.0722)))
+        for foreground,background in ((TEXT,BG),(TEXT,PANEL),(TEXT,SURFACE),(TEXT,FOREST),(MUTED,BG),(LEAF,BG),(BG,LEAF)):
+            a,b=sorted((light(foreground),light(background)))
+            self.assertGreaterEqual((b+.05)/(a+.05),4.5,(foreground,background))
+
 @unittest.skipUnless(os.environ.get('DISPLAY') or os.name=='nt','Graphical display required')
 class VisualRegressionTests(unittest.TestCase):
     def setUp(self):
