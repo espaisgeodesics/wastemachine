@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 from atmo_primary import primary_engine
 from atmo_windows import colorref, dark_titlebar
+from atmo_runtime import BG, TEXT, FOREST
 
 ROOT=Path(__file__).resolve().parents[1]
 ENGINE=ROOT/'atmo_esfera_fx_4_5_15_pas_15_editor_musical_desplegable.py'
@@ -28,8 +29,9 @@ class TitlebarTests(unittest.TestCase):
         with patch('atmo_windows.sys.platform','win32'),patch.object(ctypes,'windll',SimpleNamespace(user32=user,dwmapi=dwm),create=True):
             self.assertTrue(dark_titlebar(window))
         self.assertIn((20,1),calls)
-        self.assertIn((35,colorref('#080e20')),calls)
-        self.assertIn((36,colorref('#f2f6ff')),calls)
+        self.assertIn((35,colorref(BG)),calls)
+        self.assertIn((36,colorref(TEXT)),calls)
+        self.assertIn((34,colorref(FOREST)),calls)
         user.SetWindowPos.assert_called_once_with(123,None,0,0,0,0,0x0037)
         window.overrideredirect.assert_not_called()
 

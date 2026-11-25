@@ -146,6 +146,9 @@ def theme_widgets(widget):
         elif kind in ('Tk','Toplevel','Frame','Labelframe','Label','Button',
                       'Checkbutton','Radiobutton','Entry','Spinbox','Text','Scale','Menu','Listbox'):
             config = {}
+            old_chrome={'#080e20':BG,'#121f39':PANEL,'#1a2c49':SURFACE}
+            if 'background' in options and _colour(widget.cget('background')) in old_chrome:
+                config['background']=old_chrome[_colour(widget.cget('background'))]
             if 'background' in options and _is_legacy_chrome(widget.cget('background')):
                 config['background'] = SURFACE if kind in ('Button','Entry','Spinbox','Text','Listbox') else PANEL if _colour(widget.cget('background')) in ('#16243d','#261c16') else BG
             if 'foreground' in options and (_is_legacy_chrome(widget.cget('foreground')) or kind in ('Entry','Spinbox','Text','Listbox')):
