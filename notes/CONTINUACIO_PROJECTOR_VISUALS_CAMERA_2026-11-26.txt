@@ -1,0 +1,126 @@
+ATMO ESFERA FX · CONTINUACIÓ PREPARADA PER A LA PROPERA SESSIÓ
+Data local de la revisió: 26/11/2026 (Europe/Madrid)
+Branca: atmo/interficie-primera-integracio
+Versió lliurada de referència: atmo-escriptori-16, fe74061c130169011cb59d3603746bd64c5f2fc4.
+Aquesta sessió és una revisió i preparació: no s’ha generat un instal·lador
+nou ni s’ha modificat el comportament del programa.
+
+OBJECTIU DE L’USUARI
+La projecció està en un projector HDMI, amb Windows en mode estès.
+Ha de continuar amb les targetes visuals actives quan minimitza ATMO,
+canvia a Cakewalk o utilitza altres finestres. La previsualització és
+només d’operador; no ha d’aparèixer accidentalment a la càmera/projector.
+Les targetes 1–5 de Primavera controlen Mute/fades i han de conservar
+canals, CC, configuració sonora i visuals assignats simultàniament.
+La càmera falla després d’un ús prolongat: imatges estranyes i, segons
+l’usuari, a vegades contingut que sembla la previsualització. Causa pendent.
+
+1. PROJECTOR INDEPENDENT — PRIORITAT P0
+TROBALLA CONFIRMADA AL CODI:
+- atmo_primary.py: TOOLS inclou open_projection.
+- owned() aplica show_owned() a projection; show_owned fa transient(root).
+- La projecció queda lligada a la principal i Windows pot amagar-la quan
+  s’iconifica la finestra propietària. El bucle de dibuix no té un tall
+  intencionat per root minimitzada; el problema de propietat és real.
+TASCA:
+- Tractar projecció com a finestra de sortida independent; mantenir les
+  eines d’edició amb el comportament actual. Revisar també el wrapper
+  d’atmo_runtime per no restablir accidentalment la propietat.
+- No posar totes les finestres en always-on-top ni prendre focus a cada frame.
+- Conservar monitor, posició, mida i pantalla completa de la projecció.
+- Render i detecció continuen amb la principal minimitzada i preview oculta.
+- No confondre minimitzar amb tancar ATMO, suspendre Windows o perdre el
+  dispositiu de càmera: no prometre continuïtat si s’atura el procés/PC.
+VALIDACIÓ:
+Windows: imatge/vídeo actiu, iconificar/restaurar principal, alternar amb
+una altra aplicació i tancar només la previsualització; el projector ha de
+seguir visible i els frames de vídeo han d’avançar. Revisió en mode estès
+real amb l’usuari, a més de les proves automàtiques sense maquinari.
+
+2. VISUALS DE LES TARGETES 1–5 — PRIORITAT P0
+FET REPORTAT: assigna visuals a les targetes Mute de Primavera i no es veuen.
+COMPROVAT:
+- atmo_preview.assigned_visuals només exclou Cap acció i zona; no exclou Mute.
+- process_card_media i ProjectionMosaic també admeten targetes Mute amb fitxer.
+- Comprovació puntual passada: Mute + visual generat retorna el visual i
+  Mute + fitxer .mp4 supera media_settings. Això NO reprodueix la fallada
+  d’extrem a extrem ni confirma que la configuració de l’usuari sigui correcta.
+PUNTS A REPRODUIR:
+- Aplicar visual quan la targeta ja és activa: apply_card marca preview_dirty
+  però no sempre visual_dirty; comprovar també visuals en pausa.
+- card_preview_frame mostra diagnosi Mute, no el visual assignat: aclarir
+  la diferència entre inspecció, preview en directe i sortida de projector.
+- Revisar si una escena/estat black de ZoneProjection o una regla tapa
+  els visuals generats: image_frame retorna negre en mode black, i això
+  pot tenir prioritat sobre compose_live_visuals.
+- Fitxer, ruta relativa després de desar/obrir, font seleccionada i errors
+  de càrrega: reproduir amb un PNG conegut, un MP4 conegut i el projecte
+  ATMO de l’usuari si es necessita. No culpar el Mute sense reproduir-ho.
+TASCA/VALIDACIÓ:
+Cinc targetes Mute/fade amb visuals diferents; aplicar mentre són actives,
+retirar/reintroduir, guardar/reobrir, combinar imatges i comprovar el
+mosaic. Conservar les funcions de so i no enviar notes MIDI en seleccionar
+un visual. Seleccionar una targeta a l’editor no ha d’activar la projecció
+si encara no és present a càmera/simulació.
+
+3. CÀMERA I ESTABILITAT — PRIORITAT P0
+PUNTS CONFIRMATS DE ROBUSTESA A REVISAR:
+- tick() llegeix camera.read() al mateix fil de Tk que dibuixa la projecció.
+  Una lectura bloquejada pot aturar el dibuix i els fades de presència.
+- El tractament valida el booleà ok, però no valida frame abans de .copy()
+  i cvtColor; frames None/buits/canals incorrectes poden fer saltar tot el
+  tram fins al projector perquè comparteixen un mateix try/except.
+- Una fallada d’aquest tipus no té una recuperació explícita amb llindars.
+- Les referències PhotoImage de cam_photo, vis_photo i proj_photo són
+  diferents al codi; no hi ha una prova que s’estiguin intercanviant.
+- El medi de la targeta guanyadora es pot descodificar tant per CardMediaPlayer
+  com per ProjectionMosaic. Mesurar la càrrega redundant, sense atribuir-hi
+  la fallada de càmera abans de tenir dades.
+TASCA:
+Validació de frames, registre d’errors i latència amb origen/backend,
+aïllar la captura perquè no bloquegi la sortida, últim frame vàlid acotat,
+i recuperació controlada sense perdre recursos ni obrir dues vegades
+el mateix dispositiu. Comprovar càmera física vs. virtual i identificador.
+No reiniciar només perquè la imatge no es mogui: les targetes quietes són
+un cas vàlid. No mantenir indefinidament targetes fantasma si es perd captura.
+VALIDACIÓ:
+Proves simulades de frames buits, corruptes, lectura fallida i recuperació;
+prova prolongada 60–120 min amb càmera física, projector i vídeo. Controlar
+memòria, fils, descriptors, FPS i retards. Imatge de càmera, mapa d’operador
+i projector han de continuar separats. Cal registrar el temps i el tipus
+de fallada observada per l’usuari; no afirmar que aquesta prova física ja s’ha fet.
+
+4. VÍDEO — RESPOSTA A LA PREGUNTA DE L’USUARI
+- card_media.MediaDecoder usa OpenCV VideoCapture al lector intern d’ATMO;
+  no obre VLC ni Windows Media Player. El backend/còdec depèn de la build.
+- No hi ha un màxim de minuts ni de mida de fitxer configurat en aquesta via.
+  Això no garanteix qualsevol durada/resolució/còdec sense problemes.
+- Es descodifica per fotogrames; els frames grans es limiten a 1920x1080.
+  La durada no és un límit d’aquest redimensionament.
+- FPS fora de 1–120 o invàlids cauen a 25. Revisar precisió temporal amb
+  vídeos llargs; due es calcula com ara + 1/FPS, sense compensar tota la lectura.
+- Extensions admeses: mp4, avi, mov, mkv, webm, m4v; l’extensió sola no
+  assegura que el còdec es pugui llegir.
+- Vídeo sense àudio integrat en aquest reproductor. El so es gestiona
+  separadament a Cakewalk o via àudio local/zones.
+- media_loop decideix bucle; sense bucle el lector conserva l’últim frame.
+- Punt de partida pràctic per provar: MP4 H.264, 1080p, 25/30 fps,
+  comprovant el fitxer real al PC de l’usuari.
+
+ORDRE DE TREBALL PROPERA SESSIÓ
+1) Corregir propietat de la finestra projector i provar minimització.
+2) Reproduir/corregir visuals de Mute sense alterar àudio/fades.
+3) Robustesa de captura i assaig prolongat.
+4) Proves de regressió, captures Windows i nou instal·lador només després
+   de validar els canvis. Documentar què requereix encara maquinari real.
+
+NO DESFER EL QUE JA FUNCIONA
+Projectes Primavera de Cakewalk .cwp i ATMO .json separats. Set targetes
+preparades; cinc pistes controlades amb Mute i fades opcionals CC118.
+Conservar paleta verd bosc/blau i les quatre imatges inicials aprovades.
+Les fulles artificials ja s’han retirat. No reintroduir-les.
+Millora del timbre/expressió del violí queda per després de l’estabilitat.
+
+FRASE PER REPRENDRE
+«Continuem amb el projector independent, els visuals de les targetes Mute
+ i l’estabilitat de la càmera.»
