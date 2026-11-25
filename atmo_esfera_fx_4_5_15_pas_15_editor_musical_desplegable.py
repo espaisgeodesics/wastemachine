@@ -959,7 +959,7 @@ class App:
       self.cc.set(119);self.mute_audible.set(0);self.mute_silent.set(127)
       self.mute_fade_enabled.set(False);self.mute_fade_cc.set(118);self.mute_fade_in.set('1.5');self.mute_fade_out.set('2.0');self.mute_fade_level.set(100)
     win=tk.Toplevel(self.root);self.mute_settings_window=win
-    win.title('CONTROL D’ÀUDIO / MUTE · TARGETA '+self.card_id.get());win.geometry('620x700');win.transient(self.root);win.configure(bg=BG)
+    win.title('CONTROL D’ÀUDIO / MUTE · TARGETA '+self.card_id.get());win.geometry(f'620x{max(320,min(700,win.winfo_screenheight()-140))}');win.transient(self.root);win.configure(bg=BG)
     footer=ttk.Frame(win,padding=12);footer.pack(side='bottom',fill='x')
     pane=scrollable_form(win,padding=16)
     ttk.Label(pane,text='PRESÈNCIA → MUTE I VOLUM PROGRESSIU',font=('Segoe UI',11,'bold'),wraplength=540).pack(anchor='w',pady=8)

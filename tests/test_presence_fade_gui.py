@@ -112,5 +112,6 @@ class PresenceFadeGuiTests(unittest.TestCase):
             self.root.update()
             button=next(w for w in children(win) if w.winfo_class()=='TButton' and w.cget('text')=='APLICAR A LA TARGETA I TANCAR')
             self.assertTrue(button.winfo_ismapped())
+            self.assertLessEqual(win.winfo_height(),win.winfo_screenheight()-90)
             self.assertLessEqual(button.winfo_rooty()+button.winfo_height(),win.winfo_rooty()+win.winfo_height())
         self.assertFalse(self.errors)
