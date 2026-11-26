@@ -1,3 +1,4 @@
+from atmo_camera import CameraStream, normalise_frame
 from atmo_presence_fade import PresenceFades, settings as presence_fade_settings, validate as validate_presence_fades
 from atmo_runtime import configure_theme, install_window_theme, BG, PANEL, SURFACE, TEXT, MUTED, CYAN, PURPLE, DANGER
 from atmo_ui import draw_banner, scrollable_form, wrap_controls
@@ -160,6 +161,7 @@ class App:
     for role,defaults in AUDIO_CONTROLS.items():
       self.audio_control_vars[role]={key:(tk.BooleanVar(value=value) if key in ('enabled','inverted') else (tk.StringVar(value=value) if key=='axis' else tk.IntVar(value=value))) for key,value in defaults.items() if key!='label'}
     self.camera_frame=None;self.camera_frame_stamp=0;self.calibration_editor=None;self.calibration_window=None;self.calibration_generation=0
+    self.camera_reader_sequence=0;self.camera_warning='';self.camera_retiring=None
     self.camera=None; self.midi=None; self.midi_name=''; self.recording=None; self.record_file=None; self.t0=time.monotonic(); self.last_frame=None; self.visual_paused=False; self.visual_paused_at=None; self.monitor_window=None; self.monitor_table=None; self.monitor_ticks=0
     self.aruco_detector=cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
     self.last_visual_update=0.0; self.visual_interval=1/12; self._closing=False
@@ -316,6 +318,7 @@ class App:
     ttk.Label(frame,text='Visual assignat').pack(anchor='w',padx=8,pady=(5,0))
     visual_choice=ttk.Combobox(frame,textvariable=self.visual,values=('Cap',MEDIA_LABEL,*NAMES[:13]),state='readonly',width=25);visual_choice.pack(fill='x',padx=8)
     visual_choice.bind('<<ComboboxSelected>>',lambda event:self.open_card_media_settings() if self.visual.get()==MEDIA_LABEL else None)
+    ttk.Button(frame,text='CONFIGURAR VISUAL…',command=self.open_card_media_settings).pack(fill='x',padx=8,pady=5)
     ttk.Button(frame,text='APLICAR / CREAR TARGETA',command=self.apply_card,style='Accent.TButton').pack(fill='x',padx=8,pady=9)
     wrap_controls(toolbar);wrap_controls(control_strip)
     statusbar=tk.Frame(self.root,bg='#121f39',highlightbackground='#1a2c49',highlightthickness=1)
@@ -645,11 +648,7 @@ class App:
     if kind in ('Patró rítmic','Ritme de bateria'):
       return self.rhythm_map_preview(i)
     if kind==ZONE_FUNCTION:return self.zone_map_preview()
-    if kind==MUTE_FUNCTION:
-      frame=np.full((H,W,3),(25,20,17),np.uint8)
-      for text,y in [(f'MUTE | TARGETA {i+1:02d}',45),(f'CANAL {c["channel"]} | CC {c["cc"]}',110),(f'VISIBLE: {c.get("mute_audible",0)} | ABSENT: {c.get("mute_silent",127)}',175),('Control de presencia | No envia notes MIDI',240)]:
-        cv2.putText(frame,text,(24,y),cv2.FONT_HERSHEY_SIMPLEX,.65,(245,228,205),1,cv2.LINE_AA)
-      return frame
+    if kind==MUTE_FUNCTION:return self.render(t,visual=c['visual'])
     if kind=='Àudio':
       frame=np.full((H,W,3),(25,20,17),np.uint8)
       for text,y in [(f'AUDIO | TARGETA {i+1:02d}',45),(f'SONAR: CANAL {c["channel"]} | NOTA {c["note"]}',110),(f'UNA VEGADA | {c.get("audio_duration",0):g} segons',170),('Retirar la targeta no atura el clip.',240)]:
@@ -878,6 +877,7 @@ class App:
     rule_frame=self.rule_outputs.frame((W,H))
     if rule_frame is not None:return rule_frame
     base=self.zone_projection.image_frame((W,H))
+    if self.zone_projection.mode=='black' and assigned_visuals(self.cards,self.active,ZONE_FUNCTION):base=None
     if base is None:base=self.compose_live_visuals(t)
     self._atmo_clean_frame=base
     return self.card_media.apply(base)
@@ -885,6 +885,7 @@ class App:
     rule_frame=self.rule_outputs.frame((W,H))
     if rule_frame is not None:return rule_frame
     base=self.zone_projection.image_frame((W,H))
+    if self.zone_projection.mode=='black' and assigned_visuals(self.cards,self.active,ZONE_FUNCTION):base=None
     if base is None:base=self.compose_live_visuals(t,include_chromatic=False)
     return self.card_media.apply(base)
  def projector_frame(self):
@@ -894,6 +895,7 @@ class App:
     mosaic=self.projection_mosaic.frame((width,height))
     if mosaic is not None:return mosaic
     image=self.zone_projection.image_frame((width,height))
+    if self.zone_projection.mode=='black' and assigned_visuals(self.cards,self.active,ZONE_FUNCTION):image=None
     if self.card_media.key is not None or self.card_media.tail is not None:
       base=image if image is not None else fit_frame(self._atmo_clean_frame,width,height)
       return self.card_media.apply(base)
@@ -1193,6 +1195,7 @@ class App:
         c.update(new_fx);self.kaoss_effect_draft=new_fx
       self.live_kaoss.configure(self.cards,self.rule_config)
       if c['visual']==12 and int(self.card_id.get())-1 in self.active:self.select_visual(12)
+      self.visual_dirty=True;self.preview_dirty=True;self._atmo_layers_key=None
       self.select_card_preview(card_index)
       self.sync_mute_controls()
       if card_index in getattr(self,'mixer_rows',{}):self.mixer_rows[card_index]['name'].config(text=c.get('name',''))
@@ -1593,23 +1596,89 @@ class App:
     self.sim_card=None;self.sim_xy=None
  def toggle_cam(self):
     self.camera_generation=getattr(self,'camera_generation',0)+1
-    self.camera_frame=None;self.camera_frame_stamp=0
+    self.camera_frame=None;self.camera_frame_stamp=0;self.camera_reader_sequence=0
     if self.camera:
       self.stop_local_audio()
-      self.camera.release();self.camera=None
+      old=self.camera;old.release();self.camera=None
+      if isinstance(old,CameraStream) and old.is_running:self.camera_retiring=old
       for i in list(self.active):self.deactivate(i)
       self.all_notes_off()
       self.cam_label.config(image='',text='Càmera desconnectada')
       self.status.set('Càmera tancada');return
+    retiring=getattr(self,'camera_retiring',None)
+    if retiring is not None and retiring.is_running:
+      self.status.set('El controlador de càmera encara s’està tancant. No obrim una segona connexió al mateix dispositiu.');return
+    self.camera_retiring=None
     if self.simulation.get():
       self.simulation.set(False);self.toggle_simulation()
     backend=cv2.CAP_DSHOW if sys.platform=='win32' else cv2.CAP_ANY
     self.camera_source_id=f'camera:{self.cam_index.get()}'
-    self.camera=cv2.VideoCapture(self.cam_index.get(),backend)
-    if not self.camera.isOpened():
-      self.camera.release();self.camera=None;messagebox.showwarning('Càmera','No es pot obrir la webcam. Tanca altres programes que la utilitzin.');return
-    self.camera.set(cv2.CAP_PROP_FRAME_WIDTH,640);self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT,480)
-    self.status.set('Càmera connectada')
+    self.camera=CameraStream(int(self.cam_index.get()),backend).start()
+    self.camera_warning='';self.camera_seen_ready=False
+    self.status.set('Connectant la càmera… La captura funciona separada de la projecció.')
+ def camera_packet(self):
+    camera=self.camera
+    if camera is None:return None
+    if isinstance(camera,CameraStream):
+      packet=camera.snapshot()
+      detail=f'Càmera {packet.index} · {packet.state} · errors {packet.failures} · obertures {packet.opens}'
+      if packet.error:detail+=' · '+packet.error
+      if packet.state!='ready':
+        if detail!=getattr(self,'camera_warning',''):self.status.set(detail);self.camera_warning=detail
+      elif not getattr(self,'camera_seen_ready',False):
+        self.status.set(f'Càmera {packet.index} connectada');self.camera_seen_ready=True;self.camera_warning=''
+      elif getattr(self,'camera_warning',''):
+        self.status.set(f'Càmera {packet.index} recuperada');self.camera_warning=''
+      if packet.sequence==self.camera_reader_sequence or packet.frame is None:return None
+      self.camera_reader_sequence=packet.sequence
+      if time.monotonic()-packet.captured_at>.5:return None
+      return packet.frame,packet.captured_at
+    # Explicitly injected/custom capture adapters are kept for deterministic
+    # tests and integrations. The application's camera button creates only
+    # CameraStream, so no real device read is executed on the Tk thread.
+    ok,frame=camera.read()
+    if not ok:
+      self.toggle_cam();self.status.set('S’ha perdut la imatge de la càmera. Torna-la a obrir.');return None
+    return normalise_frame(frame),time.monotonic()
+ def process_camera(self):
+    zones={};colors={};now=time.monotonic()
+    try:
+      packet=self.camera_packet()
+      if packet is None:
+        self.expire_missing_cards(set(),now)
+        if self.camera is not None and now-getattr(self,'camera_frame_stamp',0)>CARD_LOST_TIMEOUT:self.observe_marker_frame()
+        return zones,colors
+      source,stamp=packet
+      self.camera_frame=source.copy();self.camera_frame_stamp=stamp
+      gray=cv2.cvtColor(source,cv2.COLOR_BGR2GRAY)
+      corners,ids,_=self.aruco_detector.detectMarkers(gray)
+      self.observe_marker_frame(corners,ids,(source.shape[1],source.shape[0]),stamp)
+      seen=set();draw_camera=self.camera_window.state()=='normal'
+      shown=source.copy() if draw_camera else None
+      if ids is not None:
+        for points,raw in zip(corners,ids.flatten()):
+          i=int(raw)
+          if not 0<=i<16:continue
+          p=points[0];cx=float(p[:,0].mean()/source.shape[1]);cy=float(p[:,1].mean()/source.shape[0]);dx=p[1]-p[0];angle=(math.atan2(float(dx[1]),float(dx[0]))%math.tau)/math.tau
+          seen.add(i);self.last_seen[i]=stamp
+          try:self.activate(i,cx,cy,angle)
+          except Exception as exc:self.status.set('Error MIDI de targeta: '+str(exc))
+          c=self.cards[i]
+          if c['function']==ZONE_FUNCTION:zones[i]=(cx,cy)
+          elif c['visual']==12 and c['function']!='Cap acció':colors[i]=(cx,cy)
+          if draw_camera:
+            cv2.polylines(shown,[p.astype(np.int32)],True,(0,230,255),3)
+            v={'Rotació':angle,'Horitzontal':cx,'Vertical':cy}.get(c['axis'],angle)
+            label=f'T{i+1:02d} / ID {i}  {c["function"]}  {round(max(0,min(1,v))*127)}'
+            tx=max(4,min(source.shape[1]-320,int(p[:,0].min())));ty=max(20,int(p[:,1].min())-9)
+            cv2.rectangle(shown,(tx-2,ty-18),(min(source.shape[1]-1,tx+316),ty+5),(10,25,30),-1)
+            cv2.putText(shown,label,(tx,ty),cv2.FONT_HERSHEY_SIMPLEX,.48,(0,240,255),1,cv2.LINE_AA)
+      self.expire_missing_cards(seen,now)
+      if draw_camera:self.display(self.cam_label,cv2.cvtColor(shown,cv2.COLOR_BGR2RGB),'cam_photo')
+    except Exception as exc:
+      self.status.set('Fotograma de càmera descartat: '+str(exc))
+      self.expire_missing_cards(set(),now);self.observe_marker_frame()
+    return zones,colors
  def select_visual(self,i):
     self.current_visual=i%len(NAMES)
  def toggle_visual_pause(self):
@@ -2320,39 +2389,8 @@ class App:
         if card['function']==ZONE_FUNCTION:zone_observations[self.sim_card]=self.sim_xy
         elif card['visual']==12 and card['function']!='Cap acció':color_observations[self.sim_card]=self.sim_xy
       if self.camera:
-        ok,frame=self.camera.read()
-        if not ok:
-          self.toggle_cam()
-          self.status.set('S’ha perdut la imatge de la càmera. Torna-la a obrir.')
-        if ok:
-          self.camera_frame=frame.copy();self.camera_frame_stamp=time.monotonic()
-          # Detectem sobre la imatge ORIGINAL: els ArUco no admeten el reflex de mirall.
-          gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
-          corners,ids,_=self.aruco_detector.detectMarkers(gray)
-          self.observe_marker_frame(corners,ids,(frame.shape[1],frame.shape[0]),self.camera_frame_stamp)
-          now=time.monotonic();seen=set()
-          if ids is not None:
-            for points,raw in zip(corners,ids.flatten()):
-              i=int(raw)
-              if i>=16:continue
-              p=points[0];cx=float(p[:,0].mean()/frame.shape[1]);cy=float(p[:,1].mean()/frame.shape[0]);dx=p[1]-p[0];angle=(math.atan2(float(dx[1]),float(dx[0]))%(math.tau))/math.tau
-              seen.add(i);self.last_seen[i]=now;self.activate(i,cx,cy,angle)
-              cv2.polylines(frame,[p.astype(np.int32)],True,(0,230,255),3)
-              c=self.cards[i]
-              if c['function']==ZONE_FUNCTION:zone_observations[i]=(cx,cy)
-              elif c['visual']==12 and c['function']!='Cap acció':color_observations[i]=(cx,cy)
-              v={'Rotació':angle,'Horitzontal':cx,'Vertical':cy}.get(c['axis'],angle)
-              value=round(max(0,min(1,v))*127)
-              label=f'T{i+1:02d} / ID {i}  {c["function"]}  {value}'
-              if c.get('visual')==12 and self.current_visual==12:label+=f'  COLOR X:{cx*100:.0f}% Y:{cy*100:.0f}%'
-              if i==1:label+=f'  VOL CC7:{self.card2_volume}  FILTRE CC74:{self.card2_filter}'
-              tx=max(4,min(frame.shape[1]-320,int(p[:,0].min())))
-              ty=max(20,int(p[:,1].min())-9)
-              cv2.rectangle(frame,(tx-2,ty-18),(min(frame.shape[1]-1,tx+316),ty+5),(10,25,30),-1)
-              cv2.putText(frame,label,(tx,ty),cv2.FONT_HERSHEY_SIMPLEX,.48,(0,240,255),1,cv2.LINE_AA)
-          self.expire_missing_cards(seen,now)
-          # Mostrem la imatge original: els textos i els contorns es llegeixen correctament.
-          if self.camera_window.state()=='normal':self.display(self.cam_label,cv2.cvtColor(frame,cv2.COLOR_BGR2RGB),'cam_photo')
+        camera_zones,camera_colors=self.process_camera()
+        zone_observations.update(camera_zones);color_observations.update(camera_colors)
       if not self.camera:self.observe_marker_frame()
       if self.calibration_editor is not None and self.calibration_window.winfo_exists() and self.calibration_window.state()=='normal':self.calibration_editor.refresh()
       self.sync_mute_controls()
@@ -2372,7 +2410,10 @@ class App:
         self.preview_dirty=False
       vis=self.last_frame
       if getattr(self,'projection',None) and self.projection.winfo_exists():
-        self.display(self.proj_label,cv2.cvtColor(self.projector_frame(),cv2.COLOR_BGR2RGB),'proj_photo',padding=0)
+        projection_size=(self.proj_label.winfo_width(),self.proj_label.winfo_height())
+        if frame_changed or getattr(self,'projection_draw_size',None)!=projection_size or getattr(self,'projection_draw_window',None) is not self.projection:
+          self.display(self.proj_label,cv2.cvtColor(self.projector_frame(),cv2.COLOR_BGR2RGB),'proj_photo',padding=0)
+          self.projection_draw_size=projection_size;self.projection_draw_window=self.projection
       if self.recording:self.recording.write(vis)
       self.monitor_ticks+=1
       if self.monitor_ticks%4==0:
@@ -2404,6 +2445,7 @@ class App:
     self.all_notes_off()
     if self.recording:self.recording.release()
     if self.camera:self.camera.release()
+    if getattr(self,'camera_retiring',None) is not None:self.camera_retiring.release()
     if self.midi:self.midi.close()
     if not self.local_audio.close():print('El backend d’àudio encara s’està aturant; comprova el dispositiu.')
     for timer in self.root.tk.call('after','info'):

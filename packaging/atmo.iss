@@ -2,7 +2,7 @@
 [Setup]
 AppId={{C0CF3D27-70B9-4F88-B176-1C54762139B1}
 AppName={#AppName}
-AppVersion=2026.11.25.1
+AppVersion=2026.11.26.1
 AppPublisher=Espais Geodèsics
 DefaultDirName={localappdata}\Programs\ATMO ESFERA FX
 DefaultGroupName={#AppName}

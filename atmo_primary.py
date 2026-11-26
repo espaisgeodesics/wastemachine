@@ -22,6 +22,14 @@ def show_owned(window, root):
     window.focus_set()
 
 
+def show_projection(window):
+    if window is None or not window.winfo_exists():return
+    window.transient('')
+    window.attributes('-alpha',1.)
+    theme_widgets(window)
+    window.deiconify();window.lift();window.focus_set()
+
+
 def primary_engine(module, mode='Joc'):
     adapted = adapt_engine(module)
 
@@ -86,6 +94,7 @@ def primary_engine(module, mode='Joc'):
             window = getattr(self, attribute, None)
             if window is not None and window.winfo_exists():
                 if self.atmo_starting: window.withdraw()
+                elif attribute=='projection':show_projection(window)
                 else: show_owned(window, self.root)
             return result
         return opened

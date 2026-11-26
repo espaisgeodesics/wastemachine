@@ -20,11 +20,13 @@ class CameraTests(unittest.TestCase):
         return app
 
     def test_camera_backend_and_selected_index(self):
-        for platform, backend in [('win32', app_module.cv2.CAP_DSHOW), ('linux', app_module.cv2.CAP_ANY)]:
-            with self.subTest(platform=platform), patch.object(app_module.sys, 'platform', platform), patch.object(app_module.cv2, 'VideoCapture') as capture:
-                app = self.make_app()
+        for platform,backend in [('win32',app_module.cv2.CAP_DSHOW),('linux',app_module.cv2.CAP_ANY)]:
+            app=self.make_app()
+            with patch('atmo_windows.sys.platform',platform),patch.object(app_module,'CameraStream') as reader:
                 app.toggle_cam()
-                capture.assert_called_once_with(2, backend)
+                reader.assert_called_once_with(2,backend)
+                reader.return_value.start.assert_called_once()
+                self.assertIs(app.camera,reader.return_value.start.return_value)
 
     def test_camera_close_releases_active_notes(self):
         app = self.make_app()
@@ -40,14 +42,11 @@ class CameraTests(unittest.TestCase):
         app.all_notes_off.assert_called_once()
         app.cam_label.config.assert_called_once_with(image='', text='Càmera desconnectada')
 
-    def test_failed_open_releases_camera(self):
-        app = self.make_app()
-        with patch.object(app_module.cv2, 'VideoCapture') as capture, patch.object(app_module.messagebox, 'showwarning') as warning:
-            capture.return_value.isOpened.return_value = False
-            app.toggle_cam()
-            capture.return_value.release.assert_called_once()
-            self.assertIsNone(app.camera)
-            warning.assert_called_once()
+    def test_still_closing_worker_prevents_second_connection(self):
+        app=self.make_app();app.camera_retiring=Mock(is_running=True)
+        with patch.object(app_module,'CameraStream') as reader:
+            app.toggle_cam();reader.assert_not_called()
+        self.assertIn('segona connexió',app.status.set.call_args.args[0])
 
 if __name__ == '__main__':
     unittest.main()

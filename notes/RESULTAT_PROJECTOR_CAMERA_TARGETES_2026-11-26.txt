@@ -1,0 +1,47 @@
+ATMO ESFERA FX · REVISIÓ DEL 26/11/2026
+Branca de treball: atmo/interficie-primera-integracio. No es modifica main.
+Versió d’instal·lador: 2026.11.26.1.
+
+CANVIS
+- Projecció independent de la finestra principal; les eines d’operador
+  conserven la seva propietat. No s’utilitza always-on-top ni focus per frame.
+- Configurar visual separat de la funció musical, amb invalidació immediata
+  del render en aplicar una targeta, també amb visuals en pausa.
+- Previsualització del visual generat d’una targeta Mute; un estat de zona
+  acabada en negre no oculta un altre visual generat actiu.
+- Captura de càmera en un únic treballador, últim fotograma acotat,
+  validació de format i dimensions, reintents limitats i tancament acotat.
+  No s’obre un segon dispositiu si el controlador anterior continua bloquejat.
+- Errors de càmera aïllats del render públic i pèrdua de presència amb
+  imatges antigues; no mantenir notes per una targeta fantasma.
+- Dibuix del projector quan canvia el contingut o la mida, amb recursos
+  separats de la càmera i de la previsualització.
+- Sense canviar paleta, il·lustracions aprovades, canals ni notes existents.
+
+TARGETES 6 I 7
+Reproduït el solapament de nota 52 entre el pad al canal 6 i l’arpegiador
+al canal 7. La prova verifica que l’aturada de la 7 no envia Note Off al 6
+ni reinicialitzacions globals. Això no prova la configuració de Cakewalk.
+Hipòtesi pendent: el Surge del pad rep Omni i accepta el Note Off de la 7.
+L’usuari ha respost que comprovarà les entrades més tard. Filtrar el pad
+al canal 6 i el segon Surge al canal 7 del mateix port ATMO, i desar .cwp.
+No es canvien arbitràriament notes/canals ni es força una reactivació del pad.
+
+VALIDACIÓ
+Proves de càmera amb fallada, format invàlid, reobertura i lectura bloquejada;
+projector i Tk responen durant una lectura bloquejada. Proves de visuals
+Mute generats i fotografies simultànies, i persistència de cinc targetes
+amb els fades i les rutes. Prova nativa de minimització només a Windows.
+El pipeline de Windows executa la suite, compila l’instal·lador, instal·la
+el binari i comprova la projecció amb la principal minimitzada; registra
+els resultats als artefactes del commit corresponent. No confondre les
+proves automatitzades amb una prova física del muntatge de l’usuari.
+
+PENDENT AMB L’USUARI
+1. Comprovar entrades MIDI 6/7 a Cakewalk amb dues targetes presents.
+2. Projector HDMI estès: minimitzar/restaurar ATMO, passar a Cakewalk,
+   ocultar preview, activar imatges i vídeo i verificar continuïtat.
+3. Prova prolongada 60–120 minuts amb càmera física i vídeos; registrar
+   dispositiu, tipus de fallada i temps transcorregut si reapareix.
+4. No hi ha límit de minuts al vídeo intern; compatibilitat segons còdec,
+   resolució i maquinari. Àudio del vídeo no reproduït en aquesta via.

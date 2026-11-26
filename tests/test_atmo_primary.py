@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from atmo_primary import primary_engine, show_owned
+from atmo_primary import primary_engine, show_owned, show_projection
 from test_atmo_runtime import Window
 
 
@@ -60,6 +60,12 @@ class PrimaryTests(unittest.TestCase):
         self.assertEqual(app.music_settings_window.current_state,'withdrawn')
         app.finish_startup()
         self.assertEqual(app.music_settings_window.current_state,'withdrawn')
+
+    def test_projection_is_independent_and_other_tools_stay_owned(self):
+        tool=Tool();show_projection(tool)
+        self.assertEqual(tool.owner,'');self.assertEqual(tool.current_state,'normal')
+        app=self.app();app.finish_startup();app.open_music_settings()
+        self.assertIs(app.music_settings_window.owner,app.root)
 
     def test_hidden_or_missing_tool_is_safe(self):
         root=Tool();show_owned(None,root)

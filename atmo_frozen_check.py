@@ -11,7 +11,7 @@ def run(choose_experience,open_engine,report_path):
     from PIL import ImageGrab
     import atmo_primary
     report_path=Path(report_path);report_path.parent.mkdir(parents=True,exist_ok=True)
-    result={'errors':[],'entry':False,'project':False,'engine':False,'returned_home':False,'audio':False}
+    result={'errors':[],'entry':False,'project':False,'engine':False,'returned_home':False,'audio':False,'projection':False}
     actual_tk=tk.Tk
     def save(root,name):
         root.update_idletasks()
@@ -50,6 +50,25 @@ def run(choose_experience,open_engine,report_path):
                         save(root,'03_motor')
                         result['engine']=True
                         assert getattr(root,'_atmo_app_icon',None) is not None
+                        # Exercise the installed binary's real native window, too.
+                        import numpy as np
+                        import cv2
+                        self.cards[0].update(function='Canviar visual',visual=0)
+                        self.activate(0,.3,.3,0)
+                        self.open_projection();root.update()
+                        assert str(self.projection.transient())==''
+                        self.visual_window.withdraw();root.iconify();root.update()
+                        assert self.projection.state()=='normal'
+                        assert self.projection.winfo_ismapped()
+                        self.last_frame=self.compose_output_frame(1)
+                        first=self.projector_frame().copy()
+                        self.last_frame=self.compose_output_frame(2)
+                        second=self.projector_frame()
+                        assert not np.array_equal(first,second)
+                        self.display(self.proj_label,cv2.cvtColor(second,cv2.COLOR_BGR2RGB),'proj_photo',padding=0)
+                        save(root,'04_projector_principal_minimitzada')
+                        result['projection']=True
+                        root.deiconify();root.update()
                         self.confirm_new_project=lambda:True
                         self.new_project()
                     root.after(1200,finish)
@@ -72,4 +91,4 @@ def run(choose_experience,open_engine,report_path):
     except Exception:
         result['errors'].append(traceback.format_exc())
     report_path.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
-    return 0 if not result['errors'] and all(result[k] for k in ('entry','project','engine','returned_home','audio')) else 1
+    return 0 if not result['errors'] and all(result[k] for k in ('entry','project','engine','returned_home','audio','projection')) else 1
