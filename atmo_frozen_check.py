@@ -57,6 +57,7 @@ def run(choose_experience,open_engine,report_path):
                         self.activate(0,.3,.3,0)
                         self.open_projection();root.update()
                         assert str(self.projection.transient())==''
+                        assert self.projection._atmo_projection_monitor.monitor is not None
                         self.visual_window.withdraw();root.iconify();root.update()
                         assert self.projection.state()=='normal'
                         assert self.projection.winfo_ismapped()

@@ -1,8 +1,10 @@
 ATMO ESFERA FX · REVISIÓ DEL 26/11/2026
 Branca de treball: atmo/interficie-primera-integracio. No es modifica main.
-Versió d’instal·lador: 2026.11.26.1.
+Versió d’instal·lador: 2026.11.26.2.
 
 CANVIS
+- Petició afegida: en moure la projecció a un altre monitor, es maximitza
+  al destí després de deixar anar el ratolí. F11 manté pantalla completa.
 - Projecció independent de la finestra principal; les eines d’operador
   conserven la seva propietat. No s’utilitza always-on-top ni focus per frame.
 - Configurar visual separat de la funció musical, amb invalidació immediata

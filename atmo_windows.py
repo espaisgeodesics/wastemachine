@@ -63,3 +63,67 @@ def install_app_icon(root):
     except Exception:
         # A missing icon must not prevent an existing project from opening.
         pass
+
+
+def projection_monitor(window):
+    """Native monitor containing most of the window, with pointer-sized handles."""
+    if sys.platform!='win32':return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user=ctypes.windll.user32
+        ancestor=user.GetAncestor;ancestor.argtypes=(wintypes.HWND,wintypes.UINT);ancestor.restype=wintypes.HWND
+        monitor=user.MonitorFromWindow;monitor.argtypes=(wintypes.HWND,wintypes.DWORD);monitor.restype=wintypes.HANDLE
+        handle=ancestor(window.winfo_id(),2) or window.winfo_id()
+        return monitor(handle,2) or None
+    except (AttributeError,OSError,TypeError,ValueError):return None
+
+
+def projection_dragging():
+    if sys.platform!='win32':return False
+    try:
+        import ctypes
+        key=ctypes.windll.user32.GetAsyncKeyState;key.argtypes=(ctypes.c_int,);key.restype=ctypes.c_short
+        return bool(key(1)&0x8000)
+    except (AttributeError,OSError,TypeError,ValueError):return False
+
+
+class ProjectionMonitor:
+    """Maximise once after a move to another monitor, never during a drag."""
+    def __init__(self,window,monitor=projection_monitor,dragging=projection_dragging):
+        self.window=window;self.query=monitor;self.dragging=dragging
+        self.monitor=monitor(window);self.pending=None;self.closed=False
+        window.bind('<Configure>',self.configure,add='+')
+        window.bind('<Destroy>',self.destroy,add='+')
+    def configure(self,event):
+        if event.widget is not self.window or self.closed:return
+        if self.pending is not None:self.window.after_cancel(self.pending)
+        self.pending=self.window.after(200,self.check)
+    def check(self):
+        self.pending=None
+        if self.closed or not self.window.winfo_exists():return
+        if self.dragging():
+            self.pending=self.window.after(200,self.check);return
+        current=self.query(self.window)
+        if current is None:return
+        previous=self.monitor;self.monitor=current
+        if previous is None or current==previous:return
+        if self.window.attributes('-fullscreen'):return
+        if self.window.state()!='normal':return
+        # Windows chooses the destination monitor. Do not fall back to the
+        # primary screen's geometry, which could pull it off the projector.
+        try:self.window.state('zoomed')
+        except Exception:pass
+    def destroy(self,event):
+        if event.widget is not self.window:return
+        self.closed=True
+        if self.pending is not None:
+            try:self.window.after_cancel(self.pending)
+            except Exception:pass
+            self.pending=None
+
+
+def install_projection_maximise(window):
+    if sys.platform!='win32' or not hasattr(window,'after'):return
+    if getattr(window,'_atmo_projection_monitor',None) is None:
+        window._atmo_projection_monitor=ProjectionMonitor(window)

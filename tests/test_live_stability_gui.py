@@ -77,6 +77,16 @@ class LiveStabilityTests(unittest.TestCase):
         self.app.last_frame=self.app.compose_output_frame(2)
         self.assertTrue(self.app.projector_frame().any())
         self.root.deiconify();self.root.update()
+    @unittest.skipUnless(os.name=='nt','Native maximisation requires Windows window manager')
+    def test_windows_monitor_change_maximises_real_projection_only(self):
+        self.app.open_projection();self.root.update()
+        watch=self.app.projection._atmo_projection_monitor
+        self.assertIsNotNone(watch.monitor)
+        state=self.root.state();watch.query=lambda _:('simulated-destination',);watch.dragging=lambda:False
+        watch.check();self.root.update()
+        self.assertEqual(self.app.projection.state(),'zoomed');self.assertEqual(self.root.state(),state)
+        self.assertEqual(str(self.app.projection.transient()),'')
+
     def test_invalid_camera_frame_does_not_block_projector_or_raise_tk_error(self):
         self.generated_mute();self.app.open_projection();self.root.update()
         self.app.camera=Mock();self.app.camera.read.return_value=(True,None)

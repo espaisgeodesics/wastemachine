@@ -71,7 +71,9 @@ S’han retirat les fulles artificials mantenint els colors de bosc i blau.
 PROJECTOR I VISUALS
 La projecció és una finestra independent: pots minimitzar ATMO i continuar
 amb Cakewalk sense amagar-la. Windows ha d’estar en mode Estendre; mou
-la finestra al projector i prem F11. Esc surt de pantalla completa.
+la finestra al projector: quan deixis anar el ratolí, es maximitza en
+aquella pantalla. F11 activa pantalla completa; Esc en surt.
+El botó de restaurar permet tornar a ajustar-ne la mida manualment.
 Tancar ATMO, suspendre Windows o apagar el PC sí que atura la projecció.
 A l’editor de cada targeta, tria el visual i prem APLICAR. El botó
 CONFIGURAR VISUAL obre els ajustos d’imatge/vídeo sense canviar Mute,

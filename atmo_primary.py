@@ -2,7 +2,7 @@
 import functools
 import tkinter as tk
 from atmo_runtime import adapt_engine, theme_widgets
-from atmo_windows import maximize_window
+from atmo_windows import maximize_window, install_projection_maximise
 
 TOOLS = {'open_card_media_settings': 'media_window', 'open_kaoss_settings': 'kaoss_window', 'open_basic_function_settings': 'basic_function_window', 'open_zone_editor': 'zone_window', 'open_calibration_editor': 'calibration_window',
          'open_local_audio': 'audio_window', 'open_rules': 'rules_window',
@@ -28,6 +28,7 @@ def show_projection(window):
     window.attributes('-alpha',1.)
     theme_widgets(window)
     window.deiconify();window.lift();window.focus_set()
+    install_projection_maximise(window)
 
 
 def primary_engine(module, mode='Joc'):
