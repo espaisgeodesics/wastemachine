@@ -1,0 +1,111 @@
+ATMO ESFERA FX · Edició d'escriptori · 26 de novembre de 2026 · Projector independent i estabilitat
+
+INSTAL·LACIÓ DE WINDOWS
+Executa ATMO_ESFERA_FX_Instal_lador_Windows.exe.
+L'assistent crea l'accés directe de l'escriptori i del menú Inici.
+Inclou Python i les dependències MIDI, càmera, imatges i àudio local.
+No cal executar cap instal·lador addicional de Python, MIDI o àudio.
+Per obrir el programa, fes doble clic a la icona ATMO ESFERA FX.
+Es pot desinstal·lar des de la configuració d'aplicacions de Windows.
+
+CONSERVAR EL TREBALL ACTUAL
+L'instal·lador permet triar opcionalment la carpeta de l'ATMO anterior.
+Copia PROJECTES i GRAVACIONS al directori de dades, sense sobreescriure fitxers existents.
+S'hi inclou PROJECTES/distribucio_finestres.json, amb les finestres desades.
+Si tens projectes o mitjans en altres carpetes, continuen al mateix lloc: obre'ls amb Projecte.
+Conserva la carpeta anterior fins a comprovar els projectes i recursos al programa instal·lat.
+
+DADES DE L'APLICACIÓ INSTAL·LADA
+%LOCALAPPDATA%\ATMO ESFERA FX\PROJECTES
+%LOCALAPPDATA%\ATMO ESFERA FX\GRAVACIONS
+Aquestes dades es conserven en actualitzar o desinstal·lar el programa.
+
+ÚLTIMS CANVIS
+La segona pantalla només ofereix Projecte nou i Obrir un projecte existent.
+Nou projecte, dins del motor, torna a Tria el teu univers després de preguntar si vols desar.
+En obrir s'aplica la distribució de finestres desada; es pot modificar i tornar a desar.
+La icona de finestres i accessos directes és el logo de l'eclipsi d'ATMO.
+No s'inclouen versions antigues ni projectes de prova personals al paquet.
+
+CODI NET (OPCIONAL)
+El ZIP de codi és per a qui vulgui executar o revisar el codi font.
+Aquesta modalitat requereix Python 3.12 i els paquets del seu requirements.txt.
+No cal descarregar-lo per utilitzar l'instal·lador de Windows.
+
+CONTROL XY DE CAKEWALK
+A Ambients XY pots triar Filtre + reverberació, Filtre + eco o Filtre + distorsió.
+Selecciona el port MIDI real que tens a loopMIDI; no cal crear un port nou.
+Aplica el preset a la targeta i desa el projecte. Obre el projecte compatible
+al Cakewalk: ATMO no carrega instruments ni assignacions de Cakewalk.
+Els perfils d’eco/reverb conserven X CC16 / Y CC17 al canal 16;
+el de distorsió utilitza X CC18 / Y CC19 al canal 16.
+Reverb i eco comparteixen els CC històrics: per fer-los independents alhora,
+canvia el canal o els CC d’un perfil i les assignacions del receptor.
+Consulta GUIA_CONTROL_DIRECTE_CAKEWALK.txt per als controls remots natius.
+No cal una superfície ACT. La guia ACT antiga es conserva com a referència.
+
+PROVES MIDI NETES
+Els botons X/Y envien únicament el CC triat; primer cal prémer APLICAR.
+La prova mostra els bytes enviats i permet copiar-ne les dades.
+Les proves automàtiques comproven ATMO i els missatges; comprova també
+la recepció i l’efecte real al teu Cakewalk.
+
+ATMO · BOSC I ATMOSFERA
+Paleta blau profund / verd bosc / molsa, amb fons nets sense fulles artificials.
+Les quatre imatges inicials aprovades es conserven sense canvis.
+A Ambients XY: avis de port no disponible sense canviar-lo automaticament;
+boto Usar sortida MIDI principal (cal connectar-la, Aplicar i desar).
+Boto Filtre menys extrem: posa el minim X a 60 al formulari; cal Aplicar.
+No modifica els projectes existents fins que l’usuari aplica els ajustos.
+Les frequències depenen del mapatge de Cakewalk; ajusta-les a l’oïda.
+
+ENTRADA I SORTIDA PROGRESSIVES DE TARGETES
+A Control d’audio/Mute activa Fade in / fade out i configura els segons.
+Conserva el mapatge de Mute CC119 i assigna CC118 al volum de cada pista
+d’audio a Cakewalk amb el canal corresponent. Consulta GUIA_FADES_CAKEWALK.txt.
+El fade es opcional: els projectes antics no canvien fins que l’actives.
+La primera configuracio amb Cakewalk s’ha de fer manualment; l’instal·lador
+no modifica els seus projectes ni assignacions. La funcio Mute no genera notes.
+S’han retirat les fulles artificials mantenint els colors de bosc i blau.
+
+PROJECTOR I VISUALS
+La projecció és una finestra independent: pots minimitzar ATMO i continuar
+amb Cakewalk sense amagar-la. Windows ha d’estar en mode Estendre; mou
+la finestra al projector: quan deixis anar el ratolí, es maximitza en
+aquella pantalla. F11 activa pantalla completa; Esc en surt.
+El botó de restaurar permet tornar a ajustar-ne la mida manualment.
+Tancar ATMO, suspendre Windows o apagar el PC sí que atura la projecció.
+A l’editor de cada targeta, tria el visual i prem APLICAR. El botó
+CONFIGURAR VISUAL obre els ajustos d’imatge/vídeo sense canviar Mute,
+Nota MIDI o la funció musical. La targeta ha d’estar detectada per veure
+el visual a la sortida pública; seleccionar-la a l’editor no l’activa.
+La previsualització de l’operador i la captura de càmera són separades.
+Una zona que ja ha acabat en negre no tapa un altre visual actiu.
+
+VÍDEOS
+ATMO els reprodueix internament amb OpenCV; no necessita VLC.
+No hi ha un límit de minuts configurat. La compatibilitat depèn del còdec,
+la resolució i el PC: comença amb MP4 H.264 de 720p o 1080p.
+Aquesta via de visual no reprodueix el so del vídeo.
+
+CÀMERA
+La captura funciona en un fil separat, amb només l’últim fotograma.
+Frames invàlids es descarten i els errors de lectura tenen reintents
+limitats. Una lectura bloquejada no ha de bloquejar la finestra pública.
+Si un controlador queda bloquejat, tanca la càmera i reconnecta-la;
+ATMO evita obrir un segon dispositiu mentre el primer encara es tanca.
+Sense imatge nova, les targetes perden presència i alliberen el so:
+no es mantenen targetes fantasma indefinidament.
+La prova prolongada amb el teu dispositiu i projector queda pendent.
+
+TARGETES 6 I 7 DE PRIMAVERA
+Conserva el pad al canal MIDI 6 i l’arpegiador al canal MIDI 7.
+A Cakewalk, a l’ENTRADA MIDI del pad tria el port ATMO i canal 6;
+a l’entrada MIDI del segon Surge tria el mateix port i canal 7.
+Evita Omni per aquests instruments. Si el pad escolta tots els canals,
+un Note Off de l’arpegiador sobre la mateixa nota pot tallar-lo encara
+que ATMO hagi enviat cada missatge al canal correcte.
+La prova automàtica comprova aquesta separació al remitent; cal
+comprovar els filtres reals del receptor abans de donar la causa per feta.
+Desa el projecte Cakewalk com a .cwp, a més del projecte .json d’ATMO.
+El fitxer .mid no conserva instruments, efectes ni controls remots.

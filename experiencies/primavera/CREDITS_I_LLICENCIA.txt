@@ -1,0 +1,40 @@
+ATMO · PRIMAVERA · ATRIBUCIÓ I LLICÈNCIA
+
+Obra: Antonio Vivaldi (1678–1741), Le quattro stagioni, La Primavera,
+Concert en Mi major RV 269, Op. 8 n. 1, I. Allegro (1725).
+L’obra original és de domini públic.
+
+Edició digital de partida: Mutopia-2010/02/08-301.
+Mantenidor indicat a la capçalera: Anonymous, smailliw (at) gmail.com.
+Font editorial indicada: Performers’ Facsimiles. LilyPond 2.12.3.
+https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=301
+https://github.com/MutopiaProject/MutopiaProject/tree/master/ftp/VivaldiA/O8/spring/spring-lys
+
+MIDI obtingut del mirall de l’edició Mutopia, amb la procedència i llicència
+identificades al seu index.json:
+https://github.com/zz85/midiviz/blob/gh-pages/violinist/midis/vivaldi_spring_1.mid
+https://github.com/zz85/midiviz/blob/gh-pages/violinist/midis/index.json
+El ZIP MIDI del servidor Mutopia no era accessible des d’aquest entorn;
+no afirmem una comparació binària amb aquell ZIP.
+
+Llicència de l’edició digital i d’aquesta adaptació musical:
+Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0).
+https://creativecommons.org/licenses/by-sa/3.0/
+Text legal: https://creativecommons.org/licenses/by-sa/3.0/legalcode
+Conserva aquesta atribució i la mateixa llicència quan comparteixis
+adaptacions de les dades musicals. No s’implica suport dels autors.
+
+Canvis de l’adaptació ATMO, 25 de novembre de 2026:
+- Cinc parts originals conservades, sense alterar notes, velocitats ni temps.
+- Violí principal, flauta en la veu de violí I, oboè en la veu de violí II,
+  viola i violoncel; timbres diferents segons el requeriment de la creació.
+- Canals remapejats a 1–5; volum General MIDI equilibrat i Pan central.
+- Tempo i compàs integrats a la primera pista, sense pista musical extra.
+- Projecte de set targetes i demostració introductòria nous.
+- Audicions sintetitzades; no són una interpretació humana ni una gravació
+  orquestral. S’han renderitzat amb FluidSynth i TimGM6mb de Tim Brechbill.
+  El SoundFont no es redistribueix dins d’aquest paquet.
+  https://github.com/arbruijn/TimGM6mb
+
+Els fitxers originals de MIDI i capçalera LilyPond es conserven a FONTS.
+Les comprovacions tècniques consten a INFORME_VALIDACIO.json.

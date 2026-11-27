@@ -1,0 +1,87 @@
+ATMO ESFERA FX · Alternativa a ACT: Remote Control
+22 de novembre de 2026
+
+ABAST I ESTAT REAL
+Aquesta actualització corregeix les proves MIDI d'ATMO: cada botó envia només el CC escollit, sense tornar a aplicar la targeta ni sincronitzar volums.
+Cakewalk disposa de Remote Control per a controls natius de mescla. Aquesta és una alternativa documentada a ACT per a aquests controls.
+No s'ha executat Cakewalk al teu ordinador des d'aquí. La resposta real del teu Cakewalk s'ha de comprovar amb la prova curta del punt 3.
+No prometem que els comandaments d'una FX Chain ofereixin Remote Control: no tots els controls de connectors ofereixen el mateix menú.
+
+1. PREPARACIÓ, UNA SOLA VEGADA
+Desa una còpia del projecte de Cakewalk abans de canviar-ne les rutes.
+A ATMO, conserva el teu port real. Si RtMidi hi afegeix un número, selecciona l'entrada detectada pel programa: el número no és necessàriament part del nom a loopMIDI.
+En el control XY, carrega el perfil Cakewalk, selecciona el port i prem APLICAR.
+La configuració inicial és canal 16, X CC16 i Y CC17. Pots conservar els teus valors si saps què estàs assignant.
+Fes l'aplicació ABANS d'activar cap aprenentatge al receptor. Aplicar la targeta pot sincronitzar controls musicals; provar X/Y ja no ho fa.
+Atura la càmera i desactiva la simulació per aprendre un sol CC cada vegada.
+
+2. APARTAR ACT SENSE ESBORRAR-LO
+A Cakewalk, desa el preset ATMO XY si el vols conservar.
+A Preferences > MIDI > Control Surfaces, deixa temporalment el port d'entrada de la superfície ACT MIDI Controller a None/Ninguno. Això evita assignacions de superfície durant la prova alternativa; desmarcar només Enable no desconnecta la superfície MIDI.
+A Preferences > MIDI > Devices, mantén el port de loopMIDI habilitat com a entrada i deshabilitat com a sortida.
+No cal eliminar la FX Chain, Modfilter ni Sonitus Reverb per fer la prova següent.
+
+3. PRIMERA PROVA AMB UN CONTROL NATIU, SENSE ACT
+Crea un bus estèreo buit anomenat PROVA MIDI i deixa'n l'àudio sense entrades ni enviaments. No l'utilitzarem encara per escoltar res.
+A la consola de Cakewalk, fes clic dret en el comandament natiu de panoràmica/balanç d'aquest bus i tria Remote Control / Control remoto.
+Al diàleg selecciona tipus Controller, número de controlador 16 i canal MIDI 16. Aquí els números són decimals: 16 significa CC16, no cal escriure BF ni altres codis hexadecimals.
+Accepta el diàleg.
+A ATMO, al formulari XY ja aplicat, prem X0, X64 i X127.
+El comandament de panoràmica/balanç del bus PROVA MIDI ha de moure's. Aquesta prova no necessita ACT, ACT Learn ni una FX Chain.
+Els botons d'ATMO mostren port, canal, CC, valor i bytes hexadecimals. Copiar dades de la prova permet compartir la confirmació local.
+Si no es mou aquest control natiu, atura aquí la configuració d'efectes: envia el diàleg Remote Control i les dades copiades d'ATMO. Encara no s'haurà validat la resposta de Cakewalk.
+Si funciona, desa la còpia del projecte: ja tindrem una ruta de control directa comprovada al teu ordinador.
+
+4. REVERBERACIÓ SENSE ACT: CONTROLAR UN ENVIAMENT
+Aquesta opció modifica l'encaminament d'àudio; fes-la només a la còpia del projecte.
+Crea dos busos estèreo: ATMO SUMA i ATMO REVERB.
+- Sortida ATMO SUMA -> Master.
+- Sortida ATMO REVERB -> Master.
+- Sortides D'ÀUDIO dels instruments que vulguis processar -> ATMO SUMA. Conserva les seves entrades MIDI i els instruments de destinació.
+- A ATMO SUMA, crea un enviament a ATMO REVERB.
+- A ATMO REVERB, insereix Sonitus Reverb; silencia Dry dins de l'efecte perquè aquest bus contingui la part reverberant. L'àudio directe continua per ATMO SUMA.
+- Comença amb el fader d'ATMO REVERB baix, per exemple -12 dB, i comprova el nivell del Master.
+No creïs cap enviament del Master cap a ATMO REVERB: podria formar un bucle.
+Si la cadena antiga del Master afegeix també reverberació, desactiva-la temporalment per comparar, conservant-ne la configuració.
+Fes clic dret al NIVELL DE L'ENVIAMENT d'ATMO SUMA cap a ATMO REVERB. A Remote Control, assigna Controller 17 i canal 16.
+Prova Y0/Y64/Y127. Aquí Y regula la quantitat enviada a la reverberació, no el paràmetre intern Reverb de Sonitus.
+Aquesta ruta no depèn d'aprendre un paràmetre d'un connector DX.
+
+5. FILTRE SENSE ACT: CONTROL NATIU DISPONIBLE
+Una alternativa documentada a controlar un filtre dins d'una FX Chain és utilitzar els filtres de l'EQ ProChannel i els seus controls/grups natius.
+Si la teva edició de Cakewalk té aquest EQ, posa'l al bus ATMO SUMA i prepara el filtre passa-baix (LP / Low Pass).
+A la freqüència del filtre, comprova el menú de control remot o de grups disponible. La documentació del blog de Cakewalk descriu agrupar controls de filtre i vincular el grup a Remote Control.
+Si el control/grup ofereix aquesta assignació, utilitza Controller 16 i canal 16 i prova X0/X64/X127 amb poc volum.
+Si no hi apareix Remote Control, no donem per acabada aquesta part: cal veure el menú d'aquesta versió. Aquesta guia no afirma que Modfilter ni el comandament FILTRE de la FX Chain tinguin MIDI Learn propi.
+Conserva Modfilter i la cadena original: aquesta és una opció diferent per arribar al mateix objectiu artístic, no una conversió automàtica dels efectes originals.
+
+6. TORNAR A LES TARGETES
+Només després que els controls directes responguin, reprèn la càmera i mou la targeta XY.
+El mateix X CC16 / Y CC17 es transmet amb el suavitzat, els rangs i la retirada que tens configurats a ATMO.
+Desa el projecte d'ATMO i el projecte de Cakewalk: cadascun guarda una part de la configuració.
+
+FONTS PRIMÀRIES
+Remote Control natiu: tipus Controller, número de CC i canal:
+https://legacy.cakewalk.com/Documentation?help=Mixing.44.html&language=3&product=Cakewalk
+Aprenentatge directe de controls natius:
+https://taylor.cakewalk.com/Documentation?help=Mixing.45.html&language=4&product=Cakewalk
+Blog de Cakewalk: limitació del comandament d'una FX Chain i alternativa amb filtres agrupats de ProChannel:
+https://noelborthwick.com/cakewalk/2014/01/20/anatomy-of-an-fx-chain-vintage-wah/
+Les fonts descriuen versions diferents de Cakewalk. Els noms i la disponibilitat del menú s'han de confirmar en la versió de l'usuari; no s'ha validat físicament el seu equip.
+
+
+PRESETS ATMO · FILTRE I REVERB / ECO / DISTORSIÓ
+A l’editor de qualsevol targeta, obre Ambients XY. Tria un dels tres
+presets Cakewalk, prem Carregar preset a aquesta targeta i després Aplicar.
+Desa el projecte ATMO. El port escollit es conserva; gir desactivat.
+Canal 16: reverb i eco X CC16/Y CC17; distorsió X CC18/Y CC19.
+Retorn X127/Y0: filtre obert i enviament tancat; cues naturals d’eco/reverb.
+ATMO no obre projectes ni instal·la efectes a Cakewalk. Obre el projecte
+compatible. Per tenir reverb i eco independents alhora, canvia el canal
+o els CC d’un preset a ATMO i les assignacions Remote Control de Cakewalk.
+Les col·lisions de port/canal/CC entre targetes es continuen rebutjant.
+La targeta sonora conserva la seva funció: no la substitueixis per un
+control d’efectes si vols continuar generant notes amb ella.
+Distorsió: House of Metal al Bus G, EQ LP en Post, enviament D→G;
+Bus G→Master. Totes les pistes a processar han d’enviar àudio al Bus D.
+Desa tant el projecte Cakewalk com el projecte ATMO.

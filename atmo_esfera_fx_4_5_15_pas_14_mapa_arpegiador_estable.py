@@ -46,7 +46,7 @@ def harmony_pitches(card,sector):
     return pitches,NOTE_NAMES[pitches[0]%12]
 class App:
  def __init__(self,root):
-    self.root=root; root.title('WASTELAND MACHINE 4.5.15 · Pas 15 · Editor musical desplegable'); root.geometry('790x265'); root.minsize(570,205)
+    self.root=root; root.title('ATMO ESFERA FX 4.5.15 · Pas 14 · Mapa arpegiador i rellotge estable'); root.geometry('790x265'); root.minsize(570,205)
     self.cards=json.loads(json.dumps(DEFAULTS)); self.project='Sense títol'; self.bpm=120
     self.active={}; self.last_seen={}; self.last_cc={}; self.notes={}; self.harmony_notes={}; self.harmony_zones={}; self.harmony_pending={}; self.arp_states={}; self.arp_lock=threading.RLock(); self.arp_stop=threading.Event(); self.current_visual=0
     self.metronome_enabled=False; self.metronome_start=time.monotonic(); self.metronome_last_beat=-1; self.metronome_last_bpm=self.bpm; self.quantize_harmony=tk.BooleanVar(value=True); self.queued_harmony={}; self.clock_next_beat=1; self.clock_last_bpm=self.bpm
@@ -89,17 +89,17 @@ class App:
     banner=tk.Frame(self.root,bg='#2c1b13',highlightbackground='#9c6139',highlightthickness=2,height=94)
     banner.pack(fill='x',padx=7,pady=(5,3));banner.pack_propagate(False)
     try:
-      self.banner_source=Image.open(ROOT/'capcalera_wasteland_4513.png').convert('RGB')
+      self.banner_source=Image.open(ROOT/'capcalera_atmo_esfera_fx_4513.png').convert('RGB')
       self.banner_photo=None
       self.banner_label=tk.Label(banner,bg='#20130e',bd=0)
       self.banner_label.pack(fill='both',expand=True)
       self.banner_label.bind('<Configure>',self.resize_banner)
     except Exception:
-      tk.Label(banner,text='WASTELAND MACHINE',font=('Georgia',19,'bold'),fg='#f5b47a',bg='#20130e').pack(fill='both',expand=True)
+      tk.Label(banner,text='ATMO ESFERA FX',font=('Georgia',19,'bold'),fg='#f5b47a',bg='#20130e').pack(fill='both',expand=True)
     toolbar=ttk.Frame(self.root);toolbar.pack(fill='x',padx=9,pady=(1,5))
     ttk.Button(toolbar,text='MONITOR ARUCO',command=self.open_aruco_monitor).pack(side='left',padx=2)
     ttk.Button(toolbar,text='MOSTRAR TOTES LES FINESTRES',command=self.show_all_panels).pack(side='left',padx=7)
-    ttk.Label(toolbar,text='v 4.5.15 · Pas 15',foreground='#d5a16b').pack(side='right',padx=7)
+    ttk.Label(toolbar,text='v 4.5.15 · Pas 11',foreground='#d5a16b').pack(side='right',padx=7)
     # Cada mòdul té una finestra nativa de Windows: es pot arrossegar,
     # canviar de mida, minimitzar i restaurar independentment.
     self.panel_windows={}
@@ -156,14 +156,24 @@ class App:
     cb.pack(padx=8,fill='x');cb.bind('<<ComboboxSelected>>',lambda e:self.load_card())
     for label,var,vals in [('Funció',self.fun,FUNCS),('Moviment que controla el valor',self.axis,['Rotació','Horitzontal','Vertical'])]:
       ttk.Label(frame,text=label).pack(anchor='w',padx=8,pady=(5,0))
-      combo=ttk.Combobox(frame,textvariable=var,values=vals,state='readonly',width=25)
-      combo.pack(fill='x',padx=8)
-      if label=='Funció':combo.bind('<<ComboboxSelected>>',self.on_function_selected)
+      ttk.Combobox(frame,textvariable=var,values=vals,state='readonly',width=25).pack(fill='x',padx=8)
     for label,var,from_,to in [('Canal MIDI (1-16)',self.channel,1,16),('Nota MIDI (0-127)',self.note,0,127),('Control CC (0-127)',self.cc,0,127)]:
       ttk.Label(frame,text=label).pack(anchor='w',padx=8,pady=(5,0))
       tk.Spinbox(frame,textvariable=var,from_=from_,to=to,width=8,bg='#e9d8c2').pack(anchor='w',padx=8)
-    ttk.Button(frame,text='CONFIGURAR HARMONIA / ARPEGIADOR…',command=self.open_music_settings).pack(fill='x',padx=8,pady=(9,4))
-    ttk.Label(frame,text='Les escales, la força i el ritme són dins la finestra de configuració musical.',wraplength=245,foreground='#c9aa83').pack(anchor='w',padx=8,pady=(0,5))
+    ttk.Label(frame,text='HARMONIA ESPACIAL · només si selecciones aquesta funció',foreground='#e7ae70',wraplength=245).pack(anchor='w',padx=8,pady=(9,1))
+    ttk.Label(frame,text='Tonalitat i escala').pack(anchor='w',padx=8)
+    ttk.Label(frame,text='Nota fonamental').pack(anchor='w',padx=8)
+    ttk.Combobox(frame,textvariable=self.harmony_root,values=NOTE_NAMES,state='readonly',width=25).pack(fill='x',padx=8)
+    ttk.Label(frame,text='Escala / mode').pack(anchor='w',padx=8)
+    ttk.Combobox(frame,textvariable=self.harmony_scale,values=list(SCALE_INTERVALS),state='readonly',width=25).pack(fill='x',padx=8)
+    ttk.Label(frame,text='Força de les notes (1-127)').pack(anchor='w',padx=8,pady=(4,0))
+    tk.Spinbox(frame,textvariable=self.harmony_velocity,from_=1,to=127,width=8,bg='#e9d8c2').pack(anchor='w',padx=8)
+    ttk.Label(frame,text='Arpegiador · velocitat de notes').pack(anchor='w',padx=8,pady=(7,0))
+    ttk.Combobox(frame,textvariable=self.arp_division,values=['1 temps','1/2 temps','1/4 temps'],state='readonly',width=25).pack(fill='x',padx=8)
+    ttk.Label(frame,text='Arpegiador · durada de nota (%)').pack(anchor='w',padx=8)
+    tk.Spinbox(frame,textvariable=self.arp_gate,from_=10,to=95,increment=5,width=8,bg='#e9d8c2').pack(anchor='w',padx=8)
+
+    ttk.Label(frame,text='8 sectors × 3 anells · acord sostingut',wraplength=245,foreground='#c9aa83').pack(anchor='w',padx=8,pady=(2,4))
     ttk.Label(frame,text='Visual assignat').pack(anchor='w',padx=8,pady=(5,0))
     ttk.Combobox(frame,textvariable=self.visual,values=NAMES,state='readonly',width=25).pack(fill='x',padx=8)
     ttk.Button(frame,text='APLICAR / CREAR TARGETA',command=self.apply_card,style='Accent.TButton').pack(fill='x',padx=8,pady=9)
@@ -173,7 +183,7 @@ class App:
     ttk.Label(statusbar,textvariable=self.status,foreground='#e8b47d').pack(side='left',padx=4)
  def make_panel_window(self,key,title,geometry):
     win=tk.Toplevel(self.root)
-    win.title('WASTELAND · '+title)
+    win.title('ATMO ESFERA FX · '+title)
     # Finestra propietat de la principal: Windows la manté al davant
     # de la principal, però no per sobre de Cakewalk.
     win.transient(self.root)
@@ -282,7 +292,7 @@ class App:
     try:
       with open(self.window_layout_file,'w',encoding='utf-8') as f:
         json.dump(layout,f,ensure_ascii=False,indent=2)
-      self.status.set('Distribució de finestres desada. Es recuperarà en tornar a obrir Wasteland.')
+      self.status.set('Distribució de finestres desada. Es recuperarà en tornar a obrir ATMO ESFERA FX.')
     except Exception as exc:self.status.set('No s’ha pogut desar la distribució: '+str(exc))
  def restore_window_layout(self,silent=False):
     if not self.window_layout_file.exists():
@@ -411,40 +421,6 @@ class App:
       iid=str(i)
       if tree.exists(iid):tree.item(iid,values=values,tags=('on' if active else 'off',))
       else:tree.insert('', 'end',iid=iid,values=values,tags=('on' if active else 'off',))
- def on_function_selected(self,event=None):
-    if self.fun.get() in ('Harmonia espacial','Arpegiador espacial'):
-      self.open_music_settings()
- def open_music_settings(self):
-    kind=self.fun.get()
-    if kind not in ('Harmonia espacial','Arpegiador espacial'):
-      messagebox.showinfo('Configuració musical','Selecciona Harmonia espacial o Arpegiador espacial a la funció de la targeta.',parent=self.editor_window)
-      return
-    old=getattr(self,'music_settings_window',None)
-    if old is not None and old.winfo_exists():
-      old.destroy()
-    win=tk.Toplevel(self.root)
-    self.music_settings_window=win
-    win.title('WASTELAND · '+kind.upper()+' · TARGETA '+self.card_id.get())
-    win.geometry('370x425' if kind=='Arpegiador espacial' else '370x315')
-    win.minsize(320,275)
-    win.configure(bg='#151210')
-    win.transient(self.root)
-    win.lift(self.root)
-    pane=ttk.Frame(win);pane.pack(fill='both',expand=True,padx=16,pady=12)
-    ttk.Label(pane,text=kind.upper(),foreground='#e7ae70',font=('Segoe UI',12,'bold')).pack(anchor='w',pady=(0,12))
-    ttk.Label(pane,text='Nota fonamental').pack(anchor='w',pady=(4,2))
-    ttk.Combobox(pane,textvariable=self.harmony_root,values=NOTE_NAMES,state='readonly').pack(fill='x')
-    ttk.Label(pane,text='Escala / mode').pack(anchor='w',pady=(9,2))
-    ttk.Combobox(pane,textvariable=self.harmony_scale,values=list(SCALE_INTERVALS),state='readonly').pack(fill='x')
-    ttk.Label(pane,text='Força de les notes MIDI (1–127)').pack(anchor='w',pady=(9,2))
-    tk.Spinbox(pane,textvariable=self.harmony_velocity,from_=1,to=127,bg='#e9d8c2').pack(anchor='w')
-    if kind=='Arpegiador espacial':
-      ttk.Label(pane,text='Divisió rítmica').pack(anchor='w',pady=(10,2))
-      ttk.Combobox(pane,textvariable=self.arp_division,values=['1 temps','1/2 temps','1/4 temps'],state='readonly').pack(fill='x')
-      ttk.Label(pane,text='Durada de les notes (%)').pack(anchor='w',pady=(10,2))
-      tk.Spinbox(pane,textvariable=self.arp_gate,from_=10,to=95,increment=5,bg='#e9d8c2').pack(anchor='w')
-    ttk.Button(pane,text='APLICAR A LA TARGETA I TANCAR',command=lambda:(self.apply_card(),win.destroy())).pack(fill='x',pady=(16,4))
-    ttk.Label(pane,text='Per conservar els canvis en disc: Projecte → Desar projecte.',wraplength=320).pack(anchor='w',pady=(5,0))
  def load_card(self):
     c=self.cards[int(self.card_id.get())-1]; self.fun.set(c['function']); self.axis.set(c['axis']); self.note.set(c['note']); self.cc.set(c['cc']); self.channel.set(c['channel']); self.visual.set(NAMES[c['visual']]); self.harmony_key.set(c.get('harmony_key','La menor')); self.harmony_root.set(NOTE_NAMES[int(c.get('harmony_root',9))%12]); self.harmony_scale.set(c.get('harmony_scale','Menor natural (eòlica)')); self.harmony_velocity.set(c.get('harmony_velocity',85)); self.arp_division.set(c.get('arp_division','1/2 temps')); self.arp_gate.set(c.get('arp_gate',60))
  def apply_card(self):
@@ -471,7 +447,7 @@ class App:
  def save_project(self,as_new=False):
     self.apply_card()
     if as_new or self.project=='Sense títol':
-      path=filedialog.asksaveasfilename(initialdir=ROOT/'PROJECTES',defaultextension='.json',filetypes=[('Projecte Wasteland','*.json')])
+      path=filedialog.asksaveasfilename(initialdir=ROOT/'PROJECTES',defaultextension='.json',filetypes=[('Projecte ATMO ESFERA FX','*.json')])
       if not path:return
       self.project=path
     try:
@@ -479,7 +455,7 @@ class App:
       self.status.set(f'Projecte desat: {Path(self.project).name}')
     except Exception as e:messagebox.showerror('Desar',str(e))
  def open_project(self):
-    path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte Wasteland','*.json')]);
+    path=filedialog.askopenfilename(initialdir=ROOT/'PROJECTES',filetypes=[('Projecte ATMO ESFERA FX','*.json')]);
     if not path:return
     try:
       with open(path,encoding='utf-8') as f:d=json.load(f)
@@ -554,7 +530,7 @@ class App:
  def open_projection(self):
     if getattr(self,'projection',None) and self.projection.winfo_exists():
       self.projection.lift();return
-    self.projection=tk.Toplevel(self.root);self.projection.title('PROJECCIÓ · COLOR PLA · WASTELAND MACHINE');self.projection.geometry('960x540');self.projection.configure(bg='black')
+    self.projection=tk.Toplevel(self.root);self.projection.title('PROJECCIÓ · COLOR PLA · ATMO ESFERA FX');self.projection.geometry('960x540');self.projection.configure(bg='black')
     self.proj_label=tk.Label(self.projection,bg='black');self.proj_label.pack(fill='both',expand=True)
     self.projection.bind('<F11>',lambda e:self.projection.attributes('-fullscreen',not self.projection.attributes('-fullscreen')))
     self.projection.bind('<Escape>',lambda e:self.projection.attributes('-fullscreen',False))

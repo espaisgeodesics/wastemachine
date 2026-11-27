@@ -1,0 +1,8 @@
+Targeta,ID_ArUco,Funcio,Canal_MIDI,CC,Visible,Absent,Instrument
+1,0,Control audio Mute,1,119,0,127,Violi solista
+2,1,Control audio Mute,2,119,0,127,Flauta
+3,2,Control audio Mute,3,119,0,127,Oboe
+4,3,Control audio Mute,4,119,0,127,Viola
+5,4,Control audio Mute,5,119,0,127,Violoncel
+6,5,Nota MIDI 52 Mi3,6,,,,Ambient pad calid
+7,6,Arpegi Mi major 64 68 71 76,7,,,,Caixa de musica

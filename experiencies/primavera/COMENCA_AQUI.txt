@@ -1,0 +1,115 @@
+ATMO ESFERA FX · LA PRIMAVERA · PRIMERA CREACIÓ
+Vivaldi · RV 269 · I. Allegro · Mi major · 115 BPM · 2 min 51 s
+
+1. ESCOLTA-LA ABANS DE CONFIGURAR
+Obre ESCOLTAR_PRIMAVERA.mp3: conté les cinc parts juntes.
+ESCOLTAR_INTRO.mp3 mostra la proposta d’ambient i arpegi.
+Són audicions sintetitzades amb TimGM6mb, no una gravació d’orquestra.
+No importis aquests MP3 com a música de fons mentre toquen les pistes MIDI:
+se sumarien i les targetes no silenciarien la música de la previsualització.
+
+2. OBRE ELS DOS FITXERS DE TREBALL
+A Cakewalk: Archivo > Abrir > MIDI/PRIMAVERA_5_PISTES.mid.
+Obrir-lo com a projecte nou permet recuperar els 115 BPM de l’arxiu.
+És MIDI tipus 1 amb EXACTAMENT cinc pistes musicals, canals 1–5.
+Els missatges de tempo són dins la primera pista: no hi ha una sisena
+pista musical oculta. També tens les cinc parts com a MIDI individuals,
+totes amb el mateix inici i silencis originals. No les alineïs per la
+primera nota: algunes veus tenen pauses escrites.
+A ATMO: tria Música > Obrir projecte > PRIMAVERA_ATMO.json.
+No s’ha inventat una calibració del teu terra. Conserva o fes la teva
+calibració física quan preparis la càmera per a aquesta creació.
+
+3. INSTRUMENTS A CAKEWALK
+Cada pista MIDI necessita un instrument virtual que converteixi les notes
+en so. El MIDI conté aquests programes General MIDI, amb numeració 1–128:
+  1. Violí solista: programa 41, canal 1.
+  2. Flauta: programa 74, canal 2.
+  3. Oboè: programa 69, canal 3.
+  4. Viola: programa 42, canal 4.
+  5. Violoncel: programa 43, canal 5.
+Una instància GM compatible pot llegir-los; un VST com Surge o una llibreria
+orquestral pot requerir triar el preset manualment. No es carreguen VST
+ni llibreries automàticament des d’un fitxer MIDI.
+Per controlar cada so independentment, usa cinc instruments amb sortides
+d’àudio separades. Envia cadascuna a Bus D si vols els efectes generals
+que ja hem preparat, o a Master si comences sense efectes.
+Centra TOTS els Pan a 0% C: recorda el problema de l’altaveu esquerre.
+Les pistes 1–5 llegeixen els clips de Cakewalk: desactiva’n l’Input Echo
+per no duplicar notes que arribin d’ATMO. No necessiten entrada MIDI en viu.
+
+4. TARGETES 1–5: SILENCI SENSE PERDRE EL PUNT DE LA CANÇÓ
+ATMO envia CC119. Cada targeta utilitza un canal diferent:
+  Targeta 1: canal 1 > violí.
+  Targeta 2: canal 2 > flauta.
+  Targeta 3: canal 3 > oboè.
+  Targeta 4: canal 4 > viola.
+  Targeta 5: canal 5 > violoncel.
+Visible = valor 0 (Mute desactivat); absent = 127 (Mute activat).
+La retirada es confirma després del temps de detecció, aproximadament 250 ms.
+A Cakewalk, clic dret al M de la SORTIDA D’ÀUDIO de cada instrument >
+Control remoto > Controlador 119 > canal 1, 2, 3, 4 o 5, segons la taula.
+Si tens pistes MIDI i d’àudio separades, assigna el M de la pista d’àudio:
+així les notes MIDI continuen alimentant el sintetitzador mentre no se sent.
+No ho assignis al Master, al Bus D, a Play ni al botó d’encesa del VST.
+Una sola sortida d’àudio compartida pels cinc instruments no permet
+silenciar-los per separat d’aquesta manera: separa les sortides.
+No creïs una superfície ACT: les assignacions són Control remoto directes.
+Mantén ATMO ESFERA FX activat a Entradas de MIDI/Dispositivos de Cakewalk;
+deixa la sortida del mateix loopMIDI desactivada per evitar retorns.
+
+A ATMO, selecciona el port loopMIDI real a MIDI i prem Connectar.
+No hi ha un nom de port fix inventat dins d’aquest projecte.
+Després de connectar, les targetes absents envien el seu estat silenciat.
+Si tens la cançó sonant i canvies de projecte, comprova també l’estat dels
+Mute a Cakewalk; l’acceptació local no confirma la recepció del receptor.
+
+5. TARGETA 6 · ALBA
+Funció Nota MIDI, canal 6, Mi3 = nota MIDI 52.
+Afegeix un instrument ambiental independent, amb entrada loopMIDI canal 6
+i Input Echo activat. Tria un pad càlid, atac suau i volum baix; la
+referència GM de la demostració és Warm Pad, programa 90.
+És una sola nota, no una cançó: dura mentre la targeta és present.
+Per retirar-la i evitar notes penjades, mantén ATMO connectat a MIDI.
+Serveix com a ambient previ. Mi encaixa a la tonalitat global, però la peça
+modula: no recomanem mantenir aquest pedal tota la peça sense escoltar-ho.
+
+6. TARGETA 7 · BROTS
+Funció Arpegiador espacial, canal 7, notes triades Mi–Sol#–Si–Mi
+(MIDI 64, 68, 71, 76), quatre notes, pujada i baixada, 115 BPM.
+Afegeix un altre instrument independent, amb entrada loopMIDI canal 7
+i Input Echo activat. Referència: caixa de música, programa GM 11.
+El mapa espacial pot canviar el registre entre anells, no la tonalitat.
+Proposta artística: posa la 6, afegeix la 7, retira la 7 i comença Vivaldi.
+L’arpegi viu d’ATMO NO està sincronitzat amb el transport de Cakewalk:
+compartir BPM no comparteix fase. Per això l’usem com a introducció lliure.
+INTRO_DEMOSTRACIO_6_I_7.mid és només un exemple fix d’aquesta introducció;
+no s’ha d’importar alhora que les targetes 6/7 si no vols duplicar-les.
+
+7. FER LA PRIMERA SESSIÓ
+Primer prova les cinc pistes juntes a Cakewalk per comprovar els sons.
+Després configura els Mute i comprova una targeta cada vegada.
+Prem Play UNA vegada: deixa avançar la cançó i combina les targetes 1–5.
+Treure una targeta no atura ni reinicia el clip. En tornar-la a posar,
+recuperes el so al punt actual; no torna al començament de la frase.
+Un instrument pot no sonar en un passatge perquè hi té silencis escrits.
+La targeta 1 porta el violí solista i és la que manté la melodia principal.
+
+8. DESAR-HO DEFINITIVAMENT AL TEU ORDINADOR
+Cakewalk: Archivo > Guardar como > ATMO_PRIMAVERA.cwp, dins una carpeta
+pròpia d’aquest projecte. Desa després de crear els instruments i Mute:
+això conserva els VST, presets, connexions i assignacions remotes.
+ATMO: Desar com > ATMO_PRIMAVERA_PERSONAL.json, després de triar MIDI i
+calibrar el terra. Conserva també l’original PRIMAVERA_ATMO.json com a base.
+El paquet no inclou un .cwp natiu preconfigurat: no tenim accés al teu
+Cakewalk ni als teus presets per crear-lo i comprovar-lo des d’aquí.
+La composició i el projecte ATMO sí que estan creats i desats al paquet.
+
+MAPA DE TARGETES
+Targeta 01 correspon a ID ArUco 0; 02 a ID 1, ... 07 a ID 6.
+Diccionari d’ATMO: DICT_4X4_50. Les targetes 8–16 queden sense acció.
+No hi ha visuals assignats; el projector queda negre sense contingut visual.
+
+FONTS I LLICÈNCIA
+Llegeix CREDITS_I_LLICENCIA.txt. Les notes i ritmes de les cinc veus de
+Mutopia es conserven; hem canviat timbres, canals, balanç i Pan central.

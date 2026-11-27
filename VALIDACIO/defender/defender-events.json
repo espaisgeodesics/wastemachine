@@ -1,0 +1,22 @@
+[
+  {
+    "TimeCreated": "2026-11-19T17:51:05.8019547+00:00",
+    "Id": 1001,
+    "Message": "Microsoft Defender Antivirus scan has finished.\r\n \tScan ID: {FAAD77F3-AF74-4025-88C0-3FC802CC22D4}\r\n \tScan Type: Antimalware\r\n \tScan Parameters: Custom Scan\r\n \tUser: runnervmm7ud1\\runneradmin\r\n \tScan Time: 0:00:01"
+  },
+  {
+    "TimeCreated": "2026-11-19T17:51:04.4843454+00:00",
+    "Id": 1000,
+    "Message": "Microsoft Defender Antivirus scan has started.\r\n \tScan ID: {FAAD77F3-AF74-4025-88C0-3FC802CC22D4}\r\n \tScan Type: Antimalware\r\n \tScan Parameters: Custom Scan\r\n \tScan Resources: file:_C:\\ATMO_Defender_Inspection_44581460748\\wastemachine-091e7b0d03a179e6bbf6137dacd1a21cabd10e8c.zip\r\n  \tUser: runnervmm7ud1\\runneradmin\r\n \tScan Trigger: On demand\r\n \tScan Only If Idle: Enabled\r\n \tLow CPU Priority for Scans: Disabled\r\n \tThread Priority: 7"
+  },
+  {
+    "TimeCreated": "2026-11-19T17:50:39.2217329+00:00",
+    "Id": 5007,
+    "Message": "Microsoft Defender Antivirus Configuration has changed. If this is an unexpected event you should review the settings as this may be the result of malware.\r\n \tOld value: HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Scan\\DisableArchiveScanning = 0x1\r\n \tNew value: HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Scan\\DisableArchiveScanning = 0x0"
+  },
+  {
+    "TimeCreated": "2026-11-19T17:50:39.2203567+00:00",
+    "Id": 5007,
+    "Message": "Microsoft Defender Antivirus Configuration has changed. If this is an unexpected event you should review the settings as this may be the result of malware.\r\n \tOld value: HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths\\C:\\ = 0x0\r\n \tNew value: "
+  }
+]
